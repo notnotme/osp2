@@ -27,6 +27,7 @@ add_executable(OSP2
     # OSP2 sources
     src/Application.cpp
     src/filesystem/FileSystem.cpp
+    src/filesystem/FtpDataSource.cpp
     src/filesystem/LocalDataSource.cpp
     src/gui/Gui.cpp
     src/player/PlayerController.cpp
@@ -83,6 +84,10 @@ endif ()
 # libopenmpt
 pkg_check_modules(libopenmpt REQUIRED IMPORTED_TARGET libopenmpt)
 target_link_libraries(OSP2 PRIVATE PkgConfig::libopenmpt)
+
+# libcurl (FtpDataSource)
+pkg_check_modules(libcurl REQUIRED IMPORTED_TARGET libcurl)
+target_link_libraries(OSP2 PRIVATE PkgConfig::libcurl)
 
 # NRO config
 # ========================================

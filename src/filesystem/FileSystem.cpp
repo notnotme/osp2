@@ -82,6 +82,12 @@ void FileSystem::destroy() {
     if (m_worker.joinable()) {
         m_worker.join();
     }
+    // Release the sources now, with the worker joined, so any source teardown (e.g. FtpDataSource's
+    // curl_easy_cleanup) runs before main.cpp's curl_global_cleanup()/socketExit() — not at static
+    // destruction, which would tear the handle down after the global curl/socket stack is already gone.
+    m_activeSource = nullptr;
+    m_sourceBeforeScan = nullptr;
+    m_sources.clear();
 }
 
 void FileSystem::navigateToEntry(const FileEntry &entry) {
@@ -131,11 +137,16 @@ void FileSystem::requestFile(const FileEntry &entry) {
         return;
     }
 
-    // TODO_4: resolved inline on the main thread (local fetch is identity — instant).
-    const auto localPath = m_activeSource->fetchFile(m_path / entry.name);
+    startFetch(m_path / entry.name);
+}
 
-    std::scoped_lock lock(m_mutex);
-    m_fetchResult = FetchResult{localPath, !localPath.empty()};
+void FileSystem::cancel() {
+    // Signal the active source to abort its in-flight transfer; the worker then finishes normally
+    // (scan -> nullopt keeps the listing; fetch -> empty path -> failure). Navigation is blocked
+    // while working, so m_activeSource is exactly the source the worker is using.
+    if (m_working.load() && m_activeSource != nullptr) {
+        m_activeSource->cancel();
+    }
 }
 
 std::optional<FetchResult> FileSystem::consumeFetchResult() {
@@ -152,15 +163,20 @@ void FileSystem::update() {
     }
     m_worker.join();
 
-    std::scoped_lock lock(m_mutex);
-    if (m_scanSucceeded) {
-        m_path = std::move(m_pendingPath);
-        m_content = std::move(m_pendingContent);
-    } else {
-        // nullopt from the source: keep the current listing and undo the source activation.
-        m_activeSource = m_sourceBeforeScan;
-        SDL_Log("FileSystem: scan failed, staying put");
+    // A fetch leaves its result in m_fetchResult (consumed via consumeFetchResult()); only a scan
+    // swaps the listing here.
+    if (m_workKind == WorkKind::Scan) {
+        std::scoped_lock lock(m_mutex);
+        if (m_scanSucceeded) {
+            m_path = std::move(m_pendingPath);
+            m_content = std::move(m_pendingContent);
+        } else {
+            // nullopt from the source: keep the current listing and undo the source activation.
+            m_activeSource = m_sourceBeforeScan;
+            SDL_Log("FileSystem: scan failed, staying put");
+        }
     }
+    m_workKind = WorkKind::None;
 }
 
 const std::filesystem::path &FileSystem::getPath() const {
@@ -175,14 +191,31 @@ bool FileSystem::isWorking() const {
     return m_working.load();
 }
 
+bool FileSystem::isFetching() const {
+    // Only read by the UI while isWorking() is true, where m_workKind is accurate.
+    return m_workKind == WorkKind::Fetch;
+}
+
 void FileSystem::startScan(const std::filesystem::path &path) {
     // Called on the main thread with the worker idle; join any finished-but-unswapped worker first.
     if (m_worker.joinable()) {
         m_worker.join();
     }
     auto *source = m_activeSource;
+    m_workKind = WorkKind::Scan;
     m_working.store(true);
     m_worker = std::thread(&FileSystem::scan, this, source, path);
+}
+
+void FileSystem::startFetch(const std::filesystem::path &path) {
+    // Called on the main thread with the worker idle; join any finished-but-unswapped worker first.
+    if (m_worker.joinable()) {
+        m_worker.join();
+    }
+    auto *source = m_activeSource;
+    m_workKind = WorkKind::Fetch;
+    m_working.store(true);
+    m_worker = std::thread(&FileSystem::fetch, this, source, path);
 }
 
 void FileSystem::showVirtualRoot() {
@@ -219,4 +252,13 @@ void FileSystem::scan(DataSource *source, std::filesystem::path path) {
         }
     }
     m_working.store(false);
+}
+
+void FileSystem::fetch(DataSource *source, std::filesystem::path path) {
+    const auto localPath = source->fetchFile(path);
+    {
+        std::scoped_lock lock(m_mutex);
+        m_fetchResult = FetchResult{localPath, !localPath.empty()};
+    }
+    m_working.store(false);   // store last, mirrors scan()
 }

@@ -23,6 +23,7 @@
 #include <filesystem>
 #include <map>
 #include <string>
+#include <vector>
 
 
 // Hand-editable INI store: sections of key = value pairs. Main-thread only.
@@ -53,6 +54,10 @@ public:
 
     [[nodiscard]] std::string getString(const std::string &section, const std::string &key, const std::string &fallback) const;
     [[nodiscard]] int getInt(const std::string &section, const std::string &key, int fallback) const;
+    // Section names beginning with `prefix` (the prefix is included in each returned name), in the
+    // stored sorted order. Lets main.cpp discover user-defined [source.NAME] sections without Settings
+    // knowing anything about their schema.
+    [[nodiscard]] std::vector<std::string> getSectionNames(const std::string &prefix) const;
     // Setters mutate m_data only; callers call save() explicitly after a batch of changes.
     void setString(const std::string &section, const std::string &key, const std::string &value);
     void setInt(const std::string &section, const std::string &key, int value);

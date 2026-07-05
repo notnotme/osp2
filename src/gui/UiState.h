@@ -36,6 +36,7 @@ struct UiState {
     std::string path;
     const std::vector<FileEntry> &files;      // non-owning view, valid for the frame
     bool isWorking;
+    std::string workingLabel;                 // overlay text while isWorking ("Scanning..." / "Downloading...")
     const TrackMetadata &metadata;            // non-owning view, valid for the frame
     const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings;  // non-owning view, valid for the frame
 };

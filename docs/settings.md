@@ -11,6 +11,7 @@ classDiagram
         +save()
         +getString(section, key, fallback) string
         +getInt(section, key, fallback) int
+        +getSectionNames(prefix) vector~string~
         +setString(section, key, value)
         +setInt(section, key, value)
         -parse(istream)
@@ -30,6 +31,25 @@ default_folder =          # hand-edit only; empty/invalid -> platform default st
 [plugin.libopenmpt]       # section = "plugin." + PlayerPlugin::getName()
 stereo_separation = 100   # IntRange 0..200
 interpolation = 0         # index into the plugin's enum options (0..4)
+
+[source.Modland Mirror]   # optional; each adds an extra FTP source at the virtual root
+host = some.ftp.example.org   # required — FTP hostname, no scheme
+path = /pub/modules           # optional, default "/" — base directory to browse
+```
+
+### User-defined FTP sources — `[source.NAME]`
+
+Each optional `[source.NAME]` section adds an extra FTP source at the virtual root, labelled `NAME`, alongside the built-in "Local files" and "Modland (FTP)". Keys:
+
+- `host` (**required**) — FTP hostname, no scheme (`ftp://` is added internally). An empty or missing `host` (or an empty `NAME`) skips the section with an `SDL_Log`.
+- `path` (optional, default `/`) — base directory to browse.
+
+The cache subdir for each source is derived from `NAME`, FAT-sanitized (illegal chars and `.`/`..` mapped to `_`) so it is writable on the Switch's SD card. Like `default_folder`, these sections are **hand-edit only** — never seeded on first run and never surfaced in the UI. `main.cpp` discovers them via `Settings::getSectionNames("source.")` (all section names starting with a given prefix, in sorted order — `Settings` itself knows nothing about the source schema).
+
+```ini
+[source.Modland Mirror]
+host = some.ftp.example.org
+path = /pub/modules
 ```
 
 ## INI grammar (hand-rolled parser)

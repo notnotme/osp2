@@ -83,6 +83,7 @@ private:
     void handleThemeChange(Theme theme);
     void handlePluginSettingChange(const std::string &pluginName, const std::string &key, int value);
     void handlePluginSettingCommit(const std::string &pluginName, const std::string &key, int value);
+    void handleCancelWork();
     void playAdjacentTrack(int direction);
 };
 

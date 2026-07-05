@@ -27,20 +27,26 @@
 #include <cstdlib>
 #include <filesystem>
 #include <memory>
+#include <set>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "Application.h"
 #include "filesystem/DataSource.h"
 #include "filesystem/FileSystem.h"
+#include "filesystem/FtpDataSource.h"
 #include "filesystem/LocalDataSource.h"
 #include "gui/Gui.h"
 #include "gui/Theme.h"
 #include "player/PlayerController.h"
 #include "settings/Settings.h"
 
+#include <curl/curl.h>
+
 #if defined(__SWITCH__)
+    #include <switch.h>
     #define BASE_PATH "romfs:/"
 #else
     #define BASE_PATH "romfs/"
@@ -67,6 +73,22 @@ std::filesystem::path configPath() {
         return "osp2.ini";
     }
     std::filesystem::path path = std::filesystem::path(base) / "osp2.ini";
+    SDL_free(base);
+    return path;
+#endif
+}
+
+// Remote sources download to this writable cache root. Mirrors configPath()'s convention:
+// sdmc storage on the Switch (romfs is read-only), next to the executable on desktop.
+std::filesystem::path cachePath() {
+#if defined(__SWITCH__)
+    return "sdmc:/switch/OSP2/cache/";
+#else
+    char *base = SDL_GetBasePath();
+    if (!base) {
+        return "cache/";
+    }
+    std::filesystem::path path = std::filesystem::path(base) / "cache/";
     SDL_free(base);
     return path;
 #endif
@@ -158,8 +180,44 @@ void initialize() {
         }
     }
 
+    // curl_global_init is not thread-safe: run it before file_system.create() spawns the worker.
+    // On the Switch the network stack must be up first, else every transfer fails instantly.
+#if defined(__SWITCH__)
+    socketInitializeDefault();
+#endif
+    if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) {
+        // Non-fatal: local browsing still works; remote sources will fail their transfers.
+        SDL_Log("curl_global_init failed — remote data sources will be unavailable");
+    }
+
     std::vector<std::unique_ptr<DataSource>> sources;
     sources.push_back(std::make_unique<LocalDataSource>());
+    sources.push_back(std::make_unique<FtpDataSource>(
+        "Modland (FTP)", "ftp.modland.com", "/pub/modules", cachePath() / "modland"));
+
+    // Register each user-defined [source.NAME] INI section as an extra FTP source. Hand-edit only:
+    // these are not seeded and not surfaced in the UI — they simply appear at the virtual root.
+    // Cache subdirs must be unique, so no user source collides with the built-in Modland "modland"
+    // dir or another user source that sanitizes to the same component (cross-contaminated caches).
+    constexpr std::string_view kSourcePrefix = "source.";
+    std::set<std::string> takenCacheDirs{"modland"};
+    for (const auto &section : settings.getSectionNames(std::string(kSourcePrefix))) {
+        const std::string name = section.substr(kSourcePrefix.size());
+        const std::string host = settings.getString(section, "host", "");
+        if (name.empty() || host.empty()) {
+            SDL_Log("main: skipping [%s]: a source needs a non-empty name and host", section.c_str());
+            continue;
+        }
+        const std::string subdir = sanitizeCachePathComponent(name);
+        if (!takenCacheDirs.insert(subdir).second) {
+            SDL_Log("main: skipping [%s]: cache dir '%s' already in use", section.c_str(), subdir.c_str());
+            continue;
+        }
+        const std::string path = settings.getString(section, "path", "/");
+        sources.push_back(std::make_unique<FtpDataSource>(
+            name, host, path, cachePath() / subdir));
+    }
+
     file_system.create(std::move(sources), start_path,
         [](const std::filesystem::path &p) { return player.isSupported(p); });
 }
@@ -167,6 +225,11 @@ void initialize() {
 void finalize() {
     // Join the worker before tearing down the player: its isPlayable predicate calls into PlayerController.
     file_system.destroy();
+    // Worker joined — no curl call in flight. Tear the network stack down last (Switch).
+    curl_global_cleanup();
+#if defined(__SWITCH__)
+    socketExit();
+#endif
     player.destroy();
     gui.finalize();
 

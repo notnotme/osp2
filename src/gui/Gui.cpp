@@ -156,7 +156,7 @@ void Gui::drawTopBar(const std::vector<std::pair<std::string, std::vector<Plugin
         ImGui::TextUnformatted("OSP2");
         ImGui::Separator();
 
-        if (ImGui::BeginMenu("  Settings")) {
+        if (ImGui::BeginMenu(" Settings")) {
             if (ImGui::BeginMenu("Theme")) {
                 if (ImGui::MenuItem("Dark", nullptr, m_theme == Theme::DARK)) {
                     applyTheme(Theme::DARK);
@@ -195,7 +195,7 @@ void Gui::drawTopBar(const std::vector<std::pair<std::string, std::vector<Plugin
             ImGui::EndMenu();
         }
 
-        if (ImGui::MenuItem("About")) {
+        if (ImGui::MenuItem(" About")) {
             m_aboutRequested = true;
         }
 
@@ -331,7 +331,11 @@ void Gui::drawCurrentPath(const std::string &path) {
     ImGui::Text("%s", path.c_str());
 }
 
-void Gui::drawFileBrowser(const std::vector<FileEntry> &files, const std::function<void(const FileEntry &)> &onFileClick, const std::function<void(const FileEntry &)> &onDirectoryClick, const bool isWorking) {
+void Gui::drawFileBrowser(const std::vector<FileEntry> &files, const std::function<void(const FileEntry &)> &onFileClick, const std::function<void(const FileEntry &)> &onDirectoryClick, const bool isWorking, const std::string &workingLabel, const std::function<void()> &onCancelWork, const std::string &playingFileName) {
+    // Rising edge of the loading overlay: focus is moved to the Cancel button once on this frame
+    // (below) so gamepad/keyboard on the Switch can reach it; m_wasWorking is updated at function end.
+    const bool overlayJustAppeared = isWorking && !m_wasWorking;
+
     constexpr auto folder_color = ImVec4(0.9f, 0.7f, 0.2f, 1.0f);
     constexpr auto file_color = ImVec4(0.2f, 0.6f, 0.9f, 1.0f);
     constexpr auto file_browser_flags = ImGuiTableFlags_SizingFixedFit
@@ -381,7 +385,10 @@ void Gui::drawFileBrowser(const std::vector<FileEntry> &files, const std::functi
                 } else {
                     ImGui::TextColored(file_color, "");
                     ImGui::SameLine();
-                    if (ImGui::Selectable(entry_label, false, ImGuiSelectableFlags_SpanAllColumns)) {
+                    // Highlight the currently-playing track's row (match by filename, the same basis
+                    // playAdjacentTrack uses; empty when nothing plays, so no false match).
+                    const bool is_playing = !playingFileName.empty() && file_entry.name == playingFileName;
+                    if (ImGui::Selectable(entry_label, is_playing, ImGuiSelectableFlags_SpanAllColumns)) {
                         onFileClick(file_entry);
                     }
                 }
@@ -405,7 +412,7 @@ void Gui::drawFileBrowser(const std::vector<FileEntry> &files, const std::functi
         // ASCII spinner stepped ~8x/s: | / - \.
         constexpr char frames[] = {'|', '/', '-', '\\'};
         const char spinner[] = {frames[static_cast<int64_t>(ImGui::GetTime() * 8.0) & 3], '\0'};
-        constexpr auto text = "Scanning...";
+        const char *text = workingLabel.c_str();
 
         // The frame chars differ in width in the proportional font, so give the spinner a fixed
         // slot and keep the label anchored: center [slot | gap | text] using the stable slot width,
@@ -422,12 +429,34 @@ void Gui::drawFileBrowser(const std::vector<FileEntry> &files, const std::functi
         ImGui::SetNextWindowBgAlpha(0.8f);
 
         ImGui::Begin("##file_browser_overlay", nullptr, overlay_flags);
+        // On the frame the overlay appears, pull focus onto this window so the Cancel button below is
+        // reachable by gamepad/keyboard (Switch) without a mouse; done once, not every frame.
+        if (overlayJustAppeared) {
+            ImGui::SetWindowFocus();
+        }
         ImGui::SetCursorPos(ImVec2(start_x + slot_width - spinner_width, start_y));
         ImGui::TextUnformatted(spinner);
         ImGui::SetCursorPos(ImVec2(start_x + slot_width + gap_width, start_y));
         ImGui::TextUnformatted(text);
+
+        // Cancel button, centered below the spinner/label row; aborts the in-flight scan/download.
+        const auto &overlay_style = ImGui::GetStyle();
+        const auto cancel_width = ImGui::CalcTextSize("Cancel").x + overlay_style.FramePadding.x * 2.0f;
+        const auto cancel_x = (browser_size.x - cancel_width) / 2.0f;
+        const auto cancel_y = start_y + text_size.y + overlay_style.ItemSpacing.y;
+        ImGui::SetCursorPos(ImVec2(cancel_x, cancel_y));
+        // Focus the button once on the rising edge so A/Enter activates it; NOT every frame, which
+        // would trap focus here and prevent the user from navigating away.
+        if (overlayJustAppeared) {
+            ImGui::SetKeyboardFocusHere();
+        }
+        if (ImGui::Button("Cancel")) {
+            onCancelWork();
+        }
         ImGui::End();
     }
+
+    m_wasWorking = isWorking;
 }
 
 void Gui::drawTabsSection(const TrackMetadata &metadata) {
@@ -536,11 +565,11 @@ void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(B
 
     // Track line.
     if (status.state == PlayerState::STOPPED || status.fileName.empty()) {
-        ImGui::Text("  No track");
+        ImGui::Text(" No track");
     } else if (status.title.empty()) {
-        ImGui::Text("  %s", status.fileName.c_str());
+        ImGui::Text(" %s", status.fileName.c_str());
     } else {
-        ImGui::Text("  %s · %s", status.title.c_str(), status.fileName.c_str());
+        ImGui::Text(" %s · %s", status.title.c_str(), status.fileName.c_str());
     }
 
     // Progress row: position | thin track line with a circular playhead | duration. The line and
@@ -646,7 +675,10 @@ void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
 
     if (ImGui::BeginChild("left_pane", ImVec2(left_width, panes_height), ImGuiChildFlags_Borders)) {
         drawCurrentPath(state.path);
-        drawFileBrowser(state.files, actions.onFileClick, actions.onDirectoryClick, state.isWorking);
+        // Nothing is "playing" when stopped, so pass an empty name (no row highlighted) in that state.
+        const std::string playingFileName =
+            state.status.state == PlayerState::STOPPED ? std::string{} : state.status.fileName;
+        drawFileBrowser(state.files, actions.onFileClick, actions.onDirectoryClick, state.isWorking, state.workingLabel, actions.onCancelWork, playingFileName);
     }
     ImGui::EndChild();
 

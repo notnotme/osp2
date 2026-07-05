@@ -57,6 +57,9 @@ private:
     DataSource *m_activeSource;
     DataSource *m_sourceBeforeScan;   // restored by update() when a scan fails (nullopt)
 
+    enum class WorkKind { None, Scan, Fetch };
+    WorkKind m_workKind = WorkKind::None;   // main thread only: what the current/last worker is doing
+
     // Worker synchronization.
     std::atomic_bool m_working;
     std::thread m_worker;
@@ -80,6 +83,7 @@ public:
     void navigateToEntry(const FileEntry &entry);
     void navigateToParent();
     void requestFile(const FileEntry &entry);
+    void cancel();
     [[nodiscard]] std::optional<FetchResult> consumeFetchResult();
     void update();
 
@@ -87,11 +91,14 @@ public:
     [[nodiscard]] const std::filesystem::path &getPath() const;   // empty at the virtual root
     [[nodiscard]] const std::vector<FileEntry> &getContent() const;
     [[nodiscard]] bool isWorking() const;
+    [[nodiscard]] bool isFetching() const;   // true while a file download (not a scan) is in flight
 
 private:
     void startScan(const std::filesystem::path &path);
+    void startFetch(const std::filesystem::path &path);
     void showVirtualRoot();
     void scan(DataSource *source, std::filesystem::path path);
+    void fetch(DataSource *source, std::filesystem::path path);
 };
 
 

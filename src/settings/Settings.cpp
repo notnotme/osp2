@@ -132,6 +132,17 @@ int Settings::getInt(const std::string &section, const std::string &key, const i
     }
 }
 
+std::vector<std::string> Settings::getSectionNames(const std::string &prefix) const {
+    std::vector<std::string> names;
+    // m_data is a std::map, so iteration is already in sorted section order.
+    for (const auto &[section, entries] : m_data) {
+        if (section.rfind(prefix, 0) == 0) {
+            names.push_back(section);
+        }
+    }
+    return names;
+}
+
 void Settings::setString(const std::string &section, const std::string &key, const std::string &value) {
     m_data[section][key] = value;
 }
