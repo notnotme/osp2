@@ -83,4 +83,10 @@ private:
 };
 
 
+// Maps one path component to a cache-safe form: FAT-illegal chars and controls -> '_', "."/".."
+// neutralized (traversal guard). Shared by the cache-path mirror (cacheFileFor) and main.cpp's
+// per-source cache-subdir derivation so both layouts sanitize identically.
+[[nodiscard]] std::string sanitizeCachePathComponent(const std::string &component);
+
+
 #endif //OSP2_FTP_DATA_SOURCE_H

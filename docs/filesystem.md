@@ -8,7 +8,9 @@ overlay while a scan is in flight.
 Browsing is **source-based**: a `DataSource` abstracts one place to browse — local disk
 (`LocalDataSource`) and the Modland archive over anonymous FTP (`FtpDataSource`).
 `FileSystem` owns the sources, the worker thread, and the current listing. A synthetic
-**virtual root** lists the sources themselves as folders.
+**virtual root** lists the sources themselves as folders. Beyond the built-in Modland
+instance, additional `FtpDataSource` instances can be registered from user-defined
+`[source.NAME]` INI sections (host + optional base path) — see [settings.md](settings.md).
 
 ```mermaid
 classDiagram
@@ -148,11 +150,20 @@ Browses a remote archive over anonymous FTP via **libcurl** (built-in instance: 
 - **URL building**: `ftp://<host>` + each path component percent-escaped with
   `curl_easy_escape` and joined by `/` — Modland names contain spaces (`Fasttracker 2` →
   `Fasttracker%202`); MLSD directory URLs get a trailing `/`.
-- **listDirectory (MLSD)**: `CURLOPT_CUSTOMREQUEST "MLSD"`, response accumulated via a write
-  callback. `parseMlsdListing` splits it per line — each is `fact1=val1;fact2=val2; name`, the name
-  everything after the first space, facts split on `;`. `type=` → `dir`/`file` (`cdir`/`pdir`
-  self/parent refs are skipped), `size=` → bytes (files only; dirs report `sizd` and list as size 0).
-  Malformed line → `SDL_Log` + skip.
+- **listDirectory (MLSD first, then LIST)**: tries `CURLOPT_CUSTOMREQUEST "MLSD"`, response
+  accumulated via a write callback. `parseMlsdListing` splits it per line — each is
+  `fact1=val1;fact2=val2; name`, the name everything after the first space, facts split on `;`.
+  `type=` → `dir`/`file` (`cdir`/`pdir` self/parent refs are skipped), `size=` → bytes (files only;
+  dirs report `sizd` and list as size 0). Malformed line → `SDL_Log` + skip. If MLSD **fails** (not a
+  user cancel — Modland always speaks MLSD, but arbitrary user servers may reject it), it falls back
+  to a plain LIST on the same directory URL (no `CUSTOMREQUEST`) and `parseListListing` parses the
+  classic Unix `ls -l` output via `parseListLine` (9-field layout `perms links owner group size month
+  day time/year name`; only the leading type char and the size field are load-bearing; symlinks
+  `type == 'l'` drop their `" -> target"` and count as files; `.`/`..` and any line whose type char is
+  not `d`/`-`/`l` — e.g. the `total N` header — are skipped). A user cancel at either stage returns
+  `nullopt` (no fallback). **LIST responses are NOT cached**: the `.listing` cache only ever holds raw
+  MLSD text (the cache-hit path re-parses it with `parseMlsdListing`), so caching LIST text there would
+  corrupt cache-hit parsing.
 - **Directory-listing cache (30-min TTL)**: each directory's raw MLSD response is cached to
   `<mirrored dir>/.listing` (dot-prefixed, so it coexists with downloaded module files and never
   collides with a real name; server-sourced listings never surface it). `listDirectory` reads the

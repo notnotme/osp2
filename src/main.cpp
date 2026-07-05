@@ -27,8 +27,10 @@
 #include <cstdlib>
 #include <filesystem>
 #include <memory>
+#include <set>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "Application.h"
@@ -192,6 +194,30 @@ void initialize() {
     sources.push_back(std::make_unique<LocalDataSource>());
     sources.push_back(std::make_unique<FtpDataSource>(
         "Modland (FTP)", "ftp.modland.com", "/pub/modules", cachePath() / "modland"));
+
+    // Register each user-defined [source.NAME] INI section as an extra FTP source. Hand-edit only:
+    // these are not seeded and not surfaced in the UI — they simply appear at the virtual root.
+    // Cache subdirs must be unique, so no user source collides with the built-in Modland "modland"
+    // dir or another user source that sanitizes to the same component (cross-contaminated caches).
+    constexpr std::string_view kSourcePrefix = "source.";
+    std::set<std::string> takenCacheDirs{"modland"};
+    for (const auto &section : settings.getSectionNames(std::string(kSourcePrefix))) {
+        const std::string name = section.substr(kSourcePrefix.size());
+        const std::string host = settings.getString(section, "host", "");
+        if (name.empty() || host.empty()) {
+            SDL_Log("main: skipping [%s]: a source needs a non-empty name and host", section.c_str());
+            continue;
+        }
+        const std::string subdir = sanitizeCachePathComponent(name);
+        if (!takenCacheDirs.insert(subdir).second) {
+            SDL_Log("main: skipping [%s]: cache dir '%s' already in use", section.c_str(), subdir.c_str());
+            continue;
+        }
+        const std::string path = settings.getString(section, "path", "/");
+        sources.push_back(std::make_unique<FtpDataSource>(
+            name, host, path, cachePath() / subdir));
+    }
+
     file_system.create(std::move(sources), start_path,
         [](const std::filesystem::path &p) { return player.isSupported(p); });
 }

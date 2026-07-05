@@ -22,6 +22,7 @@
 #include <curl/curl.h>
 #include <SDL.h>
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -58,9 +59,18 @@ size_t writeToFile(char *ptr, size_t size, size_t nmemb, void *userdata) {
 
 enum class LineOutcome {
     Parsed,      // out holds a usable entry
-    Skip,        // valid but ignored (cdir/pdir self/parent reference)
-    Malformed,   // no space or no type= fact — caller logs
+    Skip,        // valid but ignored (MLSD cdir/pdir self/parent refs; LIST "total"/device lines)
+    Malformed,   // unparseable for this listing format — caller logs and skips
 };
+
+// A curl result that means the control connection never came up (DNS/connect/timeout), as opposed
+// to the server actively rejecting a command. Used to decide whether the LIST fallback is worth it:
+// a rejected MLSD command means the connection is alive, so LIST is cheap; a dead connection must
+// NOT be retried, else we burn the connect/stall timeout a second time and double the UI freeze.
+bool isConnectionFailure(CURLcode code) {
+    return code == CURLE_COULDNT_RESOLVE_PROXY || code == CURLE_COULDNT_RESOLVE_HOST
+        || code == CURLE_COULDNT_CONNECT || code == CURLE_OPERATION_TIMEDOUT;
+}
 
 // One MLSD entry: "fact1=val1;fact2=val2; name". Facts are ';'-terminated key=value pairs, then a
 // single space, then the name (which may itself contain spaces).
@@ -122,24 +132,6 @@ constexpr long kConnectTimeoutSeconds = 10;
 constexpr long kStallSpeedBytesPerSec = 1;    // below this...
 constexpr long kStallTimeoutSeconds = 15;     // ...for this long -> abort (was 30)
 
-// FAT-illegal characters (and controls) in a path component -> '_', so the cache mirror is writable
-// on the Switch's FAT SD card; applied on both platforms so the two cache layouts stay identical.
-// Also neutralizes "." / ".." so a hostile or broken server can't escape the cache dir via traversal.
-std::string sanitizeComponent(const std::string &component) {
-    if (component == "." || component == "..") {
-        return std::string(component.size(), '_');   // "." -> "_", ".." -> "__"
-    }
-    std::string sanitized = component;
-    for (char &c : sanitized) {
-        const auto uc = static_cast<unsigned char>(c);
-        if (uc < 0x20 || c == '\\' || c == '/' || c == ':' || c == '*' || c == '?'
-            || c == '"' || c == '<' || c == '>' || c == '|') {
-            c = '_';
-        }
-    }
-    return sanitized;
-}
-
 // Splits a raw MLSD response into FileEntry rows (trailing \r stripped, empty lines skipped,
 // malformed lines logged and skipped). Shared by the live-fetch and cache-hit paths.
 std::vector<FileEntry> parseMlsdListing(const std::string &response) {
@@ -173,7 +165,123 @@ std::vector<FileEntry> parseMlsdListing(const std::string &response) {
     return entries;
 }
 
+// One Unix `ls -l`-style LIST line, e.g.:
+//   "drwxr-xr-x   2 owner group     4096 Jul  5 12:00 Some Dir Name"
+//   "-rw-r--r--   1 owner group   123456 Jul  5 12:00 tune.mod"
+// Standard 9-field layout: perms links owner group size month day time/year name (name may hold
+// spaces). Only the leading type char and the size field are load-bearing; the date fields are
+// skipped. Used only for arbitrary user servers that reject MLSD (Modland uses MLSD).
+LineOutcome parseListLine(const std::string &line, FileEntry &out) {
+    if (line.empty()) {
+        return LineOutcome::Malformed;
+    }
+
+    const char type = line.front();
+    if (type != 'd' && type != '-' && type != 'l') {
+        return LineOutcome::Skip;   // "total N" header, plus device/socket/fifo entries we don't browse
+    }
+
+    // Read the first 8 whitespace-delimited fields; index 4 (0-based) is the size. After the 8th
+    // field, the remainder of the line (past the whitespace) is the name, preserving internal spaces.
+    std::array<std::string, 8> fields;
+    size_t field_count = 0;
+    size_t pos = 0;
+    while (field_count < 8) {
+        while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t')) {
+            ++pos;
+        }
+        if (pos >= line.size()) {
+            break;
+        }
+        const size_t start = pos;
+        while (pos < line.size() && line[pos] != ' ' && line[pos] != '\t') {
+            ++pos;
+        }
+        fields[field_count++] = line.substr(start, pos - start);
+    }
+    if (field_count < 8) {
+        return LineOutcome::Malformed;
+    }
+
+    // Skip the whitespace after the 8th field; the rest is the name.
+    while (pos < line.size() && (line[pos] == ' ' || line[pos] == '\t')) {
+        ++pos;
+    }
+    std::string name = line.substr(pos);
+    if (name.empty()) {
+        return LineOutcome::Malformed;
+    }
+
+    // A symlink line reads "name -> target"; strip the target and treat the link as a file.
+    if (type == 'l') {
+        if (const auto arrow = name.find(" -> "); arrow != std::string::npos) {
+            name.erase(arrow);
+        }
+    }
+
+    if (name == "." || name == "..") {
+        return LineOutcome::Skip;
+    }
+
+    const bool is_directory = (type == 'd');
+    const std::int64_t file_size = static_cast<std::int64_t>(std::strtoll(fields[4].c_str(), nullptr, 10));
+    out = FileEntry{name, is_directory ? 0 : file_size, "", is_directory};
+    return LineOutcome::Parsed;
+}
+
+// Splits a raw LIST response into FileEntry rows, mirroring parseMlsdListing (trailing \r stripped,
+// empty lines skipped, malformed lines logged and skipped) but delegating to parseListLine.
+std::vector<FileEntry> parseListListing(const std::string &response) {
+    std::vector<FileEntry> entries;
+    size_t start = 0;
+    while (start < response.size()) {
+        auto newline = response.find('\n', start);
+        const auto end = (newline == std::string::npos) ? response.size() : newline;
+        std::string line = response.substr(start, end - start);
+        start = (newline == std::string::npos) ? response.size() : newline + 1;
+
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        if (line.empty()) {
+            continue;
+        }
+
+        FileEntry entry;
+        switch (parseListLine(line, entry)) {
+            case LineOutcome::Parsed:
+                entries.push_back(std::move(entry));
+                break;
+            case LineOutcome::Skip:
+                break;
+            case LineOutcome::Malformed:
+                SDL_Log("FtpDataSource: skipping unparseable LIST line: '%s'", line.c_str());
+                break;
+        }
+    }
+    return entries;
+}
+
 }   // namespace
+
+
+// FAT-illegal characters (and controls) in a path component -> '_', so the cache mirror is writable
+// on the Switch's FAT SD card; applied on both platforms so the two cache layouts stay identical.
+// Also neutralizes "." / ".." so a hostile or broken server can't escape the cache dir via traversal.
+std::string sanitizeCachePathComponent(const std::string &component) {
+    if (component == "." || component == "..") {
+        return std::string(component.size(), '_');   // "." -> "_", ".." -> "__"
+    }
+    std::string sanitized = component;
+    for (char &c : sanitized) {
+        const auto uc = static_cast<unsigned char>(c);
+        if (uc < 0x20 || c == '\\' || c == '/' || c == ':' || c == '*' || c == '?'
+            || c == '"' || c == '<' || c == '>' || c == '|') {
+            c = '_';
+        }
+    }
+    return sanitized;
+}
 
 
 FtpDataSource::FtpDataSource(std::string displayName, std::string host,
@@ -238,7 +346,7 @@ std::filesystem::path FtpDataSource::cacheFileFor(const std::filesystem::path &p
         if (part.empty() || part == "/") {
             continue;   // skip the leading root; mirror only real path components
         }
-        cacheFile /= sanitizeComponent(part);
+        cacheFile /= sanitizeCachePathComponent(part);
     }
     return cacheFile;
 }
@@ -344,10 +452,12 @@ std::optional<std::vector<FileEntry>> FtpDataSource::listDirectory(const std::fi
 
     // Stale, absent, or unreadable: go online (unless the handle can't be created).
     if (ensureHandle()) {
+        const std::string url = buildUrl(path, /*trailingSlash=*/true);
+
+        // MLSD first: machine-readable, and the only format we cache (see below).
         curl_easy_reset(m_curl);
         applyCommonOptions();
 
-        const std::string url = buildUrl(path, /*trailingSlash=*/true);
         std::string response;
         curl_easy_setopt(m_curl, CURLOPT_URL, url.c_str());
         curl_easy_setopt(m_curl, CURLOPT_CUSTOMREQUEST, "MLSD");
@@ -362,6 +472,33 @@ std::optional<std::vector<FileEntry>> FtpDataSource::listDirectory(const std::fi
             // back to a stale cache (which would drop them inside the folder showing old data).
             SDL_Log("FtpDataSource: listing cancelled for '%s'", path.string().c_str());
             return std::nullopt;
+        } else if (!isConnectionFailure(result)) {
+            // MLSD reached the server and was rejected (server lacks it): the control connection is
+            // alive, so a LIST retry is cheap. On a dead connection we skip straight to the stale-cache
+            // fallback instead — retrying would burn the connect/stall timeout a second time.
+            SDL_Log("FtpDataSource: MLSD failed for '%s': %s — trying LIST",
+                    path.string().c_str(), curl_easy_strerror(result));
+
+            // LIST fallback: a plain LIST on the directory URL (no CUSTOMREQUEST). NOT cached — the
+            // .listing cache stores raw MLSD text and the cache-hit path re-parses it with
+            // parseMlsdListing, so caching LIST text there would corrupt cache-hit parsing.
+            response.clear();
+            curl_easy_reset(m_curl);
+            applyCommonOptions();
+
+            curl_easy_setopt(m_curl, CURLOPT_URL, url.c_str());
+            curl_easy_setopt(m_curl, CURLOPT_WRITEFUNCTION, writeToString);
+            curl_easy_setopt(m_curl, CURLOPT_WRITEDATA, &response);
+
+            if (const CURLcode listResult = curl_easy_perform(m_curl); listResult == CURLE_OK) {
+                return parseListListing(response);
+            } else if (listResult == CURLE_ABORTED_BY_CALLBACK) {
+                SDL_Log("FtpDataSource: listing cancelled for '%s'", path.string().c_str());
+                return std::nullopt;
+            } else {
+                SDL_Log("FtpDataSource: LIST failed for '%s': %s",
+                        path.string().c_str(), curl_easy_strerror(listResult));
+            }
         } else {
             SDL_Log("FtpDataSource: MLSD failed for '%s': %s",
                     path.string().c_str(), curl_easy_strerror(result));

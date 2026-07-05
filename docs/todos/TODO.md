@@ -22,11 +22,11 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
   - [x] 6a — Settings domain + user settings (theme, default_folder)
   - [x] 6b — Plugin settings backend (PluginSetting, OpenMpt tunables)
   - [x] 6c — Settings UI (generic widget loop)
-- [ ] [TODO_7 — Remote data source: Modland FTP via libcurl](TODO_7.md)
+- [x] [TODO_7 — Remote data source: Modland FTP via libcurl](TODO_7.md)
   - [x] 7a — curl dependency + FTP listing (MLSD)
   - [x] 7b — Download-to-cache + playback
   - [x] 7c — Robustness + polish (overlay label, cancel button, sanitization, timeouts; Switch hardware test pending)
-  - [ ] 7d — User-defined FTP sources (optional, requires TODO_6)
+  - [x] 7d — User-defined FTP sources (optional, requires TODO_6)
 - [ ] [TODO_8 — Visualization plugin system (VisualizerPlugin + Bars visual)](TODO_8.md) — requires TODO_3 (view mode); chunk 8a is backend-only and independent
   - [ ] 8a — Audio tap (AudioTap seqlock + PlayerController::readLatestAudio)
   - [ ] 8b — Visualizer skeleton + wiring (VisualizerPlugin, VisualizerController, onRenderVisualization hook, DebugVisualizer)
