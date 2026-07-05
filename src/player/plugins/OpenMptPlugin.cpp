@@ -49,6 +49,17 @@ bool OpenMptPlugin::open(const std::filesystem::path &path) {
 
         m_module = std::make_unique<openmpt::module>(file);
         m_module->set_repeat_count(0);
+        m_metadata = ModuleMetadata{
+            m_module->get_metadata("title"),
+            m_module->get_metadata("artist"),
+            m_module->get_metadata("type_long"),
+            m_module->get_metadata("tracker"),
+            m_module->get_num_channels(),
+            m_module->get_num_patterns(),
+            m_module->get_num_samples(),
+            m_module->get_num_instruments(),
+            m_module->get_metadata("message")
+        };
         return true;
     } catch (const openmpt::exception &e) {
         SDL_Log("OpenMptPlugin: failed to parse %s: %s", path.c_str(), e.what());
@@ -59,6 +70,7 @@ bool OpenMptPlugin::open(const std::filesystem::path &path) {
 
 void OpenMptPlugin::close() {
     m_module.reset();
+    m_metadata = std::monostate{};
 }
 
 int OpenMptPlugin::decode(float *buffer, const int frames) {
@@ -83,4 +95,8 @@ double OpenMptPlugin::getPosition() const {
 
 double OpenMptPlugin::getDuration() const {
     return m_module ? m_module->get_duration_seconds() : 0.0;
+}
+
+TrackMetadata OpenMptPlugin::getMetadata() const {
+    return m_metadata;
 }

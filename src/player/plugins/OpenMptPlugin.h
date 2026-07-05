@@ -32,6 +32,8 @@ private:
     int m_sampleRate;
     std::vector<std::string> m_extensions;
     std::unique_ptr<openmpt::module> m_module;
+    // Captured once in open() so getMetadata() never touches the audio-thread-shared module.
+    TrackMetadata m_metadata;
 
 public:
     OpenMptPlugin(const OpenMptPlugin &) = delete;
@@ -50,6 +52,7 @@ public:
     [[nodiscard]] std::string getTitle() const override;
     [[nodiscard]] double getPosition() const override;
     [[nodiscard]] double getDuration() const override;
+    [[nodiscard]] TrackMetadata getMetadata() const override;
 };
 
 

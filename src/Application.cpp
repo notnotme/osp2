@@ -127,6 +127,13 @@ void Application::update() {
     if (m_player.consumeTrackEnded()) {
         playAdjacentTrack(+1);
     }
+
+    // Refetch metadata only when the playing path changes (manual play, auto-advance, stop),
+    // not per frame — getMetadata() locks the audio mutex. A cleared path resets to monostate.
+    if (auto path = m_player.getCurrentPath(); path != m_metadataPath) {
+        m_metadataPath = path;
+        m_trackMetadata = m_player.getMetadata();
+    }
 }
 
 UiState Application::makeUiState() const {
@@ -135,7 +142,8 @@ UiState Application::makeUiState() const {
         m_player.getStatus(),
         path.empty() ? "Sources" : path.string(),
         m_fileSystem.getContent(),
-        m_fileSystem.isWorking()
+        m_fileSystem.isWorking(),
+        m_trackMetadata
     };
 }
 

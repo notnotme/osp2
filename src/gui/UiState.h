@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "../filesystem/FileEntry.h"
+#include "../player/Metadata.h"
 #include "../player/PlaybackStatus.h"
 
 
@@ -31,8 +32,9 @@
 struct UiState {
     PlaybackStatus status;
     std::string path;
-    const std::vector<FileEntry> &files;   // non-owning view, valid for the frame
+    const std::vector<FileEntry> &files;      // non-owning view, valid for the frame
     bool isWorking;
+    const TrackMetadata &metadata;            // non-owning view, valid for the frame
 };
 
 

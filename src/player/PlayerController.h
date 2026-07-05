@@ -29,6 +29,7 @@
 #include <string>
 #include <vector>
 
+#include "Metadata.h"
 #include "PlaybackStatus.h"
 #include "PlayerPlugin.h"
 #include "PlayerState.h"
@@ -74,6 +75,7 @@ public:
     [[nodiscard]] std::filesystem::path getCurrentPath() const;
     [[nodiscard]] std::string getCurrentTitle() const;
     [[nodiscard]] PlaybackStatus getStatus() const;
+    [[nodiscard]] TrackMetadata getMetadata() const;
     [[nodiscard]] bool isSupported(const std::filesystem::path &path) const;
     [[nodiscard]] bool consumeTrackEnded();
 

@@ -27,9 +27,13 @@
 #include <cstdio>
 #include <fstream>
 #include <string>
+#include <variant>
 
 
 namespace {
+    // std::visit helper: builds an overload set from lambdas (C++20 aggregate CTAD, no guide needed).
+    template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
+
     // Formats a duration as "m:ss" (zero-padded seconds). Negative or NaN clamps to "0:00".
     std::string formatTime(const double seconds) {
         if (std::isnan(seconds) || seconds < 0.0) {
@@ -320,42 +324,81 @@ void Gui::drawFileBrowser(const std::vector<FileEntry> &files, const std::functi
     }
 }
 
-void Gui::drawTabsSection() {
+void Gui::drawTabsSection(const TrackMetadata &metadata) {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     if (ImGui::BeginTabBar("tabs_section")) {
-        drawFileMetadata();
+        drawFileMetadata(metadata);
         drawTabPlaylist();
         ImGui::EndTabBar();
     }
     ImGui::PopStyleVar();
 }
 
-void Gui::drawFileMetadata() {
+void Gui::drawFileMetadata(const TrackMetadata &metadata) {
     if (ImGui::BeginTabItem("Metadata")) {
-        // Placeholder key/value view; TODO_5 supplies typed per-plugin metadata.
-        constexpr auto flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp;
-        if (ImGui::BeginTable("metadata_table", 2, flags)) {
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            ImGui::Text("Title");
-            ImGui::TableNextColumn();
-            ImGui::Text("Cool Song");
-
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            ImGui::Text("Format");
-            ImGui::TableNextColumn();
-            ImGui::Text("S3M");
-
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            ImGui::Text("Channels");
-            ImGui::TableNextColumn();
-            ImGui::Text("16");
-
-            ImGui::EndTable();
-        }
+        // Dispatch on the variant. Deliberately NO generic `auto` fallback: a new plugin's
+        // metadata alternative must fail to compile here until its draw function is added.
+        std::visit(overloaded{
+            [](std::monostate) {
+                constexpr auto text = "No track loaded";
+                const auto available = ImGui::GetContentRegionAvail();
+                const auto text_size = ImGui::CalcTextSize(text);
+                ImGui::SetCursorPos(ImVec2(
+                    ImGui::GetCursorPosX() + (available.x - text_size.x) / 2.0f,
+                    ImGui::GetCursorPosY() + (available.y - text_size.y) / 2.0f));
+                ImGui::TextDisabled("%s", text);
+            },
+            [this](const ModuleMetadata &m) { drawModuleMetadata(m); },
+        }, metadata);
         ImGui::EndTabItem();
+    }
+}
+
+void Gui::drawModuleMetadata(const ModuleMetadata &metadata) {
+    constexpr auto table_flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp;
+    if (ImGui::BeginTable("metadata_table", 2, table_flags)) {
+        // Text fields are skipped when empty; count fields are always meaningful (0 = none).
+        const auto text_row = [](const char *label, const std::string &value) {
+            if (value.empty()) {
+                return;
+            }
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(label);
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(value.c_str());
+        };
+        const auto count_row = [](const char *label, const int value) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::TextUnformatted(label);
+            ImGui::TableNextColumn();
+            ImGui::Text("%d", value);
+        };
+
+        text_row("Title", metadata.title);
+        text_row("Artist", metadata.artist);
+        text_row("Format", metadata.format);
+        text_row("Tracker", metadata.tracker);
+        count_row("Channels", metadata.channels);
+        count_row("Patterns", metadata.patterns);
+        count_row("Samples", metadata.samples);
+        count_row("Instruments", metadata.instruments);
+
+        ImGui::EndTable();
+    }
+
+    // Song message: often multiline. Scrollable, word-wrapped child; TextUnformatted never
+    // treats the (user-authored) message as a printf format string.
+    if (!metadata.message.empty()) {
+        ImGui::Spacing();
+        ImGui::TextUnformatted("Message");
+        if (ImGui::BeginChild("metadata_message", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders)) {
+            ImGui::PushTextWrapPos(0.0f);
+            ImGui::TextUnformatted(metadata.message.c_str());
+            ImGui::PopTextWrapPos();
+        }
+        ImGui::EndChild();
     }
 }
 
@@ -478,7 +521,7 @@ void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
     ImGui::SameLine();
 
     if (ImGui::BeginChild("right_pane", ImVec2(right_width, panes_height), ImGuiChildFlags_Borders)) {
-        drawTabsSection();
+        drawTabsSection(state.metadata);
     }
     ImGui::EndChild();
 
