@@ -53,6 +53,20 @@ private:
     // "ftp://<host>" + each component of path percent-escaped and joined by '/'.
     // trailingSlash appends '/' (required for an MLSD directory URL).
     [[nodiscard]] std::string buildUrl(const std::filesystem::path &path, bool trailingSlash) const;
+    // m_cacheDir + each non-root component of the remote path, mirroring the remote layout.
+    [[nodiscard]] std::filesystem::path cacheFileFor(const std::filesystem::path &path) const;
+    // Whole contents of a cached listing file, regardless of age; nullopt if absent, unreadable, or
+    // a read error truncated it. Freshness is a separate concern (listingCacheFresh).
+    [[nodiscard]] std::optional<std::string> readListingCache(const std::filesystem::path &cacheFile) const;
+    // True iff cacheFile exists and its mtime is within kListingCacheTtl (→ serve without the network).
+    [[nodiscard]] bool listingCacheFresh(const std::filesystem::path &cacheFile) const;
+    // Best-effort atomic (.part → rename) write of a raw MLSD response; refreshes the mtime/TTL.
+    // Failures are logged and swallowed — the live response is still returned to the caller.
+    void writeListingCache(const std::filesystem::path &cacheFile, const std::string &response) const;
+    // Renames a fully-written <target>.part into target; removes it and logs on failure. Returns
+    // success. Shared by writeListingCache and fetchFile's download staging.
+    [[nodiscard]] bool commitPart(const std::filesystem::path &partFile,
+                                  const std::filesystem::path &target) const;
     // NOSIGNAL + connect/stall timeouts, re-applied after every curl_easy_reset.
     void applyCommonOptions() const;
 

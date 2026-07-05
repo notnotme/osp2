@@ -24,7 +24,7 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
   - [x] 6c — Settings UI (generic widget loop)
 - [ ] [TODO_7 — Remote data source: Modland FTP via libcurl](TODO_7.md)
   - [x] 7a — curl dependency + FTP listing (MLSD)
-  - [ ] 7b — Download-to-cache + playback
+  - [x] 7b — Download-to-cache + playback
   - [ ] 7c — Robustness + polish (overlay label, failures, Switch hardware)
   - [ ] 7d — User-defined FTP sources (optional, requires TODO_6)
 - [ ] [TODO_8 — Visualization plugin system (VisualizerPlugin + Bars visual)](TODO_8.md) — requires TODO_3 (view mode); chunk 8a is backend-only and independent

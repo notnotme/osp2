@@ -57,6 +57,9 @@ private:
     DataSource *m_activeSource;
     DataSource *m_sourceBeforeScan;   // restored by update() when a scan fails (nullopt)
 
+    enum class WorkKind { None, Scan, Fetch };
+    WorkKind m_workKind = WorkKind::None;   // main thread only: what the current/last worker is doing
+
     // Worker synchronization.
     std::atomic_bool m_working;
     std::thread m_worker;
@@ -90,8 +93,10 @@ public:
 
 private:
     void startScan(const std::filesystem::path &path);
+    void startFetch(const std::filesystem::path &path);
     void showVirtualRoot();
     void scan(DataSource *source, std::filesystem::path path);
+    void fetch(DataSource *source, std::filesystem::path path);
 };
 
 

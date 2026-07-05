@@ -45,6 +45,7 @@ classDiagram
         -path m_path
         -vector~FileEntry~ m_content
         -DataSource* m_activeSource
+        -WorkKind m_workKind
         -atomic_bool m_working
         -thread m_worker
         -mutex m_mutex
@@ -128,13 +129,31 @@ Browses a remote archive over anonymous FTP via **libcurl** (built-in instance: 
   `curl_easy_escape` and joined by `/` — Modland names contain spaces (`Fasttracker 2` →
   `Fasttracker%202`); MLSD directory URLs get a trailing `/`.
 - **listDirectory (MLSD)**: `CURLOPT_CUSTOMREQUEST "MLSD"`, response accumulated via a write
-  callback. Each line is `fact1=val1;fact2=val2; name` — the name is everything after the
-  first space; facts split on `;`. `type=` → `dir`/`file` (`cdir`/`pdir` self/parent refs are
-  skipped), `size=` → bytes (files only; dirs report `sizd` and list as size 0). Malformed
-  line → `SDL_Log` + skip. Transfer failure → `SDL_Log` (via `curl_easy_strerror`) + `nullopt`,
-  so FileSystem keeps the current listing and stays put when entering the source fails.
-- **fetchFile** — download-to-cache lands in chunk **7b**; in 7a it is a logged stub returning
-  an empty path (mirrored cache under `m_cacheDir`, e.g. `cache/modland/...`).
+  callback. `parseMlsdListing` splits it per line — each is `fact1=val1;fact2=val2; name`, the name
+  everything after the first space, facts split on `;`. `type=` → `dir`/`file` (`cdir`/`pdir`
+  self/parent refs are skipped), `size=` → bytes (files only; dirs report `sizd` and list as size 0).
+  Malformed line → `SDL_Log` + skip.
+- **Directory-listing cache (30-min TTL)**: each directory's raw MLSD response is cached to
+  `<mirrored dir>/.listing` (dot-prefixed, so it coexists with downloaded module files and never
+  collides with a real name; server-sourced listings never surface it). `listDirectory` reads the
+  cache once up front, and if it exists and its mtime is within `kListingCacheTtl` (30 min) it parses
+  and returns it **without any network call** — snappy re-browsing, and recently-visited directories
+  work offline. Otherwise it fetches online (guarded by `ensureHandle`); on `CURLE_OK` it writes the
+  cache (best-effort `.part` → rename, refreshing the mtime) and parses. If the fetch fails or no
+  handle could be created, it **falls back to the stale cached listing** if one exists (logged),
+  serving slightly-old contents rather than stalling; only with no cache at all does it return
+  `nullopt` (FileSystem keeps the current listing / stays put). `readListingCache` reads exactly
+  `file_size` bytes and rejects a short read, so a truncated cache is never served.
+- **fetchFile (download-to-cache)**: the cache path mirrors the remote layout under `m_cacheDir`
+  (`cacheFileFor`: each non-root path component appended, so `/pub/modules/AHX/x.ahx` →
+  `cache/modland/pub/modules/AHX/x.ahx`). This preserves the extension (plugin selection) and the
+  `filename()` (the player's adjacent-track cursor matches on it). A non-empty existing file is a
+  cache hit (`file_size` via the `error_code` overload, `!ec && size > 0` — `!ec` also covers
+  absence). Otherwise it `create_directories(parent)`, downloads via `CURLOPT_WRITEFUNCTION` into a
+  sibling `<file>.part` `std::ofstream`, and on `CURLE_OK` **and** a clean `close()` flush renames it
+  into place; any failure (`nullopt` transfer, write/flush error, rename error) removes the `.part`,
+  `SDL_Log`s, and returns an empty path. Staging via `.part` + rename keeps the cache from ever
+  holding a truncated file. FAT-illegal-character sanitization of components is deferred to 7c.
 
 **curl lifecycle ownership**: `main.cpp` owns the *global* state — `curl_global_init` runs
 before `FileSystem::create()` spawns the worker (it is not thread-safe), paired with
@@ -156,8 +175,8 @@ style as the audio domain (atomic flag + mutex-guarded handoff, swap on the main
 | `m_working` | `std::atomic_bool` (worker clears; Gui overlay + navigate/request guards read) |
 | `m_worker` | main thread only (launch in `startScan`, join in `update`/`destroy`) |
 | `m_sources`, `m_isPlayable` | immutable after `create()` until `destroy()` releases the sources (worker already joined); `m_isPlayable` is called on the worker: `PlayerController::isSupported` reads only immutable plugin extension lists |
-| `m_activeSource`, `m_sourceBeforeScan` | main thread only, mutated while the worker is idle; the worker uses the source pointer captured at launch |
-| `m_fetchResult` | `m_mutex` (TODO_4: written inline on the main thread; TODO_7: worker writes) |
+| `m_activeSource`, `m_sourceBeforeScan`, `m_workKind` | main thread only, mutated while the worker is idle; the worker uses the source pointer captured at launch. `m_workKind` is set in `startScan`/`startFetch` and read in `update()` |
+| `m_fetchResult` | `m_mutex` (worker writes in `fetch()`; `consumeFetchResult()` reads on the main thread) |
 
 - **Worker lifecycle**: `startScan(path)` joins any finished-but-unswapped worker, sets
   `m_working = true`, spawns `scan(source, path)` with the active source captured by value.
@@ -170,8 +189,14 @@ style as the audio domain (atomic flag + mutex-guarded handoff, swap on the main
   the sources (so `FtpDataSource`'s `curl_easy_cleanup` runs while curl is still initialized) —
   **main.cpp calls `file_system.destroy()` before `player.destroy()`** because the worker's
   predicate calls into `PlayerController`, and before `curl_global_cleanup()`.
+- **Fetch lifecycle**: `requestFile` launches `startFetch(path)` — the same join-then-launch
+  pattern as `startScan`, tagged `m_workKind = Fetch`. The worker runs `fetch(source, path)`
+  (`source->fetchFile`, store `m_fetchResult` under the mutex, `m_working = false` **last**).
+  `update()` joins the finished worker and, only for a `Scan`, swaps the listing; a `Fetch` leaves
+  its result parked for `consumeFetchResult()`. The single worker stays sufficient because all
+  FileSystem work is UI-modal — a listing and a download never need to overlap.
 - **Navigation** (`navigateToEntry`/`navigateToParent`) and `requestFile` are ignored while a
-  scan runs (the UI is blocked by the overlay anyway). Root detection compares
+  scan or fetch runs (the UI is blocked by the overlay anyway). Root detection compares
   `m_path == m_activeSource->getRootPath()` (not `parent_path()`, since `parent_path()` of a
   root like `sdmc:/` returns itself).
 
@@ -186,11 +211,16 @@ its `getRootPath()`.
 
 ## Fetch flow
 
-`requestFile(entry)` resolves `m_activeSource->fetchFile(m_path / entry.name)` and stores a
-`FetchResult{localPath, succeeded}`. `Application::update()` polls `consumeFetchResult()`
-(consume-once, same pattern as `PlayerController::consumeTrackEnded()`) and plays the resolved
-local path. TODO_4 resolves inline on the main thread (local fetch is instant); TODO_7 moves
-it onto the worker behind the overlay.
+`requestFile(entry)` runs `m_activeSource->fetchFile(m_path / entry.name)` on the worker (via
+`startFetch`, the same single worker used for scans) and the worker stores a
+`FetchResult{localPath, succeeded}` under `m_mutex`. `Application::update()` polls
+`consumeFetchResult()` (consume-once, same pattern as `PlayerController::consumeTrackEnded()`) and
+plays the resolved local path; on a failed fetch during auto-advance it retries the next sibling.
+TODO_4 resolved this inline on the main thread (local fetch is instant); **7b** moves it onto the
+worker so the 4c spinner overlay covers remote downloads too — one uniform path for every source,
+guarded by `m_working` like scans. Because the worker is shared, `m_workKind` (Scan / Fetch,
+main-thread-only) tells `update()` whether a finished worker's result is a listing to swap or a
+fetch result already parked in `m_fetchResult`.
 
 ## UI seam
 

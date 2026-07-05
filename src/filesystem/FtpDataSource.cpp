@@ -22,8 +22,10 @@
 #include <curl/curl.h>
 #include <SDL.h>
 
+#include <chrono>
 #include <cstdint>
 #include <cstdlib>
+#include <fstream>
 #include <string>
 #include <utility>
 
@@ -36,6 +38,15 @@ size_t writeToString(char *ptr, size_t size, size_t nmemb, void *userdata) {
     auto *accumulator = static_cast<std::string *>(userdata);
     accumulator->append(ptr, byte_count);
     return byte_count;
+}
+
+// libcurl write callback: streams received bytes to the std::ofstream handed via CURLOPT_WRITEDATA.
+// Returning a short count aborts the transfer (used to surface a disk-write failure to curl).
+size_t writeToFile(char *ptr, size_t size, size_t nmemb, void *userdata) {
+    const size_t byte_count = size * nmemb;
+    auto *out = static_cast<std::ofstream *>(userdata);
+    out->write(ptr, static_cast<std::streamsize>(byte_count));
+    return out->good() ? byte_count : 0;
 }
 
 enum class LineOutcome {
@@ -93,6 +104,42 @@ LineOutcome parseMlsdLine(const std::string &line, FileEntry &out) {
 
     out = FileEntry{name, is_directory ? 0 : file_size, "", is_directory};
     return LineOutcome::Parsed;
+}
+
+// A cached listing is served without hitting the network while its file is younger than this.
+constexpr std::chrono::minutes kListingCacheTtl{30};
+
+// Splits a raw MLSD response into FileEntry rows (trailing \r stripped, empty lines skipped,
+// malformed lines logged and skipped). Shared by the live-fetch and cache-hit paths.
+std::vector<FileEntry> parseMlsdListing(const std::string &response) {
+    std::vector<FileEntry> entries;
+    size_t start = 0;
+    while (start < response.size()) {
+        auto newline = response.find('\n', start);
+        const auto end = (newline == std::string::npos) ? response.size() : newline;
+        std::string line = response.substr(start, end - start);
+        start = (newline == std::string::npos) ? response.size() : newline + 1;
+
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
+        if (line.empty()) {
+            continue;
+        }
+
+        FileEntry entry;
+        switch (parseMlsdLine(line, entry)) {
+            case LineOutcome::Parsed:
+                entries.push_back(std::move(entry));
+                break;
+            case LineOutcome::Skip:
+                break;
+            case LineOutcome::Malformed:
+                SDL_Log("FtpDataSource: skipping unparseable MLSD line: '%s'", line.c_str());
+                break;
+        }
+    }
+    return entries;
 }
 
 }   // namespace
@@ -153,6 +200,18 @@ std::string FtpDataSource::buildUrl(const std::filesystem::path &path, bool trai
     return url;
 }
 
+std::filesystem::path FtpDataSource::cacheFileFor(const std::filesystem::path &path) const {
+    std::filesystem::path cacheFile = m_cacheDir;
+    for (const auto &component : path) {
+        const std::string part = component.string();
+        if (part.empty() || part == "/") {
+            continue;   // skip the leading root; mirror only real path components
+        }
+        cacheFile /= part;
+    }
+    return cacheFile;
+}
+
 void FtpDataSource::applyCommonOptions() const {
     curl_easy_setopt(m_curl, CURLOPT_NOSIGNAL, 1L);
     curl_easy_setopt(m_curl, CURLOPT_CONNECTTIMEOUT, 10L);
@@ -160,61 +219,179 @@ void FtpDataSource::applyCommonOptions() const {
     curl_easy_setopt(m_curl, CURLOPT_LOW_SPEED_TIME, 30L);
 }
 
-std::optional<std::vector<FileEntry>> FtpDataSource::listDirectory(const std::filesystem::path &path) {
-    if (!ensureHandle()) {
+std::optional<std::string> FtpDataSource::readListingCache(const std::filesystem::path &cacheFile) const {
+    std::error_code ec;
+    const auto expected = std::filesystem::file_size(cacheFile, ec);
+    if (ec) {
+        return std::nullopt;   // absent or unstatable
+    }
+
+    std::ifstream in(cacheFile, std::ios::binary);
+    if (!in) {
+        return std::nullopt;   // unopenable
+    }
+
+    // Read exactly the expected size and verify the count: a short read (I/O error, or the file
+    // shrinking under us) yields fewer bytes, which we reject rather than serve a truncated listing.
+    std::string content(static_cast<std::size_t>(expected), '\0');
+    in.read(content.data(), static_cast<std::streamsize>(expected));
+    if (static_cast<std::uintmax_t>(in.gcount()) != expected) {
         return std::nullopt;
+    }
+    return content;
+}
+
+bool FtpDataSource::listingCacheFresh(const std::filesystem::path &cacheFile) const {
+    std::error_code ec;
+    const auto mtime = std::filesystem::last_write_time(cacheFile, ec);
+    if (ec) {
+        return false;   // absent or unstatable
+    }
+    return std::filesystem::file_time_type::clock::now() - mtime <= kListingCacheTtl;
+}
+
+bool FtpDataSource::commitPart(const std::filesystem::path &partFile,
+                               const std::filesystem::path &target) const {
+    std::error_code ec;
+    std::filesystem::rename(partFile, target, ec);
+    if (ec) {
+        SDL_Log("FtpDataSource: cannot move '%s' into place: %s",
+                partFile.string().c_str(), ec.message().c_str());
+        std::filesystem::remove(partFile, ec);
+        return false;
+    }
+    return true;
+}
+
+void FtpDataSource::writeListingCache(const std::filesystem::path &cacheFile, const std::string &response) const {
+    std::error_code ec;
+    std::filesystem::create_directories(cacheFile.parent_path(), ec);
+    if (ec) {
+        SDL_Log("FtpDataSource: cannot create cache directory '%s': %s",
+                cacheFile.parent_path().string().c_str(), ec.message().c_str());
+        return;   // non-fatal: the live response is still returned to the caller
+    }
+
+    // Write to a sibling .part file, then rename on success so the cache never holds a truncated listing.
+    std::filesystem::path partFile = cacheFile;
+    partFile += ".part";
+
+    std::ofstream out(partFile, std::ios::binary | std::ios::trunc);
+    if (!out) {
+        SDL_Log("FtpDataSource: cannot open '%s' for writing", partFile.string().c_str());
+        return;
+    }
+    out.write(response.data(), static_cast<std::streamsize>(response.size()));
+    out.close();
+    if (!out) {
+        SDL_Log("FtpDataSource: write/flush failed for '%s'", partFile.string().c_str());
+        std::filesystem::remove(partFile, ec);
+        return;
+    }
+
+    static_cast<void>(commitPart(partFile, cacheFile));   // best-effort; failure already logged and cleaned up
+}
+
+std::optional<std::vector<FileEntry>> FtpDataSource::listDirectory(const std::filesystem::path &path) {
+    const std::filesystem::path cacheFile = cacheFileFor(path) / ".listing";
+
+    // A cached listing (any age) doubles as the offline fallback below; read it once up front.
+    const auto cached = readListingCache(cacheFile);
+
+    // Fresh (< 30 min): serve it without touching the network.
+    if (cached && listingCacheFresh(cacheFile)) {
+        return parseMlsdListing(*cached);
+    }
+
+    // Stale, absent, or unreadable: go online (unless the handle can't be created).
+    if (ensureHandle()) {
+        curl_easy_reset(m_curl);
+        applyCommonOptions();
+
+        const std::string url = buildUrl(path, /*trailingSlash=*/true);
+        std::string response;
+        curl_easy_setopt(m_curl, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(m_curl, CURLOPT_CUSTOMREQUEST, "MLSD");
+        curl_easy_setopt(m_curl, CURLOPT_WRITEFUNCTION, writeToString);
+        curl_easy_setopt(m_curl, CURLOPT_WRITEDATA, &response);
+
+        if (const CURLcode result = curl_easy_perform(m_curl); result == CURLE_OK) {
+            writeListingCache(cacheFile, response);   // best-effort; refreshes the mtime/TTL
+            return parseMlsdListing(response);
+        } else {
+            SDL_Log("FtpDataSource: MLSD failed for '%s': %s",
+                    path.string().c_str(), curl_easy_strerror(result));
+        }
+    }
+
+    // Network unavailable or the transfer failed: fall back to a stale cached listing if we have one,
+    // so a recently-visited directory still browses offline. Otherwise keep the current listing.
+    if (cached) {
+        SDL_Log("FtpDataSource: serving stale cached listing for '%s'", path.string().c_str());
+        return parseMlsdListing(*cached);
+    }
+    return std::nullopt;
+}
+
+std::filesystem::path FtpDataSource::fetchFile(const std::filesystem::path &path) {
+    std::filesystem::path cacheFile = cacheFileFor(path);
+
+    // Cache hit: a non-empty file already mirrors this remote path (!ec also covers non-existence).
+    std::error_code ec;
+    if (const auto size = std::filesystem::file_size(cacheFile, ec); !ec && size > 0) {
+        return cacheFile;
+    }
+
+    if (!ensureHandle()) {
+        return {};
+    }
+
+    std::filesystem::create_directories(cacheFile.parent_path(), ec);
+    if (ec) {
+        SDL_Log("FtpDataSource: cannot create cache directory '%s': %s",
+                cacheFile.parent_path().string().c_str(), ec.message().c_str());
+        return {};
+    }
+
+    // Download to a sibling .part file, then rename on success so the cache never holds a truncated file.
+    std::filesystem::path partFile = cacheFile;
+    partFile += ".part";
+
+    std::ofstream out(partFile, std::ios::binary | std::ios::trunc);
+    if (!out) {
+        SDL_Log("FtpDataSource: cannot open '%s' for writing", partFile.string().c_str());
+        return {};
     }
 
     curl_easy_reset(m_curl);
     applyCommonOptions();
 
-    const std::string url = buildUrl(path, /*trailingSlash=*/true);
-    std::string response;
+    const std::string url = buildUrl(path, /*trailingSlash=*/false);
     curl_easy_setopt(m_curl, CURLOPT_URL, url.c_str());
-    curl_easy_setopt(m_curl, CURLOPT_CUSTOMREQUEST, "MLSD");
-    curl_easy_setopt(m_curl, CURLOPT_WRITEFUNCTION, writeToString);
-    curl_easy_setopt(m_curl, CURLOPT_WRITEDATA, &response);
+    curl_easy_setopt(m_curl, CURLOPT_WRITEFUNCTION, writeToFile);
+    curl_easy_setopt(m_curl, CURLOPT_WRITEDATA, &out);
 
     const CURLcode result = curl_easy_perform(m_curl);
+    out.close();
+
     if (result != CURLE_OK) {
-        SDL_Log("FtpDataSource: MLSD failed for '%s': %s",
+        SDL_Log("FtpDataSource: download failed for '%s': %s",
                 path.string().c_str(), curl_easy_strerror(result));
-        return std::nullopt;
+        std::filesystem::remove(partFile, ec);
+        return {};
     }
 
-    std::vector<FileEntry> entries;
-    size_t start = 0;
-    while (start < response.size()) {
-        auto newline = response.find('\n', start);
-        const auto end = (newline == std::string::npos) ? response.size() : newline;
-        std::string line = response.substr(start, end - start);
-        start = (newline == std::string::npos) ? response.size() : newline + 1;
-
-        if (!line.empty() && line.back() == '\r') {
-            line.pop_back();
-        }
-        if (line.empty()) {
-            continue;
-        }
-
-        FileEntry entry;
-        switch (parseMlsdLine(line, entry)) {
-            case LineOutcome::Parsed:
-                entries.push_back(std::move(entry));
-                break;
-            case LineOutcome::Skip:
-                break;
-            case LineOutcome::Malformed:
-                SDL_Log("FtpDataSource: skipping unparseable MLSD line: '%s'", line.c_str());
-                break;
-        }
+    // ofstream buffers internally, so the final flush happens at close(); a failure there (e.g. the
+    // disk filling on the tail write) leaves a truncated .part that curl still reported as CURLE_OK.
+    // Check it before renaming, else the truncated file would satisfy the size>0 cache hit forever.
+    if (!out) {
+        SDL_Log("FtpDataSource: write/flush failed for '%s'", partFile.string().c_str());
+        std::filesystem::remove(partFile, ec);
+        return {};
     }
 
-    return entries;
-}
-
-std::filesystem::path FtpDataSource::fetchFile(const std::filesystem::path &path) {
-    // Chunk 7b implements download-to-cache; this chunk lists only.
-    SDL_Log("FtpDataSource::fetchFile not implemented yet (chunk 7b): %s", path.string().c_str());
-    return {};
+    if (!commitPart(partFile, cacheFile)) {
+        return {};
+    }
+    return cacheFile;
 }
