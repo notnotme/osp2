@@ -69,7 +69,7 @@ ImGui::NewFrame()  →  Gui draws, cursor is where the stick put it
 
 ## Task chunks (implement, verify, and commit one at a time)
 
-- [ ] **10a — Controller cursor + clicks.** Add `src/input/CursorEmulator.{h,cpp}`; open `SDL_GameController`, migrate off the raw `SDL_Joystick` and fix the `event.cbutton` quit bug; wire `update()` into the per-frame injection point; enable `io.MouseDrawCursor` on Switch. Left stick moves the cursor (with dead-zone), **A = left click, X = right click**. Verify: cursor moves and buttons activate ImGui widgets (temporary desktop enable for fast iteration, removed/guarded before finishing; then Switch hardware test).
+- [x] **10a — Controller cursor + clicks.** Add `src/input/CursorEmulator.{h,cpp}`; open `SDL_GameController`, migrate off the raw `SDL_Joystick` and fix the `event.cbutton` quit bug; wire `update()` into the per-frame injection point; enable `io.MouseDrawCursor` on Switch. Left stick moves the cursor (with dead-zone), **A = left click, X = right click**. Verify: cursor moves and buttons activate ImGui widgets (temporary desktop enable for fast iteration, removed/guarded before finishing; then Switch hardware test).
 - [ ] **10b — Scroll + speed modifiers + polish.** Right stick → `AddMouseWheelEvent`; **L held = slow, R held = fast**; clamp cursor to window bounds; tune dead-zone/speed/scroll constants. Verify scrolling in a long file list and precise-vs-fast movement on Switch hardware.
 
 Each chunk ends with green desktop + Switch builds, a docs update if classes/methods changed, user verification, then a commit. Run cpp-reviewer on the diff before committing; run the pending Switch hardware test before merging the branch.

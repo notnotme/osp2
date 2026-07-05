@@ -37,5 +37,5 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
   - [x] 9c — SidPlugin (libsidplayfp; needs switch-libsidplayfp portlib — P1)
   - [x] 9e — Sc68Plugin (libsc68; needs sc68 portlib desktop + Switch — P2)
 - [ ] [TODO_10 — Switch controller → mouse/scroll emulation (CursorEmulator)](TODO_10.md) — greenfield; no decoder dependency
-  - [ ] 10a — Controller cursor + clicks (left stick move, A/X click)
+  - [x] 10a — Controller cursor + clicks (left stick move, A/X click)
   - [ ] 10b — Scroll + speed modifiers + polish (right stick scroll, L/R slow/fast)
