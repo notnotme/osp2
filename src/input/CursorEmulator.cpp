@@ -70,16 +70,25 @@ void CursorEmulator::update(ImGuiIO &io) {
     m_y = std::clamp(m_y, 0.0f, static_cast<float>(m_h));
     io.AddMousePosEvent(m_x, m_y);
 
-    // A = left click (button 0), X = right click (button 1). Emit only on edges to mirror the physical
-    // button state cleanly, though ImGui tolerates repeated same-state events.
-    const bool aDown = SDL_GameControllerGetButton(m_pad, SDL_CONTROLLER_BUTTON_A) != 0;
-    const bool xDown = SDL_GameControllerGetButton(m_pad, SDL_CONTROLLER_BUTTON_X) != 0;
-    if (aDown != m_aDown) {
-        io.AddMouseButtonEvent(0, aDown);
-        m_aDown = aDown;
+    // Physical A = left click (button 0), physical X = right click (button 1). SDL names buttons by
+    // Xbox *position*, but the Switch's labels are rotated: its physical A sits at the east position
+    // (SDL_..._B) and physical X at the north position (SDL_..._Y). Map to the labels so the Switch's
+    // usual confirm button (A) left-clicks. Emit only on edges to mirror the physical state cleanly.
+#if defined(__SWITCH__)
+    constexpr auto leftClickButton = SDL_CONTROLLER_BUTTON_B;
+    constexpr auto rightClickButton = SDL_CONTROLLER_BUTTON_Y;
+#else
+    constexpr auto leftClickButton = SDL_CONTROLLER_BUTTON_A;
+    constexpr auto rightClickButton = SDL_CONTROLLER_BUTTON_X;
+#endif
+    const bool leftDown = SDL_GameControllerGetButton(m_pad, leftClickButton) != 0;
+    const bool rightDown = SDL_GameControllerGetButton(m_pad, rightClickButton) != 0;
+    if (leftDown != m_leftDown) {
+        io.AddMouseButtonEvent(0, leftDown);
+        m_leftDown = leftDown;
     }
-    if (xDown != m_xDown) {
-        io.AddMouseButtonEvent(1, xDown);
-        m_xDown = xDown;
+    if (rightDown != m_rightDown) {
+        io.AddMouseButtonEvent(1, rightDown);
+        m_rightDown = rightDown;
     }
 }

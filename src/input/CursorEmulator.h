@@ -42,8 +42,8 @@ private:
     SDL_GameController *m_pad;
     float m_x, m_y;
     int m_w, m_h;
-    bool m_aDown = false;
-    bool m_xDown = false;
+    bool m_leftDown = false;
+    bool m_rightDown = false;
 };
 
 #endif //OSP2_CURSOREMULATOR_H
