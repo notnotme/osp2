@@ -7,7 +7,7 @@
 - [x] **3a — Design doc**: write `docs/ui-design.md` only (mockups, palette tables, metrics, glyph inventory). No code; the doc is the deliverable the user reviews.
 - [x] **3b — Theme system**: `src/gui/Theme.h` + `Gui::applyTheme(Theme)` (both palettes + shared vars), called from `initialize()` with dark default; delete the manual style block in main.cpp. No layout change yet — verify the app comes up in the new dark palette (flip the default to light once to check that palette too).
 - [x] **3c — Layout restructure**: `drawTopBar` (Settings menu with the theme radio calling `applyTheme`, About popup with k7 logo), left/right child panes, player bar child (track line, m:ss progress from `state.status`, transport with play/pause sprite swap), tabs reduced to Metadata + Playlist; remove the ImGui demo window from main.cpp. Verify against the doc.
-- [ ] **3d — View mode**: `src/gui/ViewMode.h`, `m_viewMode`, top-bar toggle button, VISUALIZATION mode drawing only the top bar. Verify audio keeps playing while collapsed.
+- [x] **3d — View mode**: `src/gui/ViewMode.h`, `m_viewMode`, top-bar toggle button, VISUALIZATION mode drawing only the top bar. Verify audio keeps playing while collapsed.
 
 Each chunk ends with green desktop + Switch builds, a `docs/ui.md` update if classes/methods changed, user verification, then a commit.
 

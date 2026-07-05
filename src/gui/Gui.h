@@ -29,6 +29,7 @@
 
 #include "ButtonId.h"
 #include "Theme.h"
+#include "ViewMode.h"
 #include "UiActions.h"
 #include "UiState.h"
 #include "../filesystem/FileEntry.h"
@@ -49,8 +50,9 @@ private:
     std::unordered_map<std::string, Sprite> m_sprites;
     GLuint m_texture;
     Theme m_theme;
-    // One-frame latch: the top-bar About entry sets it, the fullscreen window opens the
-    // popup so OpenPopup and BeginPopupModal share the same window ID scope.
+    ViewMode m_viewMode;
+    // One-frame latch: the top-bar About entry sets it, the top bar then opens the popup
+    // so OpenPopup and BeginPopupModal share the same window ID scope (works in both modes).
     bool m_aboutRequested;
 
 public:

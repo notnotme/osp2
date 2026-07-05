@@ -47,7 +47,7 @@ namespace {
 
 
 Gui::Gui()
-    : m_texture(0), m_theme(Theme::DARK), m_aboutRequested(false) {}
+    : m_texture(0), m_theme(Theme::DARK), m_viewMode(ViewMode::WORKSPACE), m_aboutRequested(false) {}
 
 void Gui::initialize(const std::string &basePath) {
     const auto bin_path = basePath + "sprites/sprites.bin";
@@ -155,6 +155,24 @@ void Gui::drawTopBar() {
         if (ImGui::MenuItem("About")) {
             m_aboutRequested = true;
         }
+
+        // View-mode toggle, right-aligned: fullscreen glyph in WORKSPACE (go collapse),
+        // fullscreen_exit in VISUALIZATION (come back).
+        const auto &style = ImGui::GetStyle();
+        const auto *toggle_label = m_viewMode == ViewMode::WORKSPACE ? "" : "";
+        const auto toggle_width = ImGui::CalcTextSize(toggle_label).x + style.FramePadding.x * 2.0f;
+        ImGui::SameLine(ImGui::GetWindowWidth() - toggle_width - style.ItemSpacing.x);
+        if (ImGui::MenuItem(toggle_label)) {
+            m_viewMode = m_viewMode == ViewMode::WORKSPACE ? ViewMode::VISUALIZATION : ViewMode::WORKSPACE;
+        }
+
+        // Opened from the always-drawn menu bar so About works in both view modes;
+        // OpenPopup and BeginPopupModal share this window's ID scope.
+        if (m_aboutRequested) {
+            ImGui::OpenPopup("About");
+            m_aboutRequested = false;
+        }
+        drawAboutPopup();
 
         ImGui::EndMainMenuBar();
     }
@@ -391,6 +409,12 @@ void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(B
 void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
     drawTopBar();
 
+    // VISUALIZATION mode draws only the top bar; the area below is left empty (GL clear
+    // color shows through) for the future visualization system. Audio is unaffected.
+    if (m_viewMode == ViewMode::VISUALIZATION) {
+        return;
+    }
+
     constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove
         | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus;
 
@@ -428,13 +452,6 @@ void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
     }
     ImGui::EndChild();
     ImGui::PopStyleVar();
-
-    // Opened here (not from the menu) so OpenPopup and BeginPopupModal share this window's ID scope.
-    if (m_aboutRequested) {
-        ImGui::OpenPopup("About");
-        m_aboutRequested = false;
-    }
-    drawAboutPopup();
 
     ImGui::End();
 }
