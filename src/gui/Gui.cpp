@@ -43,6 +43,19 @@ namespace {
         std::snprintf(buffer, sizeof(buffer), "%d:%02d", minutes, remaining_seconds);
         return std::string(buffer);
     }
+
+    // Formats a byte count as "N B", "N.N KB", or "N.N MB".
+    std::string formatSize(const std::int64_t bytes) {
+        char buffer[32];
+        if (bytes < 1024) {
+            std::snprintf(buffer, sizeof(buffer), "%lld B", static_cast<long long>(bytes));
+        } else if (bytes < 1024 * 1024) {
+            std::snprintf(buffer, sizeof(buffer), "%.1f KB", static_cast<double>(bytes) / 1024.0);
+        } else {
+            std::snprintf(buffer, sizeof(buffer), "%.1f MB", static_cast<double>(bytes) / (1024.0 * 1024.0));
+        }
+        return std::string(buffer);
+    }
 }
 
 
@@ -221,9 +234,13 @@ void Gui::drawFileBrowser(const std::vector<FileEntry> &files, const std::functi
     const auto browser_position = ImGui::GetCursorScreenPos();
     const auto browser_size = ImGui::GetContentRegionAvail();
 
-    if (ImGui::BeginTable("file_browser", 2, file_browser_flags, browser_size)) {
+    // A scan blocks the whole browser: BeginDisabled stops mouse and keyboard/gamepad nav,
+    // the overlay below dims it and shows the spinner.
+    ImGui::BeginDisabled(isWorking);
+    if (ImGui::BeginTable("file_browser", 3, file_browser_flags, browser_size)) {
         ImGui::TableSetupScrollFreeze(0, 2);
         ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableHeadersRow();
 
@@ -257,30 +274,48 @@ void Gui::drawFileBrowser(const std::vector<FileEntry> &files, const std::functi
                     if (ImGui::Selectable(entry_label, false, ImGuiSelectableFlags_SpanAllColumns)) {
                         onFileClick(file_entry);
                     }
-                    ImGui::TableNextColumn();
-                    ImGui::Text("%lld Kb", static_cast<long long>(file_entry.file_size));
+                }
+
+                ImGui::TableNextColumn();
+                ImGui::TextUnformatted(file_entry.type.c_str());
+
+                ImGui::TableNextColumn();
+                if (!file_entry.is_directory) {
+                    ImGui::TextUnformatted(formatSize(file_entry.file_size).c_str());
                 }
             }
         }
         ImGui::EndTable();
     }
+    ImGui::EndDisabled();
 
     if (isWorking) {
         constexpr auto overlay_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings;
 
-        const auto animation_time = -1.0f * static_cast<float>(ImGui::GetTime());
-        const auto bar_size = ImVec2(browser_size.x / 2.0f, 32.0f);
-        const auto bar_position_x = (browser_size.x - bar_size.x) / 2.0f;
-        const auto bar_position_y = (browser_size.y - bar_size.y) / 2.0f;
+        // ASCII spinner stepped ~8x/s: | / - \.
+        constexpr char frames[] = {'|', '/', '-', '\\'};
+        const char spinner[] = {frames[static_cast<int64_t>(ImGui::GetTime() * 8.0) & 3], '\0'};
+        constexpr auto text = "Scanning...";
+
+        // The frame chars differ in width in the proportional font, so give the spinner a fixed
+        // slot and keep the label anchored: center [slot | gap | text] using the stable slot width,
+        // then right-align the spinner within its slot so only its left edge moves (no jitter).
+        const auto slot_width = ImGui::CalcTextSize("W").x;
+        const auto gap_width = ImGui::CalcTextSize(" ").x;
+        const auto text_size = ImGui::CalcTextSize(text);
+        const auto spinner_width = ImGui::CalcTextSize(spinner).x;
+        const auto start_x = (browser_size.x - (slot_width + gap_width + text_size.x)) / 2.0f;
+        const auto start_y = (browser_size.y - text_size.y) / 2.0f;
 
         ImGui::SetNextWindowPos(browser_position);
         ImGui::SetNextWindowSize(browser_size);
         ImGui::SetNextWindowBgAlpha(0.8f);
 
         ImGui::Begin("##file_browser_overlay", nullptr, overlay_flags);
-        ImGui::SetCursorPosX(bar_position_x);
-        ImGui::SetCursorPosY(bar_position_y);
-        ImGui::ProgressBar(animation_time, bar_size, "Loading...");
+        ImGui::SetCursorPos(ImVec2(start_x + slot_width - spinner_width, start_y));
+        ImGui::TextUnformatted(spinner);
+        ImGui::SetCursorPos(ImVec2(start_x + slot_width + gap_width, start_y));
+        ImGui::TextUnformatted(text);
         ImGui::End();
     }
 }

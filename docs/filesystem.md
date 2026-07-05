@@ -145,9 +145,9 @@ its `getRootPath()`.
 local path. TODO_4 resolves inline on the main thread (local fetch is instant); TODO_7 moves
 it onto the worker behind the overlay.
 
-## Not yet wired
+## UI seam
 
 Navigation is driven by the Gui through `UiActions::onDirectoryClick` →
-`Application::handleDirectoryClick` → `navigateToEntry`/`navigateToParent` (chunk 4b). The
-Type/Size columns and the scanning spinner overlay (with `BeginDisabled` while a scan runs)
-land in chunk 4c.
+`Application::handleDirectoryClick` → `navigateToEntry`/`navigateToParent`. The browser shows
+`FileEntry.type` in a Type column and formats `file_size` as B/KB/MB; while `isWorking()` it
+dims the listing (`BeginDisabled`) under an ASCII spinner overlay. See [ui.md](ui.md).
