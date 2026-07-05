@@ -23,7 +23,7 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
   - [x] 6b — Plugin settings backend (PluginSetting, OpenMpt tunables)
   - [x] 6c — Settings UI (generic widget loop)
 - [ ] [TODO_7 — Remote data source: Modland FTP via libcurl](TODO_7.md)
-  - [ ] 7a — curl dependency + FTP listing (MLSD)
+  - [x] 7a — curl dependency + FTP listing (MLSD)
   - [ ] 7b — Download-to-cache + playback
   - [ ] 7c — Robustness + polish (overlay label, failures, Switch hardware)
   - [ ] 7d — User-defined FTP sources (optional, requires TODO_6)

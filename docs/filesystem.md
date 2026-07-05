@@ -5,9 +5,10 @@ resolves a chosen entry to a locally-openable file for `PlayerController::play()
 Directory scans run on a worker thread so the UI never blocks; the browser shows an
 overlay while a scan is in flight.
 
-Browsing is **source-based**: a `DataSource` abstracts one place to browse (local disk
-now; Modland FTP in TODO_7). `FileSystem` owns the sources, the worker thread, and the
-current listing. A synthetic **virtual root** lists the sources themselves as folders.
+Browsing is **source-based**: a `DataSource` abstracts one place to browse — local disk
+(`LocalDataSource`) and the Modland archive over anonymous FTP (`FtpDataSource`).
+`FileSystem` owns the sources, the worker thread, and the current listing. A synthetic
+**virtual root** lists the sources themselves as folders.
 
 ```mermaid
 classDiagram
@@ -20,6 +21,18 @@ classDiagram
     }
 
     class LocalDataSource {
+        +getDisplayName() string
+        +getRootPath() path
+        +listDirectory(path) optional~vector~FileEntry~~
+        +fetchFile(path) path
+    }
+
+    class FtpDataSource {
+        -string m_displayName
+        -string m_host
+        -path m_basePath
+        -path m_cacheDir
+        -CURL* m_curl
         +getDisplayName() string
         +getRootPath() path
         +listDirectory(path) optional~vector~FileEntry~~
@@ -65,6 +78,7 @@ classDiagram
     }
 
     DataSource <|-- LocalDataSource : local disk
+    DataSource <|-- FtpDataSource : Modland FTP
     FileSystem "1" o-- "*" DataSource : owns, one active
     FileSystem "1" o-- "*" FileEntry : current listing
     FileSystem ..> FetchResult : requestFile / consumeFetchResult
@@ -98,6 +112,38 @@ skips dot-prefixed entries. `getRootPath()` is `"/"` on desktop, `"sdmc:/"` unde
 at any time (on the worker, or the TODO_4 inline `fetchFile` on the main thread while no
 worker runs), so sources need no internal locking.
 
+## FtpDataSource
+
+Browses a remote archive over anonymous FTP via **libcurl** (built-in instance: Modland,
+`ftp.modland.com/pub/modules`, `<format>/<artist>/<file>`). Registered at the virtual root as
+`"Modland (FTP)"`; `getRootPath()` is the base path (`/pub/modules`).
+
+- **One reusable `CURL*` easy handle**, created lazily on first use and cleaned up in the
+  destructor — FTP control-connection reuse keeps navigation snappy. Safe without locking
+  thanks to the serialization contract above. Each call does `curl_easy_reset` then re-applies
+  the common options (`CURLOPT_NOSIGNAL`, `CONNECTTIMEOUT=10`, `LOW_SPEED_LIMIT=1` /
+  `LOW_SPEED_TIME=30` for stall detection instead of a total timeout). `<curl/curl.h>` stays
+  out of the header (`typedef void CURL;` mirror); it is included only in the `.cpp`.
+- **URL building**: `ftp://<host>` + each path component percent-escaped with
+  `curl_easy_escape` and joined by `/` — Modland names contain spaces (`Fasttracker 2` →
+  `Fasttracker%202`); MLSD directory URLs get a trailing `/`.
+- **listDirectory (MLSD)**: `CURLOPT_CUSTOMREQUEST "MLSD"`, response accumulated via a write
+  callback. Each line is `fact1=val1;fact2=val2; name` — the name is everything after the
+  first space; facts split on `;`. `type=` → `dir`/`file` (`cdir`/`pdir` self/parent refs are
+  skipped), `size=` → bytes (files only; dirs report `sizd` and list as size 0). Malformed
+  line → `SDL_Log` + skip. Transfer failure → `SDL_Log` (via `curl_easy_strerror`) + `nullopt`,
+  so FileSystem keeps the current listing and stays put when entering the source fails.
+- **fetchFile** — download-to-cache lands in chunk **7b**; in 7a it is a logged stub returning
+  an empty path (mirrored cache under `m_cacheDir`, e.g. `cache/modland/...`).
+
+**curl lifecycle ownership**: `main.cpp` owns the *global* state — `curl_global_init` runs
+before `FileSystem::create()` spawns the worker (it is not thread-safe), paired with
+`curl_global_cleanup` after `FileSystem::destroy()`; on the Switch `socketInitializeDefault()`
+brackets it first and `socketExit()` last. Each `FtpDataSource` owns its *easy* handle.
+Because these globals are torn down in `finalize()`, `FileSystem::destroy()` releases its
+sources (running `curl_easy_cleanup`) right after joining the worker — not at static
+destruction of the global `file_system`, which would run after curl/socket are already gone.
+
 ## Threading
 
 Directory scans run on `m_worker`; `PlayerController`'s SDL audio thread is separate. Same
@@ -109,7 +155,7 @@ style as the audio domain (atomic flag + mutex-guarded handoff, swap on the main
 | `m_pendingPath`, `m_pendingContent`, `m_scanSucceeded` | `m_mutex` (worker writes, `update()` reads/swaps) |
 | `m_working` | `std::atomic_bool` (worker clears; Gui overlay + navigate/request guards read) |
 | `m_worker` | main thread only (launch in `startScan`, join in `update`/`destroy`) |
-| `m_sources`, `m_isPlayable` | immutable after `create()` (`m_isPlayable` is called on the worker: `PlayerController::isSupported` reads only immutable plugin extension lists) |
+| `m_sources`, `m_isPlayable` | immutable after `create()` until `destroy()` releases the sources (worker already joined); `m_isPlayable` is called on the worker: `PlayerController::isSupported` reads only immutable plugin extension lists |
 | `m_activeSource`, `m_sourceBeforeScan` | main thread only, mutated while the worker is idle; the worker uses the source pointer captured at launch |
 | `m_fetchResult` | `m_mutex` (TODO_4: written inline on the main thread; TODO_7: worker writes) |
 
@@ -120,9 +166,10 @@ style as the audio domain (atomic flag + mutex-guarded handoff, swap on the main
   mutex, and stores `m_working = false` **last**. `update()` detects the finished edge
   (`m_worker.joinable() && !m_working`), `join()`s (which establishes happens-before for the
   pending writes), then swaps success into `m_path`/`m_content` or, on `nullopt`, restores
-  `m_activeSource` and keeps the current listing. `destroy()` joins the worker — **main.cpp
-  calls `file_system.destroy()` before `player.destroy()`** because the worker's predicate
-  calls into `PlayerController`.
+  `m_activeSource` and keeps the current listing. `destroy()` joins the worker, then releases
+  the sources (so `FtpDataSource`'s `curl_easy_cleanup` runs while curl is still initialized) —
+  **main.cpp calls `file_system.destroy()` before `player.destroy()`** because the worker's
+  predicate calls into `PlayerController`, and before `curl_global_cleanup()`.
 - **Navigation** (`navigateToEntry`/`navigateToParent`) and `requestFile` are ignored while a
   scan runs (the UI is blocked by the overlay anyway). Root detection compares
   `m_path == m_activeSource->getRootPath()` (not `parent_path()`, since `parent_path()` of a

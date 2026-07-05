@@ -82,6 +82,12 @@ void FileSystem::destroy() {
     if (m_worker.joinable()) {
         m_worker.join();
     }
+    // Release the sources now, with the worker joined, so any source teardown (e.g. FtpDataSource's
+    // curl_easy_cleanup) runs before main.cpp's curl_global_cleanup()/socketExit() — not at static
+    // destruction, which would tear the handle down after the global curl/socket stack is already gone.
+    m_activeSource = nullptr;
+    m_sourceBeforeScan = nullptr;
+    m_sources.clear();
 }
 
 void FileSystem::navigateToEntry(const FileEntry &entry) {
