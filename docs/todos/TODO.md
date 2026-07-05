@@ -30,5 +30,5 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
 - [ ] [TODO_8 — Visualization plugin system (VisualizerPlugin + Bars visual)](TODO_8.md) — requires TODO_3 (view mode); chunk 8a is backend-only and independent
   - [x] 8a — Audio tap (AudioTap seqlock + PlayerController::readLatestAudio)
   - [x] 8b — Visualizer skeleton + wiring (VisualizerPlugin, VisualizerController, onRenderVisualization hook, DebugVisualizer)
-  - [ ] 8c — BarsVisualizer (vertical bars from tapped audio)
+  - [x] 8c — BarsVisualizer (vertical bars from tapped audio)
   - [ ] 8d — GL shader-quad plugin + selector (future / optional)

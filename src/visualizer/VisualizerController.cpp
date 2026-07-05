@@ -19,7 +19,7 @@
 
 #include "VisualizerController.h"
 
-#include "visualizers/DebugVisualizer.h"
+#include "visualizers/BarsVisualizer.h"
 
 
 VisualizerController::VisualizerController()
@@ -27,7 +27,7 @@ VisualizerController::VisualizerController()
 
 void VisualizerController::create() {
     // Registration order = selector order (and dispatch index). Add one emplace_back per plugin.
-    m_plugins.emplace_back(std::make_unique<DebugVisualizer>());
+    m_plugins.emplace_back(std::make_unique<BarsVisualizer>());
 
     for (const auto &plugin : m_plugins) {
         plugin->create();

@@ -24,7 +24,9 @@ classDiagram
         +render(frame)*
     }
 
-    class DebugVisualizer {
+    class BarsVisualizer {
+        -array~float~ m_levels
+        +BAR_COUNT
     }
 
     class VisualizerController {
@@ -38,7 +40,7 @@ classDiagram
     }
 
     VisualizerController "1" o-- "*" VisualizerPlugin : owns, dispatches to active
-    VisualizerPlugin <|-- DebugVisualizer : ImGui backend
+    VisualizerPlugin <|-- BarsVisualizer : ImGui backend
     VisualizerPlugin ..> VisualFrame : render(frame)
     VisualizerController ..> VisualFrame : forwards to active plugin
 ```
@@ -51,15 +53,15 @@ classDiagram
 
 - **`VisualizerController`** (`src/visualizer/VisualizerController.{h,cpp}`) mirrors `PlayerController`'s ownership pattern: owns `vector<unique_ptr<VisualizerPlugin>>` and an active index (default 0), one `emplace_back` per plugin in `create()` (registration order = selector order later), and `render()` forwards to the active plugin. It is non-copyable and guards `render()`/`select()` against an empty/out-of-range index, so `render()` is a safe no-op before `create()` / after `destroy()`.
 
-- **`DebugVisualizer`** (`src/visualizer/visualizers/DebugVisualizer.{h,cpp}`) is the trivial pipeline-proof plugin shipped in chunk 8b (ImGui backend, `create()`/`destroy()` empty). It fills the reserved rect with a translucent color, borders it (proving rect placement), and sweeps one vertical line (proving per-frame animation). It intentionally does **not** consume `frame.samples` — that is the real `BarsVisualizer`'s job (chunk 8c).
+- **`BarsVisualizer`** (`src/visualizer/visualizers/BarsVisualizer.{h,cpp}`) is the basic plugin shipped in chunk 8c (ImGui backend, `create()`/`destroy()` empty), and the sole default-active plugin (index 0). It draws `BAR_COUNT` (64) vertical bars whose heights track per-band audio amplitude. Bands are **time-domain**: the sample window is bucketed into `BAR_COUNT` contiguous buckets and each bar's target is the **peak of |mono|** over its bucket (peak, not RMS → transients pop) times an empirical visual `GAIN`, clamped to 1. No FFT → **no dependency, Switch-safe**. Per-bar heights are smoothed with a fast **attack** / gentle **decay** and persisted across frames in `m_levels`, so bars rise sharply on transients and fall smoothly; when `frameCount == 0` all targets are 0, so the bars **decay to rest**. Drawn via `ImGui::GetBackgroundDrawList()->AddRectFilled(...)` inside the reserved rect, growing bottom→up, using the theme accent (`ImGuiCol_PlotHistogram`) for consistency with the player bar. A true FFT **spectrum** and a GL **shader-quad** are follow-on plugins (8d/future).
 
-- **Animation freezes when hidden.** A visualizer must advance its animation/state from the per-frame delta **inside `render()`** (`DebugVisualizer` accumulates `ImGui::GetIO().DeltaTime` into its own clock), never from the always-ticking global `ImGui::GetTime()`. Because the controller's `render()` is only called in VISUALIZATION mode, deriving motion from render-time makes a visualizer stop while hidden and resume where it left off — no phase jump on re-entry, no work when off-screen. Audio-reactive plugins get this for free (their state only updates when fed a frame).
+- **Animation freezes when hidden.** A visualizer must advance its animation/state from the per-frame delta **inside `render()`** (`BarsVisualizer` drives its attack/decay smoothing from `ImGui::GetIO().DeltaTime`), never from the always-ticking global `ImGui::GetTime()`. Because the controller's `render()` is only called in VISUALIZATION mode, deriving motion from render-time makes a visualizer stop while hidden and resume where it left off — the bars freeze mid-decay when hidden and resume from the same heights, no phase jump on re-entry, no work when off-screen. Audio-reactive plugins get this for free (their state only updates when fed a frame).
 
 ## Render bridge (ImGui / GL)
 
 There is **one render call site and one draw order** regardless of a plugin's backend, because `render()` runs inside the ImGui frame:
 
-- **ImGui plugins** (like `DebugVisualizer`) draw **immediately** via `ImGui::GetBackgroundDrawList()` — the background list paints behind every window, directly on the reserved rect in screen coordinates. Portable and identical on desktop + Switch (no shader/CMake changes).
+- **ImGui plugins** (like `BarsVisualizer`) draw **immediately** via `ImGui::GetBackgroundDrawList()` — the background list paints behind every window, directly on the reserved rect in screen coordinates. Portable and identical on desktop + Switch (no shader/CMake changes).
 - A future **GL plugin** schedules its draw through `ImDrawList::AddCallback`, so its raw-GL rendering is ordered into the same ImGui draw data and executed before `ImGui_ImplOpenGL3_RenderDrawData`.
 
 The single call site is `main.cpp`'s `onRenderVisualization` callback (wired onto `UiActions`): in VISUALIZATION mode `Gui` invokes it with the reserved rect (`viewport->WorkPos`/`WorkSize`, which already exclude the main menu bar); the callback reads the audio tap, builds a `VisualFrame`, and calls `visualizer.render(frame)`. `Gui` stays presentation-only and knows nothing about the visualizer domain — same principle as `onButtonClick` (see [ui.md](ui.md)).

@@ -55,7 +55,7 @@ decode() ──writes──▶ [AudioTap seqlock]  ──read──▶ main.cpp 
 
 - [x] **8a — Audio tap (backend, independent)**: `src/player/AudioTap.h` (seqlock) + `PlayerController` publish in `decode()` and `readLatestAudio()`. Pure player-domain addition; builds and verifies on its own (temporary `SDL_Log` of frames read during playback, removed before finishing). Depends on nothing — may land before TODO_3.
 - [x] **8b — Visualizer skeleton + wiring**: `src/visualizer/` (`VisualFrame.h`, `VisualizerPlugin.h`, `VisualizerController.{h,cpp}`), the `onRenderVisualization` hook in Gui, and `main.cpp` wiring. Ship a trivial `DebugVisualizer` (rect fill + one moving line) to prove the pipeline in VISUALIZATION mode. Depends on TODO_3 3d (view mode + reserved rect) and 8a.
-- [ ] **8c — BarsVisualizer**: replace the debug plugin with the real vertical-bars visual (bucketed amplitude + attack/decay smoothing), registered as the default active plugin. The deliverable "basic plugin."
+- [x] **8c — BarsVisualizer**: replace the debug plugin with the real vertical-bars visual (bucketed amplitude + attack/decay smoothing), registered as the default active plugin. The deliverable "basic plugin."
 - [ ] **8d — (future / optional) GL shader-quad plugin + selector**: a `ShaderQuadVisualizer` rendering a fullscreen quad via a GLES-safe shader through `ImDrawList::AddCallback` (exercises the raw-GL path, surfaces Switch shader-version portability), plus a visualizer picker in the Settings menu calling `VisualizerController::select`. Follow-on; not required for the basic system.
 
 Each chunk ends with green desktop + Switch builds, a docs update if classes/methods changed, user verification, then a commit.

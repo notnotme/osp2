@@ -34,7 +34,7 @@ add_executable(OSP2
     src/player/plugins/OpenMptPlugin.cpp
     src/settings/Settings.cpp
     src/visualizer/VisualizerController.cpp
-    src/visualizer/visualizers/DebugVisualizer.cpp
+    src/visualizer/visualizers/BarsVisualizer.cpp
     src/main.cpp
 )
 

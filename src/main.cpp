@@ -152,7 +152,7 @@ void initialize() {
 
     gui.initialize(BASE_PATH);
 
-    // GL context + glad are up by now: harmless for the ImGui-only Debug plugin, correct for future
+    // GL context + glad are up by now: a no-op for the current ImGui-only plugin, correct for future
     // GL plugins that allocate shaders/VBOs in create().
     visualizer.create();
 
