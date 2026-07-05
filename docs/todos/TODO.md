@@ -20,7 +20,7 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
   - [x] 5b — Metadata tab UI (visit dispatch)
 - [ ] [TODO_6 — Plugin configuration + persisted user settings (INI)](TODO_6.md)
   - [x] 6a — Settings domain + user settings (theme, default_folder)
-  - [ ] 6b — Plugin settings backend (PluginSetting, OpenMpt tunables)
+  - [x] 6b — Plugin settings backend (PluginSetting, OpenMpt tunables)
   - [ ] 6c — Settings UI (generic widget loop)
 - [ ] [TODO_7 — Remote data source: Modland FTP via libcurl](TODO_7.md)
   - [ ] 7a — curl dependency + FTP listing (MLSD)

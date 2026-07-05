@@ -27,7 +27,9 @@ Location (config path helper in `main.cpp`): desktop `SDL_GetBasePath() + "osp2.
 theme = dark              # dark | light | classic
 default_folder =          # hand-edit only; empty/invalid -> platform default start path
 
-[plugin.openmpt]          # added by TODO_6 chunk 6b
+[plugin.libopenmpt]       # section = "plugin." + PlayerPlugin::getName()
+stereo_separation = 100   # IntRange 0..200
+interpolation = 0         # index into the plugin's enum options (0..4)
 ```
 
 ## INI grammar (hand-rolled parser)
@@ -50,3 +52,5 @@ default_folder =          # hand-edit only; empty/invalid -> platform default st
 ## Startup wiring & change flow
 
 `main.cpp` (composition root) loads settings, then applies the persisted `[user] theme` via `Gui::applyTheme` before the loop, and resolves the browser start path from `[user] default_folder` when it names a valid directory. Runtime changes go through `Application` (which holds a `Settings &`): the UI reports intent, the presentation layer applies the visible effect, and `Application` persists it (`set…` + `save()`). See [application.md](application.md) for the theme change flow.
+
+**Plugin settings** live in `[plugin.<name>]` sections, where `<name>` is each decoder plugin's `PlayerPlugin::getName()`. After `player.create()`, `main.cpp` iterates `player.getPluginSettings()` and, for every descriptor, pushes `getInt("plugin."+name, key, descriptor.value)` back through `player.applyPluginSetting(...)` — so an absent key keeps the plugin's own default, and no plugin name is hardcoded in `main.cpp`. The plugin clamps values on store, so a malformed hand-edited value cannot break playback. The INI is **not** seeded with plugin sections on first run (they materialize once chunk 6c writes them on change); reading tolerates their absence. See [audio.md](audio.md) for the descriptor/threading contract.

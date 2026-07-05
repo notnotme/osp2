@@ -28,6 +28,7 @@
 #include <filesystem>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "Application.h"
@@ -130,6 +131,16 @@ void initialize() {
     gui.applyTheme(themeFromString(settings.getString("user", "theme", "dark")));
 
     player.create();
+
+    // Push persisted plugin settings; the INI section is "plugin.<pluginName>". Absent keys keep
+    // the plugin's own default (getInt fallback = the descriptor's current value).
+    for (const auto &[pluginName, descriptors] : player.getPluginSettings()) {
+        const std::string section = "plugin." + pluginName;
+        for (const auto &setting : descriptors) {
+            player.applyPluginSetting(pluginName, setting.key,
+                                      settings.getInt(section, setting.key, setting.value));
+        }
+    }
 
     // Prefer a hand-edited default_folder when it names a valid directory; otherwise fall back to
     // the compile-time default (sdmc root on Switch, cwd on desktop).

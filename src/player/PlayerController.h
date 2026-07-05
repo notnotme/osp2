@@ -27,11 +27,13 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "Metadata.h"
 #include "PlaybackStatus.h"
 #include "PlayerPlugin.h"
+#include "PluginSetting.h"
 #include "PlayerState.h"
 
 
@@ -78,6 +80,12 @@ public:
     [[nodiscard]] TrackMetadata getMetadata() const;
     [[nodiscard]] bool isSupported(const std::filesystem::path &path) const;
     [[nodiscard]] bool consumeTrackEnded();
+
+    // Applies a setting to a named plugin under m_mutex (same contract as decode/open).
+    // pluginName is matched against PlayerPlugin::getName(). No-op if no plugin matches.
+    void applyPluginSetting(const std::string &pluginName, const std::string &key, int value);
+    // Plugin name (getName()) + its setting descriptors, for the settings UI. Under lock.
+    [[nodiscard]] std::vector<std::pair<std::string, std::vector<PluginSetting>>> getPluginSettings() const;
 
 private:
     static void audioCallback(void *userdata, Uint8 *stream, int len);
