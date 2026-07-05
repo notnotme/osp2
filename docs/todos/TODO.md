@@ -32,7 +32,7 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
   - [x] 8b — Visualizer skeleton + wiring (VisualizerPlugin, VisualizerController, onRenderVisualization hook, DebugVisualizer)
   - [x] 8c — BarsVisualizer (vertical bars from tapped audio)
   - [x] 8d — GL shader-quad plugin + selector (future / optional)
-- [ ] [TODO_9 — Additional decoder plugins (GmePlugin / SidPlugin / Sc68Plugin)](TODO_9.md) — requires TODO_5 + TODO_6; 9c/9e gated on maintainer-built Switch portlibs
+- [x] [TODO_9 — Additional decoder plugins (GmePlugin / SidPlugin / Sc68Plugin)](TODO_9.md) — requires TODO_5 + TODO_6; 9c/9e gated on maintainer-built Switch portlibs
   - [x] 9a — GmePlugin (libgme; NSF/SPC/VGM/GBS/…, both platforms today) + int16 audio pipeline + GME settings
   - [x] 9c — SidPlugin (libsidplayfp; needs switch-libsidplayfp portlib — P1)
   - [x] 9e — Sc68Plugin (libsc68; needs sc68 portlib desktop + Switch — P2)
