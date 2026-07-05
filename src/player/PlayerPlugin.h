@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "Metadata.h"
+#include "PluginSetting.h"
 
 
 class PlayerPlugin {
@@ -59,6 +60,13 @@ public:
     // Returns a value CACHED during open() — must not read the decoder object, which is shared
     // with the audio thread. close() clears it to monostate. Main thread only.
     [[nodiscard]] virtual TrackMetadata getMetadata() const = 0;
+
+    // Setting descriptors for the UI. Plain cached values, main thread, no decoder access.
+    // Plugins with no config return {} (the default).
+    [[nodiscard]] virtual std::vector<PluginSetting> getSettings() const { return {}; }
+    // Apply a setting to the live decoder. Called ONLY under PlayerController::m_mutex
+    // (may touch the audio-thread-shared decoder object). No-op default for plugins with no config.
+    virtual void applySetting(const std::string &key, int value) {}
 };
 
 

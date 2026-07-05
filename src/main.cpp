@@ -28,6 +28,7 @@
 #include <filesystem>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "Application.h"
@@ -35,7 +36,9 @@
 #include "filesystem/FileSystem.h"
 #include "filesystem/LocalDataSource.h"
 #include "gui/Gui.h"
+#include "gui/Theme.h"
 #include "player/PlayerController.h"
+#include "settings/Settings.h"
 
 #if defined(__SWITCH__)
     #define BASE_PATH "romfs:/"
@@ -50,7 +53,24 @@ SDL_GLContext opengl_context;
 Gui gui;
 FileSystem file_system;
 PlayerController player;
-Application app(player, file_system);
+Settings settings;
+Application app(player, file_system, settings);
+
+// The INI lives next to the executable on desktop (git-ignored build dir); romfs is read-only
+// on the Switch, so it goes to writable sdmc storage instead.
+std::filesystem::path configPath() {
+#if defined(__SWITCH__)
+    return "sdmc:/switch/osp2.ini";
+#else
+    char *base = SDL_GetBasePath();
+    if (!base) {
+        return "osp2.ini";
+    }
+    std::filesystem::path path = std::filesystem::path(base) / "osp2.ini";
+    SDL_free(base);
+    return path;
+#endif
+}
 
 void initialize() {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) {
@@ -106,14 +126,37 @@ void initialize() {
     io.Fonts->Build();
 
     gui.initialize(BASE_PATH);
+
+    settings.load(configPath());
+    gui.applyTheme(themeFromString(settings.getString("user", "theme", "dark")));
+
     player.create();
 
-    // Start path lives in one spot: TODO_6 will override it with default_folder when set.
+    // Push persisted plugin settings; the INI section is "plugin.<pluginName>". Absent keys keep
+    // the plugin's own default (getInt fallback = the descriptor's current value).
+    for (const auto &[pluginName, descriptors] : player.getPluginSettings()) {
+        const std::string section = "plugin." + pluginName;
+        for (const auto &setting : descriptors) {
+            player.applyPluginSetting(pluginName, setting.key,
+                                      settings.getInt(section, setting.key, setting.value));
+        }
+    }
+    // Seed the Application's cached descriptors with the post-push values (kept off the per-frame path).
+    app.refreshPluginSettings();
+
+    // Prefer a hand-edited default_folder when it names a valid directory; otherwise fall back to
+    // the compile-time default (sdmc root on Switch, cwd on desktop).
 #if defined(__SWITCH__)
-    const std::filesystem::path start_path = "sdmc:/";
+    std::filesystem::path start_path = "sdmc:/";
 #else
-    const std::filesystem::path start_path = std::filesystem::current_path();
+    std::filesystem::path start_path = std::filesystem::current_path();
 #endif
+    if (const auto default_folder = settings.getString("user", "default_folder", ""); !default_folder.empty()) {
+        std::error_code ec;
+        if (std::filesystem::is_directory(default_folder, ec)) {
+            start_path = default_folder;
+        }
+    }
 
     std::vector<std::unique_ptr<DataSource>> sources;
     sources.push_back(std::make_unique<LocalDataSource>());

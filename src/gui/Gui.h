@@ -25,6 +25,7 @@
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "ButtonId.h"
@@ -35,6 +36,7 @@
 #include "../filesystem/FileEntry.h"
 #include "../player/Metadata.h"
 #include "../player/PlaybackStatus.h"
+#include "../player/PluginSetting.h"
 
 
 class Gui {
@@ -55,6 +57,9 @@ private:
     // One-frame latch: the top-bar About entry sets it, the top bar then opens the popup
     // so OpenPopup and BeginPopupModal share the same window ID scope (works in both modes).
     bool m_aboutRequested;
+    // Name of the plugin whose settings popup was requested from the Plugins submenu this
+    // frame (empty = none); consumed by the top bar to open that plugin's popup by name.
+    std::string m_requestedPluginPopup;
 
 public:
     Gui(const Gui &) = delete;
@@ -63,8 +68,9 @@ public:
     virtual ~Gui() = default;
 
 private:
-    void drawTopBar();
+    void drawTopBar(const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings, const std::function<void(Theme)> &onThemeChange, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit);
     void drawAboutPopup();
+    void drawPluginPopups(const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit);
     void drawCurrentPath(const std::string &path);
     void drawFileBrowser(const std::vector<FileEntry> &files, const std::function<void(const FileEntry &)> &onFileClick, const std::function<void(const FileEntry &)> &onDirectoryClick, bool isWorking);
     void drawTabsSection(const TrackMetadata &metadata);

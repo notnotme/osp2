@@ -20,11 +20,37 @@
 #ifndef OSP2_THEME_H
 #define OSP2_THEME_H
 
+#include <string>
+
 // Color theme, mapped to ImGui's three built-in palettes by Gui::applyTheme.
 enum class Theme {
     DARK,
     LIGHT,
     CLASSIC
 };
+
+// Lossless round-trip for INI persistence: every variant serializes so CLASSIC survives.
+inline std::string themeToString(const Theme theme) {
+    switch (theme) {
+        case Theme::LIGHT:
+            return "light";
+        case Theme::CLASSIC:
+            return "classic";
+        case Theme::DARK:
+        default:
+            return "dark";
+    }
+}
+
+// Unknown/garbage values fall back to DARK (the safe default).
+inline Theme themeFromString(const std::string &value) {
+    if (value == "light") {
+        return Theme::LIGHT;
+    }
+    if (value == "classic") {
+        return Theme::CLASSIC;
+    }
+    return Theme::DARK;
+}
 
 #endif //OSP2_THEME_H

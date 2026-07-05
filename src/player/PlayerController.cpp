@@ -170,6 +170,26 @@ bool PlayerController::consumeTrackEnded() {
     return m_trackEnded.exchange(false);
 }
 
+void PlayerController::applyPluginSetting(const std::string &pluginName, const std::string &key, const int value) {
+    std::scoped_lock lock(m_mutex);
+    for (const auto &plugin : m_plugins) {
+        if (plugin->getName() == pluginName) {
+            plugin->applySetting(key, value);
+            return;
+        }
+    }
+}
+
+std::vector<std::pair<std::string, std::vector<PluginSetting>>> PlayerController::getPluginSettings() const {
+    std::scoped_lock lock(m_mutex);
+    std::vector<std::pair<std::string, std::vector<PluginSetting>>> settings;
+    settings.reserve(m_plugins.size());
+    for (const auto &plugin : m_plugins) {
+        settings.emplace_back(plugin->getName(), plugin->getSettings());
+    }
+    return settings;
+}
+
 void PlayerController::audioCallback(void *userdata, Uint8 *stream, const int len) {
     static_cast<PlayerController *>(userdata)->decode(stream, len);
 }

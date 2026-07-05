@@ -27,7 +27,10 @@
 #include <cstdio>
 #include <fstream>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <variant>
+#include <vector>
 
 
 namespace {
@@ -148,7 +151,7 @@ void Gui::applyTheme(const Theme theme) {
     }
 }
 
-void Gui::drawTopBar() {
+void Gui::drawTopBar(const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings, const std::function<void(Theme)> &onThemeChange, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit) {
     if (ImGui::BeginMainMenuBar()) {
         ImGui::TextUnformatted("OSP2");
         ImGui::Separator();
@@ -157,15 +160,38 @@ void Gui::drawTopBar() {
             if (ImGui::BeginMenu("Theme")) {
                 if (ImGui::MenuItem("Dark", nullptr, m_theme == Theme::DARK)) {
                     applyTheme(Theme::DARK);
+                    onThemeChange(Theme::DARK);
                 }
                 if (ImGui::MenuItem("Light", nullptr, m_theme == Theme::LIGHT)) {
                     applyTheme(Theme::LIGHT);
+                    onThemeChange(Theme::LIGHT);
                 }
                 if (ImGui::MenuItem("Classic", nullptr, m_theme == Theme::CLASSIC)) {
                     applyTheme(Theme::CLASSIC);
+                    onThemeChange(Theme::CLASSIC);
                 }
                 ImGui::EndMenu();
             }
+
+            if (ImGui::BeginMenu("Plugins")) {
+                // One entry per plugin that publishes settings; clicking it opens that
+                // plugin's popup (latched by name, opened below in the menu-bar scope).
+                auto any_shown = false;
+                for (const auto &[pluginName, descriptors] : pluginSettings) {
+                    if (descriptors.empty()) {
+                        continue;
+                    }
+                    any_shown = true;
+                    if (ImGui::MenuItem(pluginName.c_str())) {
+                        m_requestedPluginPopup = pluginName;
+                    }
+                }
+                if (!any_shown) {
+                    ImGui::TextDisabled("No configurable plugins");
+                }
+                ImGui::EndMenu();
+            }
+
             ImGui::EndMenu();
         }
 
@@ -191,6 +217,12 @@ void Gui::drawTopBar() {
         }
         drawAboutPopup();
 
+        if (!m_requestedPluginPopup.empty()) {
+            ImGui::OpenPopup(m_requestedPluginPopup.c_str());
+            m_requestedPluginPopup.clear();
+        }
+        drawPluginPopups(pluginSettings, onPluginSettingChange, onPluginSettingCommit);
+
         ImGui::EndMainMenuBar();
     }
 }
@@ -211,6 +243,63 @@ void Gui::drawAboutPopup() {
         ImGui::TextUnformatted("GPL-3.0-or-later");
         ImGui::Spacing();
 
+        if (ImGui::Button("Close")) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
+// One modal per plugin, keyed and titled by the plugin name (matches OpenPopup by name above);
+// only the plugin the user picked in the submenu is ever open. Widgets are generic — one per
+// descriptor, driven entirely by the descriptor's shape. Each edit applies to the decoder live
+// (onPluginSettingChange); the value is persisted only when the widget is released
+// (onPluginSettingCommit on IsItemDeactivatedAfterEdit), so dragging a slider does not rewrite
+// the INI every frame. Both callbacks pass the live local `v` — on the release frame it already
+// holds the final value, whereas setting.value trails a frame behind (it is refetched next frame).
+void Gui::drawPluginPopups(const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit) {
+    const auto center = ImGui::GetMainViewport()->GetCenter();
+    constexpr auto flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
+
+    for (const auto &[pluginName, descriptors] : pluginSettings) {
+        ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+        if (!ImGui::BeginPopupModal(pluginName.c_str(), nullptr, flags)) {
+            continue;
+        }
+        // Scope widget IDs by plugin so descriptor keys need only be unique per plugin
+        // (the INI-key contract), not globally — two plugins may share a key.
+        ImGui::PushID(pluginName.c_str());
+        for (const auto &setting : descriptors) {
+            ImGui::PushID(setting.key.c_str());
+            std::visit([&](const auto &shape) {
+                using T = std::decay_t<decltype(shape)>;
+                if constexpr (std::is_same_v<T, IntRange>) {
+                    int v = setting.value;
+                    if (ImGui::SliderInt(setting.label.c_str(), &v, shape.min, shape.max)) {
+                        onPluginSettingChange(pluginName, setting.key, v);
+                    }
+                    if (ImGui::IsItemDeactivatedAfterEdit()) {
+                        onPluginSettingCommit(pluginName, setting.key, v);
+                    }
+                } else if constexpr (std::is_same_v<T, EnumOptions>) {
+                    std::vector<const char *> items;
+                    items.reserve(shape.labels.size());
+                    for (const auto &l : shape.labels) items.push_back(l.c_str());
+                    int v = setting.value;
+                    // A combo selection is a discrete one-shot event (no drag spam) and
+                    // IsItemDeactivatedAfterEdit is unreliable for combos, so apply and persist
+                    // together on the single change.
+                    if (ImGui::Combo(setting.label.c_str(), &v, items.data(), static_cast<int>(items.size()))) {
+                        onPluginSettingChange(pluginName, setting.key, v);
+                        onPluginSettingCommit(pluginName, setting.key, v);
+                    }
+                }
+            }, setting.shape);
+            ImGui::PopID();
+        }
+        ImGui::PopID();
+
+        ImGui::Separator();
         if (ImGui::Button("Close")) {
             ImGui::CloseCurrentPopup();
         }
@@ -486,7 +575,7 @@ void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(B
 }
 
 void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
-    drawTopBar();
+    drawTopBar(state.pluginSettings, actions.onThemeChange, actions.onPluginSettingChange, actions.onPluginSettingCommit);
 
     // VISUALIZATION mode draws only the top bar; the area below is left empty (GL clear
     // color shows through) for the future visualization system. Audio is unaffected.

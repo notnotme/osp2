@@ -17,28 +17,24 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef OSP2_UI_STATE_H
-#define OSP2_UI_STATE_H
+#ifndef OSP2_PLUGIN_SETTING_H
+#define OSP2_PLUGIN_SETTING_H
 
 #include <string>
-#include <utility>
+#include <variant>
 #include <vector>
 
-#include "../filesystem/FileEntry.h"
-#include "../player/Metadata.h"
-#include "../player/PlaybackStatus.h"
-#include "../player/PluginSetting.h"
 
+struct IntRange    { int min; int max; };
+// value (in PluginSetting) is an index into labels: 0 selects labels[0], and so on.
+struct EnumOptions { std::vector<std::string> labels; };
 
-// Per-frame view model: rebuilt every frame, never stored across frames.
-struct UiState {
-    PlaybackStatus status;
-    std::string path;
-    const std::vector<FileEntry> &files;      // non-owning view, valid for the frame
-    bool isWorking;
-    const TrackMetadata &metadata;            // non-owning view, valid for the frame
-    const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings;  // non-owning view, valid for the frame
+struct PluginSetting {
+    std::string key;                             // INI key, e.g. "stereo_separation"
+    std::string label;                           // UI label, e.g. "Stereo separation"
+    std::variant<IntRange, EnumOptions> shape;   // drives the widget in 6c
+    int value;                                   // current value
 };
 
 
-#endif //OSP2_UI_STATE_H
+#endif //OSP2_PLUGIN_SETTING_H

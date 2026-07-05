@@ -34,6 +34,10 @@ private:
     std::unique_ptr<openmpt::module> m_module;
     // Captured once in open() so getMetadata() never touches the audio-thread-shared module.
     TrackMetadata m_metadata;
+    // Cached render settings, re-applied to each module on open(); m_interpolation is an index
+    // into the Interpolation enum labels (see getSettings()).
+    int m_stereoSeparation;
+    int m_interpolation;
 
 public:
     OpenMptPlugin(const OpenMptPlugin &) = delete;
@@ -53,6 +57,8 @@ public:
     [[nodiscard]] double getPosition() const override;
     [[nodiscard]] double getDuration() const override;
     [[nodiscard]] TrackMetadata getMetadata() const override;
+    [[nodiscard]] std::vector<PluginSetting> getSettings() const override;
+    void applySetting(const std::string &key, int value) override;
 };
 
 
