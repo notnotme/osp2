@@ -49,9 +49,17 @@ struct GmeMetadata {                 // console/arcade formats via libgme
     int trackCount;
 };
 
+struct SidMetadata {                 // Commodore 64 SID files via libsidplayfp
+    std::string title;
+    std::string author;
+    std::string released;            // copyright / release line (PSID info string 2)
+    std::string sidModel;            // "MOS 6581" / "MOS 8580", may be empty (unknown)
+    std::string clock;               // "PAL" / "NTSC", may be empty (unknown)
+};
+
 // One alternative per plugin family; monostate = no track loaded.
-// Future: SidMetadata, Sc68Metadata added with their plugins.
-using TrackMetadata = std::variant<std::monostate, ModuleMetadata, GmeMetadata>;
+// Future: Sc68Metadata added with its plugin.
+using TrackMetadata = std::variant<std::monostate, ModuleMetadata, GmeMetadata, SidMetadata>;
 
 
 #endif //OSP2_METADATA_H

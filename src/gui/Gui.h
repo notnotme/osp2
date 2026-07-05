@@ -86,6 +86,7 @@ private:
     void drawFileMetadata(const TrackMetadata &metadata);
     void drawModuleMetadata(const ModuleMetadata &metadata);
     void drawGmeMetadata(const GmeMetadata &metadata);
+    void drawSidMetadata(const SidMetadata &metadata);
     void drawTabPlaylist();
     void drawPlayerBar(const PlaybackStatus &status, const std::function<void(ButtonId)> &onButtonClick);
 

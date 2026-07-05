@@ -91,6 +91,21 @@ classDiagram
         -int m_accuracy
     }
 
+    class SidPlugin {
+        -int m_sampleRate
+        -vector~string~ m_extensions
+        -unique_ptr~sidplayfp~ m_engine
+        -unique_ptr~ReSIDfpBuilder~ m_builder
+        -unique_ptr~SidTune~ m_tune
+        -vector~int16_t~ m_mixBuffer
+        -size_t m_mixPos
+        -size_t m_mixFrames
+        -TrackMetadata m_metadata
+        -string m_title
+        -int m_model
+        -int m_clock
+    }
+
     class PluginSetting {
         <<value object>>
         +string key
@@ -142,9 +157,18 @@ classDiagram
         +int trackCount
     }
 
+    class SidMetadata {
+        <<value object>>
+        +string title
+        +string author
+        +string released
+        +string sidModel
+        +string clock
+    }
+
     class TrackMetadata {
         <<variant>>
-        monostate | ModuleMetadata | GmeMetadata
+        monostate | ModuleMetadata | GmeMetadata | SidMetadata
     }
 
     PlayerController --> PlayerState : state machine
@@ -154,8 +178,10 @@ classDiagram
     PlayerController "1" *-- "1" AudioTap : lock-free tap
     PlayerPlugin <|-- OpenMptPlugin : libopenmpt (mod, xm, s3m, it, ...)
     PlayerPlugin <|-- GmePlugin : libgme (nsf, spc, vgm, gbs, ...)
+    PlayerPlugin <|-- SidPlugin : libsidplayfp (sid, psid, rsid)
     TrackMetadata ..> ModuleMetadata : alternative (libopenmpt)
     TrackMetadata ..> GmeMetadata : alternative (libgme)
+    TrackMetadata ..> SidMetadata : alternative (libsidplayfp)
     PlayerPlugin ..> PluginSetting : publishes descriptors
     PluginSetting ..> IntRange : shape alternative
     PluginSetting ..> EnumOptions : shape alternative
@@ -175,4 +201,6 @@ classDiagram
 
 ## Adding a decoder plugin
 
-One class under `src/player/plugins/` implementing `PlayerPlugin`, one `emplace_back` in `PlayerController::create()` (registration order = dispatch priority on extension overlap), one CMake stanza. Shipped: libopenmpt (`OpenMptPlugin`), libgme (`GmePlugin` — `ay, gbs, gym, hes, kss, nsf, nsfe, sap, spc, vgm, vgz`; renders libgme's interleaved-stereo 16-bit straight into the output buffer, no conversion; exposes `stereo_depth` (`IntRange 0–100` → `gme_set_stereo_depth`) and `accuracy` (`EnumOptions` Fast/Accurate → `gme_enable_accuracy`)). Planned: libsidplayfp, libsc68. A plugin with no tunables need not override `getSettings()`/`applySetting()` (safe defaults: `{}` / no-op); one that does override them gets persistence and settings UI for free via the `PluginSetting` descriptor mechanism.
+One class under `src/player/plugins/` implementing `PlayerPlugin`, one `emplace_back` in `PlayerController::create()` (registration order = dispatch priority on extension overlap), one CMake stanza. Shipped: libopenmpt (`OpenMptPlugin`), libgme (`GmePlugin` — `ay, gbs, gym, hes, kss, nsf, nsfe, sap, spc, vgm, vgz`; renders libgme's interleaved-stereo 16-bit straight into the output buffer, no conversion; exposes `stereo_depth` (`IntRange 0–100` → `gme_set_stereo_depth`) and `accuracy` (`EnumOptions` Fast/Accurate → `gme_enable_accuracy`)), libsidplayfp (`SidPlugin` — `sid, psid, rsid`; see below). Planned: libsc68. A plugin with no tunables need not override `getSettings()`/`applySetting()` (safe defaults: `{}` / no-op); one that does override them gets persistence and settings UI for free via the `PluginSetting` descriptor mechanism.
+
+**SidPlugin (libsidplayfp v3).** Drives the `sidplayfp` engine with a `ReSIDfpBuilder` (the accurate ReSIDfp emulation; requires the `libresidfp` companion library on both platforms — see [build-portlibs.md](build-portlibs.md)). **Optional C64 ROMs:** `create()` loads `romfs/roms/{kernal-901227-03,basic-901226-01,chargen-901225-01}.bin` if present and hands them to `setRoms()` (each skipped on absence or size mismatch — `setRoms` copies the data, so the load buffers are transient). PSID tunes (the vast majority) play with **no** ROMs; RSID tunes that boot like a real C64 need at least the KERNAL. The ROMs are copyrighted Commodore firmware, so they are `.gitignore`d (not in the repo) and only baked into the `.nro` if the user supplies them. libsidplayfp's v3 API is a two-step `play(cycles)` → `mix(short*, samples)` that yields a **variable** number of interleaved-stereo 16-bit samples per call, so `decode()` runs the emulation in fixed cycle slices and buffers the surplus in `m_mixBuffer` (`m_mixPos`/`m_mixFrames`), draining it before emulating more — the scratch is sized once in `open()` (`getBufSize`) so the audio thread never allocates. SID tunes loop indefinitely and carry no intrinsic length, so `getDuration()` returns `0` (unknown) and playback never self-ends. **Default subtune only** (`selectSong(0)`); per-subtune selection is a deliberate future extension. Settings: `sid_model` (`EnumOptions` Auto/MOS 6581/MOS 8580) and `clock` (`EnumOptions` Auto/PAL/NTSC), both **applied on the next `open()`** (a live change would restart the tune) and clamped on store.

@@ -33,6 +33,7 @@ add_executable(OSP2
     src/player/PlayerController.cpp
     src/player/plugins/OpenMptPlugin.cpp
     src/player/plugins/GmePlugin.cpp
+    src/player/plugins/SidPlugin.cpp
     src/settings/Settings.cpp
     src/visualizer/VisualizerController.cpp
     src/visualizer/visualizers/BarsVisualizer.cpp
@@ -84,6 +85,10 @@ endif ()
 # libgme
 pkg_check_modules(libgme REQUIRED IMPORTED_TARGET libgme)
 target_link_libraries(OSP2 PRIVATE PkgConfig::libgme)
+
+# libsidplayfp
+pkg_check_modules(libsidplayfp REQUIRED IMPORTED_TARGET libsidplayfp)
+target_link_libraries(OSP2 PRIVATE PkgConfig::libsidplayfp)
 
 # libopenmpt
 pkg_check_modules(libopenmpt REQUIRED IMPORTED_TARGET libopenmpt)
