@@ -501,17 +501,17 @@ void Gui::drawTabPlaylist() {
 void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(ButtonId)> &onButtonClick) {
     const auto item_spacing_x = ImGui::GetStyle().ItemSpacing.x;
     constexpr auto row_spacing = 4.0f;
-    constexpr auto progress_bar_height = 18.0f;
     constexpr auto button_frame_padding = 4.0f;
     constexpr auto button_size = ImVec2(48.0f, 48.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(item_spacing_x, row_spacing));
 
     // Vertically center the three rows (track line, progress, transport) in the bar so the
-    // transport buttons keep a clear margin above the bar's bottom edge.
+    // transport buttons keep a clear margin above the bar's bottom edge. The progress row is as
+    // tall as the timer labels; its playhead knob is smaller, so text_height sizes the row.
     const auto text_height = ImGui::GetTextLineHeight();
     const auto button_height = button_size.y + button_frame_padding * 2.0f;
     const auto content_height = text_height + row_spacing
-        + std::max(text_height, progress_bar_height) + row_spacing + button_height;
+        + text_height + row_spacing + button_height;
     const auto slack = ImGui::GetContentRegionAvail().y - content_height;
     if (slack > 0.0f) {
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + slack / 2.0f);
@@ -526,7 +526,9 @@ void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(B
         ImGui::Text("  %s · %s", status.title.c_str(), status.fileName.c_str());
     }
 
-    // Progress row: position | display-only bar | duration.
+    // Progress row: position | thin track line with a circular playhead | duration. The line and
+    // knob are drawn on the window draw list (centred on the label line); the slot is reserved with a
+    // plain Dummy so both timer labels keep one baseline — a framed widget would shove them around.
     const auto position = formatTime(status.positionSeconds);
     const auto duration = formatTime(status.durationSeconds);
     auto fraction = 0.0f;
@@ -534,11 +536,35 @@ void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(B
         fraction = std::clamp(static_cast<float>(status.positionSeconds / status.durationSeconds), 0.0f, 1.0f);
     }
 
+    const auto duration_width = ImGui::CalcTextSize(duration.c_str()).x;
+
     ImGui::TextUnformatted(position.c_str());
     ImGui::SameLine();
-    const auto duration_width = ImGui::CalcTextSize(duration.c_str()).x;
-    const auto bar_width = ImGui::GetContentRegionAvail().x - duration_width - item_spacing_x;
-    ImGui::ProgressBar(fraction, ImVec2(bar_width, progress_bar_height), "");
+
+    constexpr auto line_half_height = 1.5f;   // 3 px-thick track line
+    constexpr auto knob_radius = 6.0f;
+    const auto track_width = ImGui::GetContentRegionAvail().x - duration_width - item_spacing_x;
+    const auto track_origin = ImGui::GetCursorScreenPos();
+    const auto track_y = track_origin.y + text_height * 0.5f;
+    const auto track_x0 = track_origin.x;
+    const auto track_x1 = track_origin.x + track_width;
+    auto *draw_list = ImGui::GetWindowDrawList();
+    draw_list->AddRectFilled(ImVec2(track_x0, track_y - line_half_height), ImVec2(track_x1, track_y + line_half_height),
+                             ImGui::GetColorU32(ImGuiCol_FrameBg), line_half_height);
+    // With a track loaded, fill the line up to a circular playhead in the accent colour; when stopped
+    // the row is just the empty track line (no knob). Same "track loaded" test as the title row above.
+    // The knob's travel is inset by its radius so it never overflows the line ends or the timer labels.
+    if (status.state != PlayerState::STOPPED && !status.fileName.empty()) {
+        const auto knob_x = track_x0 + knob_radius + (track_width - knob_radius * 2.0f) * fraction;
+        const auto accent = ImGui::GetColorU32(ImGuiCol_PlotHistogram);
+        draw_list->AddRectFilled(ImVec2(track_x0, track_y - line_half_height), ImVec2(knob_x, track_y + line_half_height),
+                                 accent, line_half_height);
+        draw_list->AddCircleFilled(ImVec2(knob_x, track_y), knob_radius, accent);
+    }
+
+    // Reserve the track's slot at the label line height so the line advances normally and the duration
+    // label lands on the same baseline as the position label.
+    ImGui::Dummy(ImVec2(track_width, text_height));
     ImGui::SameLine();
     ImGui::TextUnformatted(duration.c_str());
 
