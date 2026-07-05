@@ -66,6 +66,16 @@ void Application::handleFileClick(const FileEntry &entry) {
     }
 }
 
+void Application::handleDirectoryClick(const FileEntry &entry) {
+    // No path joining here: at the virtual root, entry.name is a source display name, not a
+    // path component — FileSystem interprets it against the active source (or lack of one).
+    if (entry.name == "..") {
+        m_fileSystem.navigateToParent();
+    } else {
+        m_fileSystem.navigateToEntry(entry);
+    }
+}
+
 // direction: +1 for NEXT, -1 for PREVIOUS. Requests the first playable sibling of the current track;
 // success is decided later at the consume site, which retries via this cursor if the fetch fails.
 void Application::playAdjacentTrack(const int direction) {
@@ -132,6 +142,7 @@ UiState Application::makeUiState() const {
 UiActions Application::makeUiActions() {
     return {
         [this](const ButtonId buttonId) { handleButtonClick(buttonId); },
-        [this](const FileEntry &entry) { handleFileClick(entry); }
+        [this](const FileEntry &entry) { handleFileClick(entry); },
+        [this](const FileEntry &entry) { handleDirectoryClick(entry); }
     };
 }

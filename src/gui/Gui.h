@@ -65,7 +65,7 @@ private:
     void drawTopBar();
     void drawAboutPopup();
     void drawCurrentPath(const std::string &path);
-    void drawFileBrowser(const std::vector<FileEntry> &files, const std::function<void(const FileEntry &)> &onFileClick, bool isWorking);
+    void drawFileBrowser(const std::vector<FileEntry> &files, const std::function<void(const FileEntry &)> &onFileClick, const std::function<void(const FileEntry &)> &onDirectoryClick, bool isWorking);
     void drawTabsSection();
     void drawFileMetadata();
     void drawTabPlaylist();

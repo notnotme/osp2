@@ -208,7 +208,7 @@ void Gui::drawCurrentPath(const std::string &path) {
     ImGui::Text("%s", path.c_str());
 }
 
-void Gui::drawFileBrowser(const std::vector<FileEntry> &files, const std::function<void(const FileEntry &)> &onFileClick, const bool isWorking) {
+void Gui::drawFileBrowser(const std::vector<FileEntry> &files, const std::function<void(const FileEntry &)> &onFileClick, const std::function<void(const FileEntry &)> &onDirectoryClick, const bool isWorking) {
     constexpr auto folder_color = ImVec4(0.9f, 0.7f, 0.2f, 1.0f);
     constexpr auto file_color = ImVec4(0.2f, 0.6f, 0.9f, 1.0f);
     constexpr auto file_browser_flags = ImGuiTableFlags_SizingFixedFit
@@ -232,7 +232,8 @@ void Gui::drawFileBrowser(const std::vector<FileEntry> &files, const std::functi
         ImGui::TextColored(folder_color, "");
         ImGui::SameLine();
         if (ImGui::Selectable("..", false, ImGuiSelectableFlags_SpanAllColumns)) {
-            // Directory navigation is wired in TODO_4.
+            // ".." is pinned by the Gui (never a FileSystem entry); a synthetic entry carries the intent.
+            onDirectoryClick(FileEntry{"..", 0, "Folder", true});
         }
 
         ImGuiListClipper clipper;
@@ -248,7 +249,7 @@ void Gui::drawFileBrowser(const std::vector<FileEntry> &files, const std::functi
                     ImGui::TextColored(folder_color, "");
                     ImGui::SameLine();
                     if (ImGui::Selectable(entry_label, false, ImGuiSelectableFlags_SpanAllColumns)) {
-                        // Directory navigation is wired in TODO_4.
+                        onDirectoryClick(file_entry);
                     }
                 } else {
                     ImGui::TextColored(file_color, "");
@@ -435,7 +436,7 @@ void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
 
     if (ImGui::BeginChild("left_pane", ImVec2(left_width, panes_height), ImGuiChildFlags_Borders)) {
         drawCurrentPath(state.path);
-        drawFileBrowser(state.files, actions.onFileClick, state.isWorking);
+        drawFileBrowser(state.files, actions.onFileClick, actions.onDirectoryClick, state.isWorking);
     }
     ImGui::EndChild();
 

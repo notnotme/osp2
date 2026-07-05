@@ -147,6 +147,7 @@ it onto the worker behind the overlay.
 
 ## Not yet wired
 
-`navigateToEntry`/`navigateToParent` exist but are not invoked until TODO_4 chunk 4b adds the
-directory-click UI seam (`UiActions::onDirectoryClick` + `Application::handleDirectoryClick`);
-the Type/Size columns and the scanning spinner overlay land in chunk 4c.
+Navigation is driven by the Gui through `UiActions::onDirectoryClick` →
+`Application::handleDirectoryClick` → `navigateToEntry`/`navigateToParent` (chunk 4b). The
+Type/Size columns and the scanning spinner overlay (with `BeginDisabled` while a scan runs)
+land in chunk 4c.

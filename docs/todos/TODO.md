@@ -13,7 +13,7 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
   - [x] 3d — View mode (WORKSPACE / VISUALIZATION)
 - [ ] [TODO_4 — Real threaded FileBrowser (DataSource abstraction + local source)](TODO_4.md)
   - [x] 4a — Threaded FileSystem backend + wiring (DataSource, LocalDataSource, requestFile)
-  - [ ] 4b — Directory navigation (onDirectoryClick, "..", virtual root)
+  - [x] 4b — Directory navigation (onDirectoryClick, "..", virtual root)
   - [ ] 4c — Browser polish (Type column, sizes, icons, spinner)
 - [ ] [TODO_5 — Typed per-plugin track metadata (std::variant) driving the Metadata tab](TODO_5.md)
   - [ ] 5a — Metadata backend (capture-at-open, fetch-on-change)

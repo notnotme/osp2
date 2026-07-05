@@ -57,6 +57,7 @@ public:
 private:
     void handleButtonClick(ButtonId buttonId);
     void handleFileClick(const FileEntry &entry);
+    void handleDirectoryClick(const FileEntry &entry);
     void playAdjacentTrack(int direction);
 };
 
