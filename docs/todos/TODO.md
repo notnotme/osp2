@@ -39,3 +39,20 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
 - [x] [TODO_10 — Switch controller → mouse/scroll emulation (CursorEmulator)](TODO_10.md) — greenfield; no decoder dependency
   - [x] 10a — Controller cursor + clicks (left stick move, A/X click)
   - [x] 10b — Scroll + speed modifiers + polish (right stick scroll, L/R slow/fast)
+- [ ] [TODO_11 — Back-fill THIRD_PARTY_NOTICES.md](TODO_11.md) — priority; single chunk; docs-only
+- [ ] [TODO_12 — main.cpp cleanup + shared Paths.h (BASE_PATH dedup)](TODO_12.md) — behaviour-preserving; do early
+  - [ ] 12a — Shared Paths.h (dedup BASE_PATH + config/cache helpers)
+  - [ ] 12b — Split initialize() + hoist magic constants
+- [ ] [TODO_13 — Enable clang-format + lint tooling](TODO_13.md) — do early (after TODO_12); scoped to src/
+  - [ ] 13a — .clang-format + one-time sweep
+  - [ ] 13b — CMake format/format-check targets + .clang-tidy
+- [ ] [TODO_14 — Persist selected visualizer](TODO_14.md) — requires TODO_6 + TODO_8; single chunk
+- [ ] [TODO_15 — Quit-app button](TODO_15.md) — single chunk
+- [ ] [TODO_16 — File-browser scroll position (top on descend, restore on back)](TODO_16.md) — single chunk
+- [ ] [TODO_17 — Playback loading overlay + error notifications](TODO_17.md)
+  - [ ] 17a — Async decode + loading overlay
+  - [ ] 17b — Playback error notifications (popup)
+- [ ] [TODO_18 — Subtrack navigation (NEXT/PREVIOUS step subtracks)](TODO_18.md) — requires TODO_9; GME multi-track
+  - [ ] 18a — Plugin subtrack API + GME impl + controller pass-through
+  - [ ] 18b — Wire NEXT/PREVIOUS + auto-advance to subtracks
+- [ ] [TODO_19 — Loop-song setting](TODO_19.md) — requires TODO_6; single chunk
