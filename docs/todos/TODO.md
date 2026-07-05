@@ -12,7 +12,7 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
   - [x] 3c — Layout restructure (top bar, panes, player bar, tabs)
   - [x] 3d — View mode (WORKSPACE / VISUALIZATION)
 - [ ] [TODO_4 — Real threaded FileBrowser (DataSource abstraction + local source)](TODO_4.md)
-  - [ ] 4a — Threaded FileSystem backend + wiring (DataSource, LocalDataSource, requestFile)
+  - [x] 4a — Threaded FileSystem backend + wiring (DataSource, LocalDataSource, requestFile)
   - [ ] 4b — Directory navigation (onDirectoryClick, "..", virtual root)
   - [ ] 4c — Browser polish (Type column, sizes, icons, spinner)
 - [ ] [TODO_5 — Typed per-plugin track metadata (std::variant) driving the Metadata tab](TODO_5.md)

@@ -20,16 +20,51 @@
 #ifndef OSP2_FILEBROWSER_H
 #define OSP2_FILEBROWSER_H
 
+#include <atomic>
 #include <filesystem>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <thread>
 #include <vector>
 
+#include "DataSource.h"
 #include "FileEntry.h"
 
 
+// Outcome of resolving an entry to a locally-openable file; consumed once by Application.
+struct FetchResult {
+    std::filesystem::path localPath;
+    bool succeeded;
+};
+
+
+// Threaded directory browser over a set of DataSources. Directory scans run on a worker
+// thread; the main thread reads m_path/m_content (handed to the Gui) and swaps in finished
+// scans via update(). See docs/filesystem.md for the full threading contract.
 class FileSystem final {
 private:
+    // Immutable after create().
+    std::vector<std::unique_ptr<DataSource>> m_sources;
+    std::function<bool(const std::filesystem::path &)> m_isPlayable;
+
+    // Main thread only (update(), or the synchronous virtual-root swap while !m_working).
     std::filesystem::path m_path;
     std::vector<FileEntry> m_content;
+
+    // Main thread only, mutated only while the worker is idle; the worker uses the source captured at launch.
+    DataSource *m_activeSource;
+    DataSource *m_sourceBeforeScan;   // restored by update() when a scan fails (nullopt)
+
+    // Worker synchronization.
+    std::atomic_bool m_working;
+    std::thread m_worker;
+    mutable std::mutex m_mutex;
+    std::filesystem::path m_pendingPath;      // m_mutex
+    std::vector<FileEntry> m_pendingContent;  // m_mutex
+    bool m_scanSucceeded;                      // m_mutex
+    std::optional<FetchResult> m_fetchResult;  // m_mutex
 
 public:
     FileSystem(const FileSystem &) = delete;
@@ -38,9 +73,25 @@ public:
     ~FileSystem() = default;
 
 public:
-    [[nodiscard]] const std::filesystem::path &getPath() const;
+    void create(std::vector<std::unique_ptr<DataSource>> sources, const std::filesystem::path &startPath,
+                std::function<bool(const std::filesystem::path &)> isPlayable);
+    void destroy();
+
+    void navigateToEntry(const FileEntry &entry);
+    void navigateToParent();
+    void requestFile(const FileEntry &entry);
+    [[nodiscard]] std::optional<FetchResult> consumeFetchResult();
+    void update();
+
+public:
+    [[nodiscard]] const std::filesystem::path &getPath() const;   // empty at the virtual root
     [[nodiscard]] const std::vector<FileEntry> &getContent() const;
     [[nodiscard]] bool isWorking() const;
+
+private:
+    void startScan(const std::filesystem::path &path);
+    void showVirtualRoot();
+    void scan(DataSource *source, std::filesystem::path path);
 };
 
 

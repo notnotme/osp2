@@ -257,7 +257,7 @@ void Gui::drawFileBrowser(const std::vector<FileEntry> &files, const std::functi
                         onFileClick(file_entry);
                     }
                     ImGui::TableNextColumn();
-                    ImGui::Text("%i Kb", file_entry.file_size);
+                    ImGui::Text("%lld Kb", static_cast<long long>(file_entry.file_size));
                 }
             }
         }

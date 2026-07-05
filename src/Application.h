@@ -20,6 +20,8 @@
 #ifndef OSP2_APPLICATION_H
 #define OSP2_APPLICATION_H
 
+#include <string>
+
 #include "filesystem/FileEntry.h"
 #include "filesystem/FileSystem.h"
 #include "gui/ButtonId.h"
@@ -35,6 +37,11 @@ class Application final {
 private:
     PlayerController &m_player;
     FileSystem &m_fileSystem;
+
+    // Playback-request retry state: m_lastRequestedName is the cursor playAdjacentTrack advances
+    // from when a fetched sibling fails; m_advanceDirection is the direction (+1/-1, 0 for a direct click).
+    std::string m_lastRequestedName;
+    int m_advanceDirection;
 
 public:
     Application(const Application &) = delete;

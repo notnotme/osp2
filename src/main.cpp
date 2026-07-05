@@ -25,10 +25,15 @@
 #include <backends/imgui_impl_opengl3.h>
 
 #include <cstdlib>
+#include <filesystem>
+#include <memory>
 #include <stdexcept>
+#include <vector>
 
 #include "Application.h"
+#include "filesystem/DataSource.h"
 #include "filesystem/FileSystem.h"
+#include "filesystem/LocalDataSource.h"
 #include "gui/Gui.h"
 #include "player/PlayerController.h"
 
@@ -102,9 +107,23 @@ void initialize() {
 
     gui.initialize(BASE_PATH);
     player.create();
+
+    // Start path lives in one spot: TODO_6 will override it with default_folder when set.
+#if defined(__SWITCH__)
+    const std::filesystem::path start_path = "sdmc:/";
+#else
+    const std::filesystem::path start_path = std::filesystem::current_path();
+#endif
+
+    std::vector<std::unique_ptr<DataSource>> sources;
+    sources.push_back(std::make_unique<LocalDataSource>());
+    file_system.create(std::move(sources), start_path,
+        [](const std::filesystem::path &p) { return player.isSupported(p); });
 }
 
 void finalize() {
+    // Join the worker before tearing down the player: its isPlayable predicate calls into PlayerController.
+    file_system.destroy();
     player.destroy();
     gui.finalize();
 
