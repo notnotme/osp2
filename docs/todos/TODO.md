@@ -18,7 +18,7 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
 - [x] [TODO_5 — Typed per-plugin track metadata (std::variant) driving the Metadata tab](TODO_5.md)
   - [x] 5a — Metadata backend (capture-at-open, fetch-on-change)
   - [x] 5b — Metadata tab UI (visit dispatch)
-- [ ] [TODO_6 — Plugin configuration + persisted user settings (INI)](TODO_6.md)
+- [x] [TODO_6 — Plugin configuration + persisted user settings (INI)](TODO_6.md)
   - [x] 6a — Settings domain + user settings (theme, default_folder)
   - [x] 6b — Plugin settings backend (PluginSetting, OpenMpt tunables)
   - [x] 6c — Settings UI (generic widget loop)
