@@ -75,7 +75,7 @@ private:
     void drawAboutPopup();
     void drawPluginPopups(const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit);
     void drawCurrentPath(const std::string &path);
-    void drawFileBrowser(const std::vector<FileEntry> &files, const std::function<void(const FileEntry &)> &onFileClick, const std::function<void(const FileEntry &)> &onDirectoryClick, bool isWorking, const std::string &workingLabel, const std::function<void()> &onCancelWork);
+    void drawFileBrowser(const std::vector<FileEntry> &files, const std::function<void(const FileEntry &)> &onFileClick, const std::function<void(const FileEntry &)> &onDirectoryClick, bool isWorking, const std::string &workingLabel, const std::function<void()> &onCancelWork, const std::string &playingFileName);
     void drawTabsSection(const TrackMetadata &metadata);
     void drawFileMetadata(const TrackMetadata &metadata);
     void drawModuleMetadata(const ModuleMetadata &metadata);

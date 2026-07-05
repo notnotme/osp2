@@ -156,7 +156,7 @@ void Gui::drawTopBar(const std::vector<std::pair<std::string, std::vector<Plugin
         ImGui::TextUnformatted("OSP2");
         ImGui::Separator();
 
-        if (ImGui::BeginMenu("  Settings")) {
+        if (ImGui::BeginMenu(" Settings")) {
             if (ImGui::BeginMenu("Theme")) {
                 if (ImGui::MenuItem("Dark", nullptr, m_theme == Theme::DARK)) {
                     applyTheme(Theme::DARK);
@@ -195,7 +195,7 @@ void Gui::drawTopBar(const std::vector<std::pair<std::string, std::vector<Plugin
             ImGui::EndMenu();
         }
 
-        if (ImGui::MenuItem("About")) {
+        if (ImGui::MenuItem(" About")) {
             m_aboutRequested = true;
         }
 
@@ -314,7 +314,7 @@ void Gui::drawCurrentPath(const std::string &path) {
     ImGui::Text("%s", path.c_str());
 }
 
-void Gui::drawFileBrowser(const std::vector<FileEntry> &files, const std::function<void(const FileEntry &)> &onFileClick, const std::function<void(const FileEntry &)> &onDirectoryClick, const bool isWorking, const std::string &workingLabel, const std::function<void()> &onCancelWork) {
+void Gui::drawFileBrowser(const std::vector<FileEntry> &files, const std::function<void(const FileEntry &)> &onFileClick, const std::function<void(const FileEntry &)> &onDirectoryClick, const bool isWorking, const std::string &workingLabel, const std::function<void()> &onCancelWork, const std::string &playingFileName) {
     // Rising edge of the loading overlay: focus is moved to the Cancel button once on this frame
     // (below) so gamepad/keyboard on the Switch can reach it; m_wasWorking is updated at function end.
     const bool overlayJustAppeared = isWorking && !m_wasWorking;
@@ -368,7 +368,10 @@ void Gui::drawFileBrowser(const std::vector<FileEntry> &files, const std::functi
                 } else {
                     ImGui::TextColored(file_color, "");
                     ImGui::SameLine();
-                    if (ImGui::Selectable(entry_label, false, ImGuiSelectableFlags_SpanAllColumns)) {
+                    // Highlight the currently-playing track's row (match by filename, the same basis
+                    // playAdjacentTrack uses; empty when nothing plays, so no false match).
+                    const bool is_playing = !playingFileName.empty() && file_entry.name == playingFileName;
+                    if (ImGui::Selectable(entry_label, is_playing, ImGuiSelectableFlags_SpanAllColumns)) {
                         onFileClick(file_entry);
                     }
                 }
@@ -545,11 +548,11 @@ void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(B
 
     // Track line.
     if (status.state == PlayerState::STOPPED || status.fileName.empty()) {
-        ImGui::Text("  No track");
+        ImGui::Text(" No track");
     } else if (status.title.empty()) {
-        ImGui::Text("  %s", status.fileName.c_str());
+        ImGui::Text(" %s", status.fileName.c_str());
     } else {
-        ImGui::Text("  %s · %s", status.title.c_str(), status.fileName.c_str());
+        ImGui::Text(" %s · %s", status.title.c_str(), status.fileName.c_str());
     }
 
     // Progress row: position | thin track line with a circular playhead | duration. The line and
@@ -655,7 +658,10 @@ void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
 
     if (ImGui::BeginChild("left_pane", ImVec2(left_width, panes_height), ImGuiChildFlags_Borders)) {
         drawCurrentPath(state.path);
-        drawFileBrowser(state.files, actions.onFileClick, actions.onDirectoryClick, state.isWorking, state.workingLabel, actions.onCancelWork);
+        // Nothing is "playing" when stopped, so pass an empty name (no row highlighted) in that state.
+        const std::string playingFileName =
+            state.status.state == PlayerState::STOPPED ? std::string{} : state.status.fileName;
+        drawFileBrowser(state.files, actions.onFileClick, actions.onDirectoryClick, state.isWorking, state.workingLabel, actions.onCancelWork, playingFileName);
     }
     ImGui::EndChild();
 
