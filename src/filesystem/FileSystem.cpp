@@ -121,7 +121,7 @@ void FileSystem::navigateToParent() {
         return;   // virtual root: nowhere higher to go
     }
 
-    // parent_path() of a source root (e.g. "sdmc:/") returns itself, so detect the root by value.
+    // parent_path() of a source root (e.g. "/") returns itself, so detect the root by value.
     if (m_path == m_activeSource->getRootPath()) {
         m_activeSource = nullptr;
         showVirtualRoot();
