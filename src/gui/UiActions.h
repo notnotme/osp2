@@ -21,6 +21,7 @@
 #define OSP2_UI_ACTIONS_H
 
 #include <functional>
+#include <string>
 
 #include "ButtonId.h"
 #include "Theme.h"
@@ -33,6 +34,11 @@ struct UiActions {
     std::function<void(const FileEntry &)> onFileClick;
     std::function<void(const FileEntry &)> onDirectoryClick;
     std::function<void(Theme)> onThemeChange;
+    // onPluginSettingChange fires on every edit (apply to the live decoder for immediate feedback);
+    // onPluginSettingCommit fires once the widget is released (persist to the INI). Split so dragging
+    // a slider does not rewrite the file every frame.
+    std::function<void(const std::string &pluginName, const std::string &key, int value)> onPluginSettingChange;
+    std::function<void(const std::string &pluginName, const std::string &key, int value)> onPluginSettingCommit;
 };
 
 

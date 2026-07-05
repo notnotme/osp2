@@ -22,6 +22,8 @@
 
 #include <filesystem>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "filesystem/FileEntry.h"
 #include "filesystem/FileSystem.h"
@@ -31,6 +33,7 @@
 #include "gui/UiState.h"
 #include "player/Metadata.h"
 #include "player/PlayerController.h"
+#include "player/PluginSetting.h"
 #include "settings/Settings.h"
 
 
@@ -53,6 +56,14 @@ private:
     TrackMetadata m_trackMetadata;
     std::filesystem::path m_metadataPath;
 
+    // Plugin setting descriptors cached across frames (getPluginSettings() locks the audio mutex and
+    // allocates, so it must stay off the per-frame path). Refreshed only when the values can change:
+    // once at startup via refreshPluginSettings(), then — via m_pluginSettingsDirty — on the frame
+    // after a committed edit. The refresh is deferred (not run inside the commit callback) because the
+    // Gui iterates this vector by reference while drawing, so reassigning it mid-draw would dangle.
+    std::vector<std::pair<std::string, std::vector<PluginSetting>>> m_pluginSettings;
+    bool m_pluginSettingsDirty;
+
 public:
     Application(const Application &) = delete;
     Application &operator=(const Application &) = delete;
@@ -61,6 +72,7 @@ public:
 
 public:
     void update();
+    void refreshPluginSettings();
     [[nodiscard]] UiState makeUiState() const;
     [[nodiscard]] UiActions makeUiActions();
 
@@ -69,6 +81,8 @@ private:
     void handleFileClick(const FileEntry &entry);
     void handleDirectoryClick(const FileEntry &entry);
     void handleThemeChange(Theme theme);
+    void handlePluginSettingChange(const std::string &pluginName, const std::string &key, int value);
+    void handlePluginSettingCommit(const std::string &pluginName, const std::string &key, int value);
     void playAdjacentTrack(int direction);
 };
 

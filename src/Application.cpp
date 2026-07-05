@@ -29,7 +29,8 @@
 
 
 Application::Application(PlayerController &player, FileSystem &fileSystem, Settings &settings)
-    : m_player(player), m_fileSystem(fileSystem), m_settings(settings), m_advanceDirection(0) {}
+    : m_player(player), m_fileSystem(fileSystem), m_settings(settings), m_advanceDirection(0),
+      m_pluginSettingsDirty(false) {}
 
 void Application::handleButtonClick(const ButtonId buttonId) {
     switch (buttonId) {
@@ -115,8 +116,38 @@ void Application::handleThemeChange(const Theme theme) {
     m_settings.save();
 }
 
+// Live edit (fires every frame while a slider is dragged): apply to the decoder for immediate
+// feedback, but do NOT persist — the file write is deferred to the commit below on release.
+void Application::handlePluginSettingChange(const std::string &pluginName, const std::string &key, const int value) {
+    m_player.applyPluginSetting(pluginName, key, value);
+}
+
+// Commit (fires once the widget is released): the decoder already holds the value, so only persist,
+// then mark the cache dirty so update() refreshes it next frame. The refresh must NOT run here — this
+// callback fires from inside the Gui's draw while it iterates m_pluginSettings by reference, so
+// reassigning that vector now would invalidate the loop and dangle the references.
+void Application::handlePluginSettingCommit(const std::string &pluginName, const std::string &key, const int value) {
+    m_settings.setInt("plugin." + pluginName, key, value);
+    m_settings.save();
+    m_pluginSettingsDirty = true;
+}
+
+// Rebuilds the cached plugin-setting descriptors from the player (locks the audio mutex, so it is
+// called only at settled points — from main.cpp after the startup push, and from update() when a
+// committed edit marked the cache dirty — never per frame and never during a draw).
+void Application::refreshPluginSettings() {
+    m_pluginSettings = m_player.getPluginSettings();
+}
+
 void Application::update() {
     m_fileSystem.update();
+
+    // Apply a deferred plugin-settings refresh here (before makeUiState builds the frame's view model),
+    // never inside the commit callback which fires mid-draw while the Gui iterates the cache.
+    if (m_pluginSettingsDirty) {
+        refreshPluginSettings();
+        m_pluginSettingsDirty = false;
+    }
 
     // Resolve a pending request first: a successful play() clears the track-ended flag,
     // so an explicit click made just as the current track ends wins over auto-advance
@@ -149,7 +180,8 @@ UiState Application::makeUiState() const {
         path.empty() ? "Sources" : path.string(),
         m_fileSystem.getContent(),
         m_fileSystem.isWorking(),
-        m_trackMetadata
+        m_trackMetadata,
+        m_pluginSettings
     };
 }
 
@@ -158,6 +190,8 @@ UiActions Application::makeUiActions() {
         [this](const ButtonId buttonId) { handleButtonClick(buttonId); },
         [this](const FileEntry &entry) { handleFileClick(entry); },
         [this](const FileEntry &entry) { handleDirectoryClick(entry); },
-        [this](const Theme theme) { handleThemeChange(theme); }
+        [this](const Theme theme) { handleThemeChange(theme); },
+        [this](const std::string &pluginName, const std::string &key, const int value) { handlePluginSettingChange(pluginName, key, value); },
+        [this](const std::string &pluginName, const std::string &key, const int value) { handlePluginSettingCommit(pluginName, key, value); }
     };
 }

@@ -21,11 +21,13 @@
 #define OSP2_UI_STATE_H
 
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "../filesystem/FileEntry.h"
 #include "../player/Metadata.h"
 #include "../player/PlaybackStatus.h"
+#include "../player/PluginSetting.h"
 
 
 // Per-frame view model: rebuilt every frame, never stored across frames.
@@ -35,6 +37,7 @@ struct UiState {
     const std::vector<FileEntry> &files;      // non-owning view, valid for the frame
     bool isWorking;
     const TrackMetadata &metadata;            // non-owning view, valid for the frame
+    const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings;  // non-owning view, valid for the frame
 };
 
 

@@ -141,6 +141,8 @@ void initialize() {
                                       settings.getInt(section, setting.key, setting.value));
         }
     }
+    // Seed the Application's cached descriptors with the post-push values (kept off the per-frame path).
+    app.refreshPluginSettings();
 
     // Prefer a hand-edited default_folder when it names a valid directory; otherwise fall back to
     // the compile-time default (sdmc root on Switch, cwd on desktop).
