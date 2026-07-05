@@ -57,12 +57,12 @@ private:
     std::filesystem::path m_metadataPath;
 
     // Plugin setting descriptors cached across frames (getPluginSettings() locks the audio mutex and
-    // allocates, so it must stay off the per-frame path). Refreshed only when the values can change:
-    // once at startup via refreshPluginSettings(), then — via m_pluginSettingsDirty — on the frame
-    // after a committed edit. The refresh is deferred (not run inside the commit callback) because the
-    // Gui iterates this vector by reference while drawing, so reassigning it mid-draw would dangle.
+    // allocates, so it must stay off the per-frame path). Built once at startup via
+    // refreshPluginSettings(); thereafter each live edit patches the matching descriptor's value in
+    // place (handlePluginSettingChange), so the cache tracks the decoder and a reopened popup seeds
+    // from current values. No full rebuild after edits — the Gui iterates this vector by reference
+    // while drawing, so reassigning it mid-draw would dangle.
     std::vector<std::pair<std::string, std::vector<PluginSetting>>> m_pluginSettings;
-    bool m_pluginSettingsDirty;
 
 public:
     Application(const Application &) = delete;

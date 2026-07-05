@@ -23,6 +23,7 @@
 #include <glad/glad.h>
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -60,6 +61,11 @@ private:
     // Name of the plugin whose settings popup was requested from the Plugins submenu this
     // frame (empty = none); consumed by the top bar to open that plugin's popup by name.
     std::string m_requestedPluginPopup;
+    // Working copy backing the open settings popup so sliders bind to stable storage (no one-frame
+    // flash from the frame-lagging descriptor cache). m_openSettingsPlugin is the plugin whose popup
+    // is currently open (empty = none); it seeds m_settingsEdit (key -> value) once on open.
+    std::string m_openSettingsPlugin;
+    std::map<std::string, int> m_settingsEdit;
 
 public:
     Gui(const Gui &) = delete;
