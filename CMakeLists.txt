@@ -27,6 +27,7 @@ add_executable(OSP2
     # OSP2 sources
     src/Application.cpp
     src/filesystem/FileSystem.cpp
+    src/filesystem/LocalDataSource.cpp
     src/gui/Gui.cpp
     src/player/PlayerController.cpp
     src/player/plugins/OpenMptPlugin.cpp

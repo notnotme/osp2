@@ -17,19 +17,26 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef OSP2_FILE_ENTRY_H
-#define OSP2_FILE_ENTRY_H
+#ifndef OSP2_LOCAL_DATA_SOURCE_H
+#define OSP2_LOCAL_DATA_SOURCE_H
 
-#include <cstdint>
+#include <filesystem>
+#include <optional>
 #include <string>
+#include <vector>
+
+#include "DataSource.h"
+#include "FileEntry.h"
 
 
-struct FileEntry {
-    std::string name;
-    std::int64_t file_size;   // bytes
-    std::string type;         // uppercase ext without dot ("S3M"), "Folder", or "Source"; empty when a source hands it over pre-derivation
-    bool is_directory;
+// Browses the platform filesystem. A local path is already openable, so fetchFile is the identity.
+class LocalDataSource final : public DataSource {
+public:
+    [[nodiscard]] std::string getDisplayName() const override;
+    [[nodiscard]] std::filesystem::path getRootPath() const override;
+    [[nodiscard]] std::optional<std::vector<FileEntry>> listDirectory(const std::filesystem::path &path) override;
+    [[nodiscard]] std::filesystem::path fetchFile(const std::filesystem::path &path) override { return path; }
 };
 
 
-#endif //OSP2_FILE_ENTRY_H
+#endif //OSP2_LOCAL_DATA_SOURCE_H

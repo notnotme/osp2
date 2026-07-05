@@ -30,6 +30,7 @@
 struct UiActions {
     std::function<void(ButtonId)> onButtonClick;
     std::function<void(const FileEntry &)> onFileClick;
+    std::function<void(const FileEntry &)> onDirectoryClick;
 };
 
 

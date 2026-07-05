@@ -29,7 +29,7 @@
 
 
 Application::Application(PlayerController &player, FileSystem &fileSystem)
-    : m_player(player), m_fileSystem(fileSystem) {}
+    : m_player(player), m_fileSystem(fileSystem), m_advanceDirection(0) {}
 
 void Application::handleButtonClick(const ButtonId buttonId) {
     switch (buttonId) {
@@ -61,15 +61,29 @@ void Application::handleButtonClick(const ButtonId buttonId) {
 
 void Application::handleFileClick(const FileEntry &entry) {
     if (m_player.isSupported(entry.name)) {
-        m_player.play(m_fileSystem.getPath() / entry.name);
+        m_advanceDirection = 0;
+        m_fileSystem.requestFile(entry);
     }
 }
 
-// direction: +1 for NEXT, -1 for PREVIOUS. Plays the nearest playable sibling of the current track.
+void Application::handleDirectoryClick(const FileEntry &entry) {
+    // No path joining here: at the virtual root, entry.name is a source display name, not a
+    // path component — FileSystem interprets it against the active source (or lack of one).
+    if (entry.name == "..") {
+        m_fileSystem.navigateToParent();
+    } else {
+        m_fileSystem.navigateToEntry(entry);
+    }
+}
+
+// direction: +1 for NEXT, -1 for PREVIOUS. Requests the first playable sibling of the current track;
+// success is decided later at the consume site, which retries via this cursor if the fetch fails.
 void Application::playAdjacentTrack(const int direction) {
     const auto &entries = m_fileSystem.getContent();
     const auto count = static_cast<int>(entries.size());
-    const auto current = m_player.getCurrentPath().filename().string();
+    const auto current = m_lastRequestedName.empty()
+        ? m_player.getCurrentPath().filename().string()
+        : m_lastRequestedName;
 
     auto index = -1;
     for (int i = 0; i < count; ++i) {
@@ -84,22 +98,42 @@ void Application::playAdjacentTrack(const int direction) {
         if (entry.is_directory || !m_player.isSupported(entry.name)) {
             continue;
         }
-        if (m_player.play(m_fileSystem.getPath() / entry.name)) {
-            return;
-        }
+        m_advanceDirection = direction;
+        m_lastRequestedName = entry.name;
+        m_fileSystem.requestFile(entry);
+        return;
     }
+
+    // No candidate in this direction: drop the retry cursor so a later NEXT/PREVIOUS
+    // resolves against the actually-playing track, not the last failed name.
+    m_lastRequestedName.clear();
 }
 
 void Application::update() {
+    m_fileSystem.update();
+
+    // Resolve a pending request first: a successful play() clears the track-ended flag,
+    // so an explicit click made just as the current track ends wins over auto-advance
+    // (rather than being clobbered by it when both land in the same frame).
+    if (auto r = m_fileSystem.consumeFetchResult()) {
+        if (r->succeeded && m_player.play(r->localPath)) {
+            m_lastRequestedName.clear();
+        } else if (m_advanceDirection != 0) {
+            playAdjacentTrack(m_advanceDirection);   // skip a broken sibling
+        }
+        // Direct-click failure (direction 0): SDL_Log inside the player is enough.
+    }
+
     if (m_player.consumeTrackEnded()) {
         playAdjacentTrack(+1);
     }
 }
 
 UiState Application::makeUiState() const {
+    const auto &path = m_fileSystem.getPath();
     return {
         m_player.getStatus(),
-        m_fileSystem.getPath().string(),
+        path.empty() ? "Sources" : path.string(),
         m_fileSystem.getContent(),
         m_fileSystem.isWorking()
     };
@@ -108,6 +142,7 @@ UiState Application::makeUiState() const {
 UiActions Application::makeUiActions() {
     return {
         [this](const ButtonId buttonId) { handleButtonClick(buttonId); },
-        [this](const FileEntry &entry) { handleFileClick(entry); }
+        [this](const FileEntry &entry) { handleFileClick(entry); },
+        [this](const FileEntry &entry) { handleDirectoryClick(entry); }
     };
 }

@@ -19,39 +19,149 @@
 
 #include "FileSystem.h"
 
+#include <SDL.h>
+
+#include <algorithm>
+#include <cctype>
+#include <utility>
+
+
+namespace {
+    // Uppercase extension without the dot ("s3m" -> "S3M"); empty when the name has no extension.
+    std::string deriveType(const std::string &name) {
+        auto extension = std::filesystem::path(name).extension().string();
+        if (extension.empty()) {
+            return "";
+        }
+        extension.erase(0, 1);
+        std::ranges::transform(extension, extension.begin(), [](const unsigned char c) {
+            return static_cast<char>(std::toupper(c));
+        });
+        return extension;
+    }
+
+    bool caseInsensitiveLess(const std::string &a, const std::string &b) {
+        return std::ranges::lexicographical_compare(a, b, [](const unsigned char x, const unsigned char y) {
+            return std::tolower(x) < std::tolower(y);
+        });
+    }
+
+    // Directories first, then files; ties broken case-insensitively by name.
+    bool entryLess(const FileEntry &a, const FileEntry &b) {
+        if (a.is_directory != b.is_directory) {
+            return a.is_directory;
+        }
+        return caseInsensitiveLess(a.name, b.name);
+    }
+}
+
+
 FileSystem::FileSystem()
-    : m_path("/sample/path/placeholder"),
-      m_content({
-       { "placeholder_folder_01", 0, true },
-       { "placeholder_folder_02", 0, true },
-       { "placeholder_folder_03", 0, true },
-       { "placeholder_folder_04", 0, true },
-       { "placeholder_1.snd", 33, false },
-       { "placeholder_2.xm", 2, false },
-       { "placeholder_3.sndh", 18, false },
-       { "placeholder_4.sc68", 16, false },
-       { "placeholder_5.sid", 24, false },
-       { "placeholder_6.mod", 100, false },
-       { "placeholder_7.it", 89, false },
-       { "placeholder_8.xm", 3, false },
-       { "placeholder_9.mod", 8, false },
-       { "placeholder_10.sid", 7, false },
-       { "placeholder_11.sid", 4, false },
-       { "placeholder_12.sid", 12, false },
-       { "placeholder_13.s3m", 10, false },
-       { "placeholder_14.xm", 10, false },
-       { "placeholder_15.snd", 11, false },
-       { "placeholder_16.snd", 21, false },
-       { "placeholder_17.sndh", 17, false },
-       { "placeholder_18.sc68", 60, false },
-       { "placeholder_19.sc68", 41, false },
-       { "placeholder_20.sc68", 55, false },
-       { "placeholder_21.mod", 8, false },
-       { "placeholder_22.s3m", 8, false },
-       { "placeholder_23.mod", 7, false },
-       { "placeholder_24.s3m", 8, false },
-       { "placeholder_25.mod", 2, false }
-      }) {}
+    : m_activeSource(nullptr),
+      m_sourceBeforeScan(nullptr),
+      m_working(false),
+      m_scanSucceeded(false) {}
+
+void FileSystem::create(std::vector<std::unique_ptr<DataSource>> sources, const std::filesystem::path &startPath,
+                        std::function<bool(const std::filesystem::path &)> isPlayable) {
+    m_sources = std::move(sources);
+    m_isPlayable = std::move(isPlayable);
+
+    if (m_sources.empty()) {
+        showVirtualRoot();
+        return;
+    }
+
+    // sources[0] is the startup source, activated immediately and scanned at startPath.
+    m_activeSource = m_sources.front().get();
+    m_sourceBeforeScan = m_activeSource;
+    startScan(startPath);
+}
+
+void FileSystem::destroy() {
+    if (m_worker.joinable()) {
+        m_worker.join();
+    }
+}
+
+void FileSystem::navigateToEntry(const FileEntry &entry) {
+    if (m_working.load()) {
+        return;
+    }
+
+    if (m_activeSource == nullptr) {
+        // At the virtual root: entry.name is a source display name, not a path component.
+        for (const auto &source : m_sources) {
+            if (source->getDisplayName() == entry.name) {
+                m_sourceBeforeScan = m_activeSource;   // nullptr: restore the virtual root if the scan fails
+                m_activeSource = source.get();
+                startScan(source->getRootPath());
+                return;
+            }
+        }
+        return;
+    }
+
+    m_sourceBeforeScan = m_activeSource;
+    startScan(m_path / entry.name);
+}
+
+void FileSystem::navigateToParent() {
+    if (m_working.load()) {
+        return;
+    }
+
+    if (m_activeSource == nullptr) {
+        return;   // virtual root: nowhere higher to go
+    }
+
+    // parent_path() of a source root (e.g. "sdmc:/") returns itself, so detect the root by value.
+    if (m_path == m_activeSource->getRootPath()) {
+        m_activeSource = nullptr;
+        showVirtualRoot();
+        return;
+    }
+
+    m_sourceBeforeScan = m_activeSource;
+    startScan(m_path.parent_path());
+}
+
+void FileSystem::requestFile(const FileEntry &entry) {
+    if (m_working.load() || m_activeSource == nullptr) {
+        return;
+    }
+
+    // TODO_4: resolved inline on the main thread (local fetch is identity — instant).
+    const auto localPath = m_activeSource->fetchFile(m_path / entry.name);
+
+    std::scoped_lock lock(m_mutex);
+    m_fetchResult = FetchResult{localPath, !localPath.empty()};
+}
+
+std::optional<FetchResult> FileSystem::consumeFetchResult() {
+    std::scoped_lock lock(m_mutex);
+    auto result = std::move(m_fetchResult);
+    m_fetchResult.reset();
+    return result;
+}
+
+void FileSystem::update() {
+    // A scan is pending exactly when a worker exists and has finished (cleared m_working).
+    if (!m_worker.joinable() || m_working.load()) {
+        return;
+    }
+    m_worker.join();
+
+    std::scoped_lock lock(m_mutex);
+    if (m_scanSucceeded) {
+        m_path = std::move(m_pendingPath);
+        m_content = std::move(m_pendingContent);
+    } else {
+        // nullopt from the source: keep the current listing and undo the source activation.
+        m_activeSource = m_sourceBeforeScan;
+        SDL_Log("FileSystem: scan failed, staying put");
+    }
+}
 
 const std::filesystem::path &FileSystem::getPath() const {
     return m_path;
@@ -62,5 +172,51 @@ const std::vector<FileEntry> &FileSystem::getContent() const {
 }
 
 bool FileSystem::isWorking() const {
-    return false;
+    return m_working.load();
+}
+
+void FileSystem::startScan(const std::filesystem::path &path) {
+    // Called on the main thread with the worker idle; join any finished-but-unswapped worker first.
+    if (m_worker.joinable()) {
+        m_worker.join();
+    }
+    auto *source = m_activeSource;
+    m_working.store(true);
+    m_worker = std::thread(&FileSystem::scan, this, source, path);
+}
+
+void FileSystem::showVirtualRoot() {
+    // Built synchronously on the main thread while !m_working (nothing to scan).
+    m_path.clear();
+    m_content.clear();
+    for (const auto &source : m_sources) {
+        m_content.push_back(FileEntry{source->getDisplayName(), 0, "Source", true});
+    }
+}
+
+void FileSystem::scan(DataSource *source, std::filesystem::path path) {
+    auto raw = source->listDirectory(path);
+
+    std::vector<FileEntry> content;
+    const auto succeeded = raw.has_value();
+    if (succeeded) {
+        content = std::move(*raw);
+        std::erase_if(content, [this](const FileEntry &entry) {
+            return !entry.is_directory && !m_isPlayable(entry.name);
+        });
+        for (auto &entry : content) {
+            entry.type = entry.is_directory ? "Folder" : deriveType(entry.name);
+        }
+        std::ranges::sort(content, entryLess);
+    }
+
+    {
+        std::scoped_lock lock(m_mutex);
+        m_scanSucceeded = succeeded;
+        if (succeeded) {
+            m_pendingPath = std::move(path);
+            m_pendingContent = std::move(content);
+        }
+    }
+    m_working.store(false);
 }
