@@ -34,6 +34,7 @@ add_executable(OSP2
     src/player/plugins/OpenMptPlugin.cpp
     src/player/plugins/GmePlugin.cpp
     src/player/plugins/SidPlugin.cpp
+    src/player/plugins/Sc68Plugin.cpp
     src/settings/Settings.cpp
     src/visualizer/VisualizerController.cpp
     src/visualizer/visualizers/BarsVisualizer.cpp
@@ -47,6 +48,12 @@ if (NINTENDO_SWITCH)
         -DIMGUI_DISABLE_DEFAULT_SHELL_FUNCTIONS
         -DIMGUI_IMPL_OPENGL_LOADER_CUSTOM
     )
+endif ()
+
+# libsc68 references a plain `basename' symbol that devkitA64's newlib declares but does not
+# provide; supply it on the Switch only (see switch_compat.c). Desktop libc already has it.
+if (NINTENDO_SWITCH)
+    target_sources(OSP2 PRIVATE src/player/plugins/switch_compat.c)
 endif ()
 
 # Dependencies
@@ -89,6 +96,10 @@ target_link_libraries(OSP2 PRIVATE PkgConfig::libgme)
 # libsidplayfp
 pkg_check_modules(libsidplayfp REQUIRED IMPORTED_TARGET libsidplayfp)
 target_link_libraries(OSP2 PRIVATE PkgConfig::libsidplayfp)
+
+# libsc68 (+ file68 + unice68)
+pkg_check_modules(sc68 REQUIRED IMPORTED_TARGET sc68)
+target_link_libraries(OSP2 PRIVATE PkgConfig::sc68)
 
 # libopenmpt
 pkg_check_modules(libopenmpt REQUIRED IMPORTED_TARGET libopenmpt)

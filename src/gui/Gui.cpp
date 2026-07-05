@@ -539,6 +539,7 @@ void Gui::drawFileMetadata(const TrackMetadata &metadata) {
             [this](const ModuleMetadata &m) { drawModuleMetadata(m); },
             [this](const GmeMetadata &m) { drawGmeMetadata(m); },
             [this](const SidMetadata &m) { drawSidMetadata(m); },
+            [this](const Sc68Metadata &m) { drawSc68Metadata(m); },
         }, metadata);
         ImGui::EndTabItem();
     }
@@ -578,6 +579,17 @@ void Gui::drawSidMetadata(const SidMetadata &metadata) {
         metadataTextRow("Released", metadata.released);
         metadataTextRow("SID model", metadata.sidModel);
         metadataTextRow("Clock", metadata.clock);
+        ImGui::EndTable();
+    }
+}
+
+void Gui::drawSc68Metadata(const Sc68Metadata &metadata) {
+    if (ImGui::BeginTable("metadata_table", 2, metadata_table_flags)) {
+        metadataTextRow("Title", metadata.title);
+        metadataTextRow("Author", metadata.author);
+        metadataTextRow("Composer", metadata.composer);
+        metadataTextRow("Hardware", metadata.hardware);
+        metadataTextRow("Ripper", metadata.ripper);
         ImGui::EndTable();
     }
 }

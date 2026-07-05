@@ -106,6 +106,18 @@ classDiagram
         -int m_clock
     }
 
+    class Sc68Plugin {
+        -int m_sampleRate
+        -vector~string~ m_extensions
+        -sc68_t* m_sc68
+        -TrackMetadata m_metadata
+        -string m_title
+        -double m_duration
+        -uint64_t m_playedFrames
+        -bool m_ended
+        -int m_asid
+    }
+
     class PluginSetting {
         <<value object>>
         +string key
@@ -166,9 +178,18 @@ classDiagram
         +string clock
     }
 
+    class Sc68Metadata {
+        <<value object>>
+        +string title
+        +string author
+        +string composer
+        +string hardware
+        +string ripper
+    }
+
     class TrackMetadata {
         <<variant>>
-        monostate | ModuleMetadata | GmeMetadata | SidMetadata
+        monostate | ModuleMetadata | GmeMetadata | SidMetadata | Sc68Metadata
     }
 
     PlayerController --> PlayerState : state machine
@@ -179,9 +200,11 @@ classDiagram
     PlayerPlugin <|-- OpenMptPlugin : libopenmpt (mod, xm, s3m, it, ...)
     PlayerPlugin <|-- GmePlugin : libgme (nsf, spc, vgm, gbs, ...)
     PlayerPlugin <|-- SidPlugin : libsidplayfp (sid, psid, rsid)
+    PlayerPlugin <|-- Sc68Plugin : libsc68 (sc68, sndh, snd)
     TrackMetadata ..> ModuleMetadata : alternative (libopenmpt)
     TrackMetadata ..> GmeMetadata : alternative (libgme)
     TrackMetadata ..> SidMetadata : alternative (libsidplayfp)
+    TrackMetadata ..> Sc68Metadata : alternative (libsc68)
     PlayerPlugin ..> PluginSetting : publishes descriptors
     PluginSetting ..> IntRange : shape alternative
     PluginSetting ..> EnumOptions : shape alternative
@@ -201,6 +224,8 @@ classDiagram
 
 ## Adding a decoder plugin
 
-One class under `src/player/plugins/` implementing `PlayerPlugin`, one `emplace_back` in `PlayerController::create()` (registration order = dispatch priority on extension overlap), one CMake stanza. Shipped: libopenmpt (`OpenMptPlugin`), libgme (`GmePlugin` — `ay, gbs, gym, hes, kss, nsf, nsfe, sap, spc, vgm, vgz`; renders libgme's interleaved-stereo 16-bit straight into the output buffer, no conversion; exposes `stereo_depth` (`IntRange 0–100` → `gme_set_stereo_depth`) and `accuracy` (`EnumOptions` Fast/Accurate → `gme_enable_accuracy`)), libsidplayfp (`SidPlugin` — `sid, psid, rsid`; see below). Planned: libsc68. A plugin with no tunables need not override `getSettings()`/`applySetting()` (safe defaults: `{}` / no-op); one that does override them gets persistence and settings UI for free via the `PluginSetting` descriptor mechanism.
+One class under `src/player/plugins/` implementing `PlayerPlugin`, one `emplace_back` in `PlayerController::create()` (registration order = dispatch priority on extension overlap), one CMake stanza. Shipped: libopenmpt (`OpenMptPlugin`), libgme (`GmePlugin` — `ay, gbs, gym, hes, kss, nsf, nsfe, sap, spc, vgm, vgz`; renders libgme's interleaved-stereo 16-bit straight into the output buffer, no conversion; exposes `stereo_depth` (`IntRange 0–100` → `gme_set_stereo_depth`) and `accuracy` (`EnumOptions` Fast/Accurate → `gme_enable_accuracy`)), libsidplayfp (`SidPlugin` — `sid, psid, rsid`; see below), libsc68 (`Sc68Plugin` — `sc68, sndh, snd`; see below). A plugin with no tunables need not override `getSettings()`/`applySetting()` (safe defaults: `{}` / no-op); one that does override them gets persistence and settings UI for free via the `PluginSetting` descriptor mechanism.
 
 **SidPlugin (libsidplayfp v3).** Drives the `sidplayfp` engine with a `ReSIDfpBuilder` (the accurate ReSIDfp emulation; requires the `libresidfp` companion library on both platforms — see [build-portlibs.md](build-portlibs.md)). **Optional C64 ROMs:** `create()` loads `romfs/roms/{kernal-901227-03,basic-901226-01,chargen-901225-01}.bin` if present and hands them to `setRoms()` (each skipped on absence or size mismatch — `setRoms` copies the data, so the load buffers are transient). PSID tunes (the vast majority) play with **no** ROMs; RSID tunes that boot like a real C64 need at least the KERNAL. The ROMs are copyrighted Commodore firmware, so they are `.gitignore`d (not in the repo) and only baked into the `.nro` if the user supplies them. libsidplayfp's v3 API is a two-step `play(cycles)` → `mix(short*, samples)` that yields a **variable** number of interleaved-stereo 16-bit samples per call, so `decode()` runs the emulation in fixed cycle slices and buffers the surplus in `m_mixBuffer` (`m_mixPos`/`m_mixFrames`), draining it before emulating more — the scratch is sized once in `open()` (`getBufSize`) so the audio thread never allocates. SID tunes loop indefinitely and carry no intrinsic length, so `getDuration()` returns `0` (unknown) and playback never self-ends. **Default subtune only** (`selectSong(0)`); per-subtune selection is a deliberate future extension. Settings: `sid_model` (`EnumOptions` Auto/MOS 6581/MOS 8580) and `clock` (`EnumOptions` Auto/PAL/NTSC), both **applied on the next `open()`** (a live change would restart the tune) and clamped on store.
+
+**Sc68Plugin (libsc68).** Wraps the `sc68_t` instance (Atari ST YM-2149/STE and Amiga Paula formats, plus SNDH archives). Needs no external ROMs. `create()` runs the refcounted global `sc68_init(0)`, creates the instance at the output sample rate, and forces `SC68_SET_PCM`/`SC68_PCM_S16` so `sc68_process()` writes interleaved signed-16-bit stereo straight into `decode()`'s buffer — **no conversion**. `open()` reads the whole file into memory and hands it to `sc68_load_mem()` (matching Sid/Gme; the read is wrapped so `open()` never throws), then `sc68_play(SC68_DEF_TRACK, SC68_DEF_LOOP)` starts the disk's **default track** (per-subtune selection is a future extension). `decode()` runs a **fill loop** over `sc68_process()`: `sc68_play()` only *posts* the track change, which `sc68_process()` applies lazily on its first call — reporting `SC68_CHANGE` with **zero** frames before emulating a sample — so a single call can fall short without the track ending (a naive one-shot decode would misread that as immediate end-of-track and never play). The loop keeps calling until the buffer is full or the track truly ends, latches `m_ended` on `SC68_END` or `SC68_ERROR` (tested with `==`, since `SC68_ERROR == ~0` would otherwise match the normal status bits), and carries a small consecutive-empty-pass guard so a persistent `SC68_IDLE` can never spin the audio thread. Returning fewer frames than requested signals end-of-track to the controller; `getPosition()` is derived from an accumulated decoded-frame counter (sc68 has no cheap position query) while `getDuration()` is the real track length from `sc68_music_info` `time_ms` (track time, falling back to disk time). Metadata (`Sc68Metadata`) is copied out of the disk info during `open()` because those pointers are only valid until `sc68_close()`: title (falling back to album), author, composer (scanned from the track then disk tag arrays for a case-insensitive `composer` key), hardware name, and ripper. Exposes one setting, `asid` (`EnumOptions` Off/On/Force → `SC68_SET_ASID`, the aSIDifier that reshapes YM/ST output toward a SID-like waveform): a cached member clamped on store and applied at the next `open()` — `sc68_play()` loads the asidifier replay, so a live change would need a track restart — matching Sid's model/clock pattern (only tracks advertising aSID caps are affected, a harmless no-op otherwise). **Switch note:** libsc68 references a plain `basename` symbol that devkitA64's newlib declares but does not provide, so the Switch build compiles `src/player/plugins/switch_compat.c` (a minimal C-linkage `basename`, deliberately including no libc string headers whose asm aliases would rename the symbol); the desktop libc already provides it.

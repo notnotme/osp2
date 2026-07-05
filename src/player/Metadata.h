@@ -57,9 +57,17 @@ struct SidMetadata {                 // Commodore 64 SID files via libsidplayfp
     std::string clock;               // "PAL" / "NTSC", may be empty (unknown)
 };
 
-// One alternative per plugin family; monostate = no track loaded.
-// Future: Sc68Metadata added with its plugin.
-using TrackMetadata = std::variant<std::monostate, ModuleMetadata, GmeMetadata, SidMetadata>;
+struct Sc68Metadata {                // Atari ST / Amiga / SNDH files via libsc68
+    std::string title;
+    std::string author;
+    std::string composer;            // from a "composer" tag, may be empty (absent)
+    std::string hardware;            // e.g. "Atari ST", may be empty (unknown)
+    std::string ripper;              // who ripped the tune, may be empty
+};
+
+// One alternative per plugin family; monostate = no track loaded. The variant is complete: sc68
+// is the last planned decoder, so every supported format now maps to one alternative below.
+using TrackMetadata = std::variant<std::monostate, ModuleMetadata, GmeMetadata, SidMetadata, Sc68Metadata>;
 
 
 #endif //OSP2_METADATA_H

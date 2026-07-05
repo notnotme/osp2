@@ -27,6 +27,7 @@
 #include "plugins/OpenMptPlugin.h"
 #include "plugins/GmePlugin.h"
 #include "plugins/SidPlugin.h"
+#include "plugins/Sc68Plugin.h"
 
 
 // The tap's fixed capacity is declared independently of PlayerController (to keep AudioTap.h
@@ -46,6 +47,7 @@ void PlayerController::create() {
     m_plugins.emplace_back(std::make_unique<OpenMptPlugin>());
     m_plugins.emplace_back(std::make_unique<GmePlugin>());
     m_plugins.emplace_back(std::make_unique<SidPlugin>());
+    m_plugins.emplace_back(std::make_unique<Sc68Plugin>());
 
     for (const auto &plugin : m_plugins) {
         plugin->create(SAMPLE_RATE);
