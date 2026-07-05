@@ -41,6 +41,9 @@ struct UiActions {
     std::function<void(const std::string &pluginName, const std::string &key, int value)> onPluginSettingCommit;
     // Fired by the browser-overlay Cancel button to abort an in-flight scan/download.
     std::function<void()> onCancelWork;
+    // Invoked in VISUALIZATION mode with the reserved rect (screen coords) below the top bar.
+    // main.cpp reads the audio tap, builds a VisualFrame, and renders the active visualizer.
+    std::function<void(float x, float y, float w, float h)> onRenderVisualization;
 };
 
 

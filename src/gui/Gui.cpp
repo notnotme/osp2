@@ -649,9 +649,16 @@ void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(B
 void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
     drawTopBar(state.pluginSettings, actions.onThemeChange, actions.onPluginSettingChange, actions.onPluginSettingCommit);
 
-    // VISUALIZATION mode draws only the top bar; the area below is left empty (GL clear
-    // color shows through) for the future visualization system. Audio is unaffected.
+    // VISUALIZATION mode draws only the top bar; the work area below is handed to the visualizer via
+    // onRenderVisualization with the reserved rect (WorkPos/WorkSize already exclude the menu bar).
+    // Gui stays presentation-only and knows nothing about the visualizer domain — main.cpp wires it.
+    // Audio is unaffected.
     if (m_viewMode == ViewMode::VISUALIZATION) {
+        const ImGuiViewport *viewport = ImGui::GetMainViewport();
+        if (actions.onRenderVisualization) {
+            actions.onRenderVisualization(viewport->WorkPos.x, viewport->WorkPos.y,
+                                          viewport->WorkSize.x, viewport->WorkSize.y);
+        }
         return;
     }
 
