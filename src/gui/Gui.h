@@ -28,9 +28,12 @@
 #include <vector>
 
 #include "ButtonId.h"
+#include "Theme.h"
+#include "ViewMode.h"
 #include "UiActions.h"
 #include "UiState.h"
 #include "../filesystem/FileEntry.h"
+#include "../player/PlaybackStatus.h"
 
 
 class Gui {
@@ -46,6 +49,11 @@ private:
 
     std::unordered_map<std::string, Sprite> m_sprites;
     GLuint m_texture;
+    Theme m_theme;
+    ViewMode m_viewMode;
+    // One-frame latch: the top-bar About entry sets it, the top bar then opens the popup
+    // so OpenPopup and BeginPopupModal share the same window ID scope (works in both modes).
+    bool m_aboutRequested;
 
 public:
     Gui(const Gui &) = delete;
@@ -54,20 +62,19 @@ public:
     virtual ~Gui() = default;
 
 private:
-    void drawMainMenuBar(const std::string &file);
+    void drawTopBar();
+    void drawAboutPopup();
     void drawCurrentPath(const std::string &path);
     void drawFileBrowser(const std::vector<FileEntry> &files, const std::function<void(const FileEntry &)> &onFileClick, bool isWorking);
-    void drawPlayerControls(const std::function<void(ButtonId)> &onButtonClick);
-    void drawTrackInformation();
     void drawTabsSection();
     void drawFileMetadata();
     void drawTabPlaylist();
-    void drawTabSettings();
-    void drawTabAbout();
+    void drawPlayerBar(const PlaybackStatus &status, const std::function<void(ButtonId)> &onButtonClick);
 
 public:
     void initialize(const std::string &basePath);
     void finalize();
+    void applyTheme(Theme theme);
     void drawUserInterface(const UiState &state, const UiActions &actions);
 };
 

@@ -79,7 +79,6 @@ void initialize() {
     gladLoadGL();
 
     ImGui::CreateContext();
-    ImGui::StyleColorsLight();
     if (!ImGui_ImplSDL2_InitForOpenGL(window, opengl_context)) {
         throw std::runtime_error("ImGui_ImplSDL2_InitForOpenGL failed");
     }
@@ -87,10 +86,6 @@ void initialize() {
     if (!ImGui_ImplOpenGL3_Init("#version 330 core")) {
         throw std::runtime_error("ImGui_ImplOpenGL3_Init failed");
     }
-
-    auto &style = ImGui::GetStyle();
-    style.FramePadding = ImVec2(8, 8);
-    style.TabRounding = 0.0f;
 
     auto &io = ImGui::GetIO();
     io.LogFilename = nullptr;
@@ -161,10 +156,6 @@ int main(int argc, char** argv) {
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
         gui.drawUserInterface(app.makeUiState(), actions);
-        //=======================================
-        bool showDemoWindow = true;
-        ImGui::ShowDemoWindow(&showDemoWindow);
-        //=======================================
         ImGui::Render();
 
         auto *draw_data = ImGui::GetDrawData();

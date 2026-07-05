@@ -6,11 +6,11 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
 
 - [x] [TODO_1 — Separate UI actions from presentation (UiState/UiActions + Application layer)](TODO_1.md) — single chunk
 - [x] [TODO_2 — Playback status API (PlaybackStatus + position/duration)](TODO_2.md) — single chunk
-- [ ] [TODO_3 — UI redesign: docs/ui-design.md + Gui implementation](TODO_3.md)
-  - [ ] 3a — Design doc (`docs/ui-design.md`)
-  - [ ] 3b — Theme system (`Theme.h`, `applyTheme`)
-  - [ ] 3c — Layout restructure (top bar, panes, player bar, tabs)
-  - [ ] 3d — View mode (WORKSPACE / VISUALIZATION)
+- [x] [TODO_3 — UI redesign: docs/ui-design.md + Gui implementation](TODO_3.md)
+  - [x] 3a — Design doc (`docs/ui-design.md`)
+  - [x] 3b — Theme system (`Theme.h`, `applyTheme`)
+  - [x] 3c — Layout restructure (top bar, panes, player bar, tabs)
+  - [x] 3d — View mode (WORKSPACE / VISUALIZATION)
 - [ ] [TODO_4 — Real threaded FileBrowser (DataSource abstraction + local source)](TODO_4.md)
   - [ ] 4a — Threaded FileSystem backend + wiring (DataSource, LocalDataSource, requestFile)
   - [ ] 4b — Directory navigation (onDirectoryClick, "..", virtual root)
