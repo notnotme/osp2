@@ -276,15 +276,8 @@ void Gui::drawTabAbout() {
     }
 }
 
-void Gui::drawUserInterface(
-    const std::string &file,
-    const std::string& path,
-    const std::vector<FileEntry> &files,
-    const std::function<void(ButtonId)> &onButtonClick,
-    const std::function<void(const FileEntry &)> &onFileClick,
-    const bool isWorking) {
-
-    drawMainMenuBar(file);
+void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
+    drawMainMenuBar(state.currentFile);
     constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove
         | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus;
 
@@ -296,11 +289,11 @@ void Gui::drawUserInterface(
     ImGui::BeginTable("table_area", 2);
 
     ImGui::TableNextColumn();
-    drawCurrentPath(path);
-    drawFileBrowser(files, onFileClick, isWorking);
+    drawCurrentPath(state.path);
+    drawFileBrowser(state.files, actions.onFileClick, state.isWorking);
 
     ImGui::TableNextColumn();
-    drawPlayerControls(onButtonClick);
+    drawPlayerControls(actions.onButtonClick);
     drawTrackInformation();
     drawTabsSection();
 

@@ -25,9 +25,12 @@
 #include <functional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "ButtonId.h"
-#include "../filesystem/FileSystem.h"
+#include "UiActions.h"
+#include "UiState.h"
+#include "../filesystem/FileEntry.h"
 
 
 class Gui {
@@ -65,13 +68,7 @@ private:
 public:
     void initialize(const std::string &basePath);
     void finalize();
-    void drawUserInterface(
-        const std::string &file,
-        const std::string &path,
-        const std::vector<FileEntry> &files,
-        const std::function<void(ButtonId)> &onButtonClick,
-        const std::function<void(const FileEntry &)> &onFileClick,
-        bool isWorking);
+    void drawUserInterface(const UiState &state, const UiActions &actions);
 };
 
 
