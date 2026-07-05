@@ -60,6 +60,9 @@ private:
     // Name of the plugin whose settings popup was requested from the Plugins submenu this
     // frame (empty = none); consumed by the top bar to open that plugin's popup by name.
     std::string m_requestedPluginPopup;
+    // Previous frame's file-browser working state; used to detect the rising edge when the loading
+    // overlay first appears, so focus is moved to the Cancel button exactly once (see drawFileBrowser).
+    bool m_wasWorking = false;
 
 public:
     Gui(const Gui &) = delete;
@@ -72,7 +75,7 @@ private:
     void drawAboutPopup();
     void drawPluginPopups(const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit);
     void drawCurrentPath(const std::string &path);
-    void drawFileBrowser(const std::vector<FileEntry> &files, const std::function<void(const FileEntry &)> &onFileClick, const std::function<void(const FileEntry &)> &onDirectoryClick, bool isWorking);
+    void drawFileBrowser(const std::vector<FileEntry> &files, const std::function<void(const FileEntry &)> &onFileClick, const std::function<void(const FileEntry &)> &onDirectoryClick, bool isWorking, const std::string &workingLabel, const std::function<void()> &onCancelWork);
     void drawTabsSection(const TrackMetadata &metadata);
     void drawFileMetadata(const TrackMetadata &metadata);
     void drawModuleMetadata(const ModuleMetadata &metadata);

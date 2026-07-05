@@ -18,6 +18,7 @@ classDiagram
         +getRootPath() path
         +listDirectory(path) optional~vector~FileEntry~~
         +fetchFile(path) path
+        +cancel()
     }
 
     class LocalDataSource {
@@ -33,10 +34,12 @@ classDiagram
         -path m_basePath
         -path m_cacheDir
         -CURL* m_curl
+        -atomic_bool m_cancelRequested
         +getDisplayName() string
         +getRootPath() path
         +listDirectory(path) optional~vector~FileEntry~~
         +fetchFile(path) path
+        +cancel()
     }
 
     class FileSystem {
@@ -57,11 +60,13 @@ classDiagram
         +navigateToEntry(FileEntry)
         +navigateToParent()
         +requestFile(FileEntry)
+        +cancel()
         +consumeFetchResult() optional~FetchResult~
         +update()
         +getPath() path
         +getContent() vector~FileEntry~
         +isWorking() bool
+        +isFetching() bool
     }
 
     class FileEntry {
@@ -104,6 +109,10 @@ Header-only domain interface (`DataSource.h`). One implementation per browsable 
 - `fetchFile(path)` — **blocking**; resolves a source path to a locally-openable file.
   `LocalDataSource` returns the path itself; remote sources download to cache and return the
   cache path. Empty path = failure.
+- `cancel()` — requests that an in-flight `listDirectory`/`fetchFile` abort ASAP. Called from the
+  **main thread** and may run concurrently with a blocking call on the worker, so implementations
+  must be thread-safe (an atomic flag). Default: no-op — `LocalDataSource` is instant and has nothing
+  to cancel.
 
 `LocalDataSource` scans with `directory_iterator(path, skip_permission_denied, ec)` using the
 `error_code` overloads throughout, returns what was readable on error (never `nullopt`), and
@@ -122,9 +131,20 @@ Browses a remote archive over anonymous FTP via **libcurl** (built-in instance: 
 - **One reusable `CURL*` easy handle**, created lazily on first use and cleaned up in the
   destructor — FTP control-connection reuse keeps navigation snappy. Safe without locking
   thanks to the serialization contract above. Each call does `curl_easy_reset` then re-applies
-  the common options (`CURLOPT_NOSIGNAL`, `CONNECTTIMEOUT=10`, `LOW_SPEED_LIMIT=1` /
-  `LOW_SPEED_TIME=30` for stall detection instead of a total timeout). `<curl/curl.h>` stays
-  out of the header (`typedef void CURL;` mirror); it is included only in the `.cpp`.
+  the common options (named constants: `CURLOPT_NOSIGNAL`, `CONNECTTIMEOUT=10`,
+  `LOW_SPEED_LIMIT=1` / `LOW_SPEED_TIME=15` for stall detection instead of a total timeout —
+  15 s of sub-1 B/s transfer aborts a dead connection without killing slow-but-live links, tuned
+  down from 30 s because fetches/scans are UI-modal). `<curl/curl.h>` stays out of the header
+  (`typedef void CURL;` mirror); it is included only in the `.cpp`.
+- **Cancellation**: `cancel()` sets a `mutable std::atomic<bool> m_cancelRequested`; a
+  `CURLOPT_XFERINFOFUNCTION` progress callback (armed via `NOPROGRESS=0`, its `XFERINFODATA` is the
+  flag's address) polls it during `perform` and returns non-zero to abort → `CURLE_ABORTED_BY_CALLBACK`.
+  The flag is reset to false at the start of every `listDirectory`/`fetchFile` so a stale cancel never
+  carries into the next call. A cancelled **download** deletes its `.part` and reports failure; a
+  cancelled **scan** returns `nullopt` (stays put) — unlike a genuine transfer failure, it does *not*
+  fall back to the stale listing cache, so cancelling doesn't drop the user into the folder with old
+  data. `cancel()` only aborts a transfer already in progress; during synchronous DNS/connect curl may
+  not poll the callback, so a cancel there waits out `CONNECTTIMEOUT` (≤ 10 s).
 - **URL building**: `ftp://<host>` + each path component percent-escaped with
   `curl_easy_escape` and joined by `/` — Modland names contain spaces (`Fasttracker 2` →
   `Fasttracker%202`); MLSD directory URLs get a trailing `/`.
@@ -153,7 +173,13 @@ Browses a remote archive over anonymous FTP via **libcurl** (built-in instance: 
   sibling `<file>.part` `std::ofstream`, and on `CURLE_OK` **and** a clean `close()` flush renames it
   into place; any failure (`nullopt` transfer, write/flush error, rename error) removes the `.part`,
   `SDL_Log`s, and returns an empty path. Staging via `.part` + rename keeps the cache from ever
-  holding a truncated file. FAT-illegal-character sanitization of components is deferred to 7c.
+  holding a truncated file.
+- **Cache-path sanitization** (`sanitizeComponent`, applied per component in `cacheFileFor` — so it
+  covers both downloads and the `.listing` cache): FAT-illegal characters (`\ / : * ? " < > |`) and
+  controls (`< 0x20`) map to `_` so the mirror is writable on the Switch's FAT SD card; the literal
+  `.`/`..` components map to `_`/`__` so a hostile or broken server can't escape the cache dir via
+  traversal. Applied identically on both platforms. Only the local mirror is sanitized — `buildUrl`
+  keeps the real (percent-escaped) names for the FTP request.
 
 **curl lifecycle ownership**: `main.cpp` owns the *global* state — `curl_global_init` runs
 before `FileSystem::create()` spawns the worker (it is not thread-safe), paired with
@@ -195,6 +221,12 @@ style as the audio domain (atomic flag + mutex-guarded handoff, swap on the main
   `update()` joins the finished worker and, only for a `Scan`, swaps the listing; a `Fetch` leaves
   its result parked for `consumeFetchResult()`. The single worker stays sufficient because all
   FileSystem work is UI-modal — a listing and a download never need to overlap.
+- **Cancellation**: `FileSystem::cancel()` (main thread) forwards to `m_activeSource->cancel()` while
+  `m_working` — since navigation is blocked during work, `m_activeSource` is exactly the source the
+  worker is using. The worker then finishes normally (its aborted transfer surfaces as `nullopt` /
+  empty path) and `update()` swaps as usual. The Gui overlay's Cancel button drives this via
+  `UiActions::onCancelWork` → `Application::handleCancelWork`, which also drops the auto-advance intent
+  so a cancelled download doesn't chain into the next sibling (see [application.md](application.md)).
 - **Navigation** (`navigateToEntry`/`navigateToParent`) and `requestFile` are ignored while a
   scan or fetch runs (the UI is blocked by the overlay anyway). Root detection compares
   `m_path == m_activeSource->getRootPath()` (not `parent_path()`, since `parent_path()` of a

@@ -50,6 +50,11 @@ public:
     // Local source: returns the path itself. Remote sources: download to cache, return the cache path.
     // Empty path = failure (already SDL_Logged).
     [[nodiscard]] virtual std::filesystem::path fetchFile(const std::filesystem::path &path) = 0;
+
+    // Requests that an in-flight listDirectory/fetchFile abort ASAP. Called from the MAIN thread and
+    // may run concurrently with a blocking call on the worker, so implementations must be thread-safe
+    // (an atomic flag). Default: no-op (local/instant sources have nothing to cancel).
+    virtual void cancel() {}
 };
 
 

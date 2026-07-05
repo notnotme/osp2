@@ -22,6 +22,7 @@
 #include <curl/curl.h>
 #include <SDL.h>
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -31,6 +32,12 @@
 
 
 namespace {
+
+// curl progress callback: returning non-zero aborts the transfer. Wired to the cancel flag so the
+// main thread can abort a stuck perform() on the worker.
+int xferInfoCallback(void *clientp, curl_off_t, curl_off_t, curl_off_t, curl_off_t) {
+    return static_cast<std::atomic<bool> *>(clientp)->load() ? 1 : 0;
+}
 
 // libcurl write callback: appends the received bytes to the std::string handed via CURLOPT_WRITEDATA.
 size_t writeToString(char *ptr, size_t size, size_t nmemb, void *userdata) {
@@ -108,6 +115,30 @@ LineOutcome parseMlsdLine(const std::string &line, FileEntry &out) {
 
 // A cached listing is served without hitting the network while its file is younger than this.
 constexpr std::chrono::minutes kListingCacheTtl{30};
+
+// Transfer timeouts. Fetches/scans are UI-modal (the overlay blocks the UI), so a dead connection
+// must not freeze the app for long. All are <= 7.32-vintage curl options (switch-curl 7.69.1 ok).
+constexpr long kConnectTimeoutSeconds = 10;
+constexpr long kStallSpeedBytesPerSec = 1;    // below this...
+constexpr long kStallTimeoutSeconds = 15;     // ...for this long -> abort (was 30)
+
+// FAT-illegal characters (and controls) in a path component -> '_', so the cache mirror is writable
+// on the Switch's FAT SD card; applied on both platforms so the two cache layouts stay identical.
+// Also neutralizes "." / ".." so a hostile or broken server can't escape the cache dir via traversal.
+std::string sanitizeComponent(const std::string &component) {
+    if (component == "." || component == "..") {
+        return std::string(component.size(), '_');   // "." -> "_", ".." -> "__"
+    }
+    std::string sanitized = component;
+    for (char &c : sanitized) {
+        const auto uc = static_cast<unsigned char>(c);
+        if (uc < 0x20 || c == '\\' || c == '/' || c == ':' || c == '*' || c == '?'
+            || c == '"' || c == '<' || c == '>' || c == '|') {
+            c = '_';
+        }
+    }
+    return sanitized;
+}
 
 // Splits a raw MLSD response into FileEntry rows (trailing \r stripped, empty lines skipped,
 // malformed lines logged and skipped). Shared by the live-fetch and cache-hit paths.
@@ -207,16 +238,21 @@ std::filesystem::path FtpDataSource::cacheFileFor(const std::filesystem::path &p
         if (part.empty() || part == "/") {
             continue;   // skip the leading root; mirror only real path components
         }
-        cacheFile /= part;
+        cacheFile /= sanitizeComponent(part);
     }
     return cacheFile;
 }
 
 void FtpDataSource::applyCommonOptions() const {
     curl_easy_setopt(m_curl, CURLOPT_NOSIGNAL, 1L);
-    curl_easy_setopt(m_curl, CURLOPT_CONNECTTIMEOUT, 10L);
-    curl_easy_setopt(m_curl, CURLOPT_LOW_SPEED_LIMIT, 1L);
-    curl_easy_setopt(m_curl, CURLOPT_LOW_SPEED_TIME, 30L);
+    curl_easy_setopt(m_curl, CURLOPT_CONNECTTIMEOUT, kConnectTimeoutSeconds);
+    curl_easy_setopt(m_curl, CURLOPT_LOW_SPEED_LIMIT, kStallSpeedBytesPerSec);
+    curl_easy_setopt(m_curl, CURLOPT_LOW_SPEED_TIME, kStallTimeoutSeconds);
+    // Progress callback abort path: the flag is polled by curl during perform() so a main-thread
+    // cancel() aborts the transfer promptly (returns CURLE_ABORTED_BY_CALLBACK).
+    curl_easy_setopt(m_curl, CURLOPT_NOPROGRESS, 0L);
+    curl_easy_setopt(m_curl, CURLOPT_XFERINFOFUNCTION, xferInfoCallback);
+    curl_easy_setopt(m_curl, CURLOPT_XFERINFODATA, &m_cancelRequested);
 }
 
 std::optional<std::string> FtpDataSource::readListingCache(const std::filesystem::path &cacheFile) const {
@@ -293,6 +329,9 @@ void FtpDataSource::writeListingCache(const std::filesystem::path &cacheFile, co
 }
 
 std::optional<std::vector<FileEntry>> FtpDataSource::listDirectory(const std::filesystem::path &path) {
+    // Clear any stale cancel from a previously aborted call so it never carries into this one.
+    m_cancelRequested.store(false);
+
     const std::filesystem::path cacheFile = cacheFileFor(path) / ".listing";
 
     // A cached listing (any age) doubles as the offline fallback below; read it once up front.
@@ -318,14 +357,19 @@ std::optional<std::vector<FileEntry>> FtpDataSource::listDirectory(const std::fi
         if (const CURLcode result = curl_easy_perform(m_curl); result == CURLE_OK) {
             writeListingCache(cacheFile, response);   // best-effort; refreshes the mtime/TTL
             return parseMlsdListing(response);
+        } else if (result == CURLE_ABORTED_BY_CALLBACK) {
+            // The user cancelled: abort the navigation entirely and stay put, rather than falling
+            // back to a stale cache (which would drop them inside the folder showing old data).
+            SDL_Log("FtpDataSource: listing cancelled for '%s'", path.string().c_str());
+            return std::nullopt;
         } else {
             SDL_Log("FtpDataSource: MLSD failed for '%s': %s",
                     path.string().c_str(), curl_easy_strerror(result));
         }
     }
 
-    // Network unavailable or the transfer failed: fall back to a stale cached listing if we have one,
-    // so a recently-visited directory still browses offline. Otherwise keep the current listing.
+    // Network unavailable or the transfer failed (but not a user cancel): fall back to a stale cached
+    // listing if we have one, so a recently-visited directory still browses offline. Else keep put.
     if (cached) {
         SDL_Log("FtpDataSource: serving stale cached listing for '%s'", path.string().c_str());
         return parseMlsdListing(*cached);
@@ -334,6 +378,9 @@ std::optional<std::vector<FileEntry>> FtpDataSource::listDirectory(const std::fi
 }
 
 std::filesystem::path FtpDataSource::fetchFile(const std::filesystem::path &path) {
+    // Clear any stale cancel from a previously aborted call so it never carries into this one.
+    m_cancelRequested.store(false);
+
     std::filesystem::path cacheFile = cacheFileFor(path);
 
     // Cache hit: a non-empty file already mirrors this remote path (!ec also covers non-existence).
@@ -394,4 +441,8 @@ std::filesystem::path FtpDataSource::fetchFile(const std::filesystem::path &path
         return {};
     }
     return cacheFile;
+}
+
+void FtpDataSource::cancel() {
+    m_cancelRequested.store(true);
 }

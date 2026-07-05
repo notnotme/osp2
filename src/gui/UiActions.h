@@ -39,6 +39,8 @@ struct UiActions {
     // a slider does not rewrite the file every frame.
     std::function<void(const std::string &pluginName, const std::string &key, int value)> onPluginSettingChange;
     std::function<void(const std::string &pluginName, const std::string &key, int value)> onPluginSettingCommit;
+    // Fired by the browser-overlay Cancel button to abort an in-flight scan/download.
+    std::function<void()> onCancelWork;
 };
 
 

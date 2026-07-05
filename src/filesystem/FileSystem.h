@@ -83,6 +83,7 @@ public:
     void navigateToEntry(const FileEntry &entry);
     void navigateToParent();
     void requestFile(const FileEntry &entry);
+    void cancel();
     [[nodiscard]] std::optional<FetchResult> consumeFetchResult();
     void update();
 
@@ -90,6 +91,7 @@ public:
     [[nodiscard]] const std::filesystem::path &getPath() const;   // empty at the virtual root
     [[nodiscard]] const std::vector<FileEntry> &getContent() const;
     [[nodiscard]] bool isWorking() const;
+    [[nodiscard]] bool isFetching() const;   // true while a file download (not a scan) is in flight
 
 private:
     void startScan(const std::filesystem::path &path);

@@ -132,6 +132,14 @@ void Application::handlePluginSettingCommit(const std::string &pluginName, const
     m_pluginSettingsDirty = true;
 }
 
+void Application::handleCancelWork() {
+    m_fileSystem.cancel();
+    // A cancelled download must NOT auto-advance to the next sibling: drop the advance intent so the
+    // resulting failed FetchResult (direction 0) just logs instead of kicking off another download.
+    m_advanceDirection = 0;
+    m_lastRequestedName.clear();
+}
+
 // Rebuilds the cached plugin-setting descriptors from the player (locks the audio mutex, so it is
 // called only at settled points — from main.cpp after the startup push, and from update() when a
 // committed edit marked the cache dirty — never per frame and never during a draw).
@@ -175,11 +183,20 @@ void Application::update() {
 
 UiState Application::makeUiState() const {
     const auto &path = m_fileSystem.getPath();
+
+    // Read the working flag once so the flag and its label can't disagree if the worker finishes mid-build.
+    const bool working = m_fileSystem.isWorking();
+    std::string workingLabel;
+    if (working) {
+        workingLabel = m_fileSystem.isFetching() ? "Downloading..." : "Scanning...";
+    }
+
     return {
         m_player.getStatus(),
         path.empty() ? "Sources" : path.string(),
         m_fileSystem.getContent(),
-        m_fileSystem.isWorking(),
+        working,
+        std::move(workingLabel),
         m_trackMetadata,
         m_pluginSettings
     };
@@ -192,6 +209,7 @@ UiActions Application::makeUiActions() {
         [this](const FileEntry &entry) { handleDirectoryClick(entry); },
         [this](const Theme theme) { handleThemeChange(theme); },
         [this](const std::string &pluginName, const std::string &key, const int value) { handlePluginSettingChange(pluginName, key, value); },
-        [this](const std::string &pluginName, const std::string &key, const int value) { handlePluginSettingCommit(pluginName, key, value); }
+        [this](const std::string &pluginName, const std::string &key, const int value) { handlePluginSettingCommit(pluginName, key, value); },
+        [this]() { handleCancelWork(); }
     };
 }

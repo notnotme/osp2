@@ -20,6 +20,7 @@
 #ifndef OSP2_FTP_DATA_SOURCE_H
 #define OSP2_FTP_DATA_SOURCE_H
 
+#include <atomic>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -46,6 +47,7 @@ public:
     [[nodiscard]] std::filesystem::path getRootPath() const override;
     [[nodiscard]] std::optional<std::vector<FileEntry>> listDirectory(const std::filesystem::path &path) override;
     [[nodiscard]] std::filesystem::path fetchFile(const std::filesystem::path &path) override;
+    void cancel() override;
 
 private:
     // Lazily creates m_curl on first use; false (already SDL_Logged) on allocation failure.
@@ -75,6 +77,9 @@ private:
     std::filesystem::path m_basePath;
     std::filesystem::path m_cacheDir;   // download target root (chunk 7b)
     CURL *m_curl = nullptr;
+    // Set from the main thread (cancel()), read on the worker by the curl progress callback to abort
+    // a blocking perform(). mutable so the const applyCommonOptions() can hand its address to curl.
+    mutable std::atomic<bool> m_cancelRequested{false};
 };
 
 

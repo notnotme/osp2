@@ -140,6 +140,15 @@ void FileSystem::requestFile(const FileEntry &entry) {
     startFetch(m_path / entry.name);
 }
 
+void FileSystem::cancel() {
+    // Signal the active source to abort its in-flight transfer; the worker then finishes normally
+    // (scan -> nullopt keeps the listing; fetch -> empty path -> failure). Navigation is blocked
+    // while working, so m_activeSource is exactly the source the worker is using.
+    if (m_working.load() && m_activeSource != nullptr) {
+        m_activeSource->cancel();
+    }
+}
+
 std::optional<FetchResult> FileSystem::consumeFetchResult() {
     std::scoped_lock lock(m_mutex);
     auto result = std::move(m_fetchResult);
@@ -180,6 +189,11 @@ const std::vector<FileEntry> &FileSystem::getContent() const {
 
 bool FileSystem::isWorking() const {
     return m_working.load();
+}
+
+bool FileSystem::isFetching() const {
+    // Only read by the UI while isWorking() is true, where m_workKind is accurate.
+    return m_workKind == WorkKind::Fetch;
 }
 
 void FileSystem::startScan(const std::filesystem::path &path) {
