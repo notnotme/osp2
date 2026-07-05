@@ -33,6 +33,7 @@
 #include "UiActions.h"
 #include "UiState.h"
 #include "../filesystem/FileEntry.h"
+#include "../player/Metadata.h"
 #include "../player/PlaybackStatus.h"
 
 
@@ -66,8 +67,9 @@ private:
     void drawAboutPopup();
     void drawCurrentPath(const std::string &path);
     void drawFileBrowser(const std::vector<FileEntry> &files, const std::function<void(const FileEntry &)> &onFileClick, const std::function<void(const FileEntry &)> &onDirectoryClick, bool isWorking);
-    void drawTabsSection();
-    void drawFileMetadata();
+    void drawTabsSection(const TrackMetadata &metadata);
+    void drawFileMetadata(const TrackMetadata &metadata);
+    void drawModuleMetadata(const ModuleMetadata &metadata);
     void drawTabPlaylist();
     void drawPlayerBar(const PlaybackStatus &status, const std::function<void(ButtonId)> &onButtonClick);
 

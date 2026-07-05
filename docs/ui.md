@@ -18,8 +18,9 @@ classDiagram
         -drawAboutPopup()
         -drawCurrentPath(path)
         -drawFileBrowser(files, onFileClick, onDirectoryClick, isWorking)
-        -drawTabsSection()
-        -drawFileMetadata()
+        -drawTabsSection(metadata)
+        -drawFileMetadata(metadata)
+        -drawModuleMetadata(metadata)
         -drawTabPlaylist()
         -drawPlayerBar(status, onButtonClick)
     }
@@ -30,6 +31,7 @@ classDiagram
         +string path
         +const vector~FileEntry~& files
         +bool isWorking
+        +const TrackMetadata& metadata
     }
 
     class UiActions {
@@ -77,6 +79,7 @@ classDiagram
     Gui ..> UiActions : reports intent through
     UiState ..> PlaybackStatus : playback snapshot
     UiState ..> FileEntry : non-owning view
+    UiState ..> TrackMetadata : non-owning view
     UiActions ..> ButtonId : onButtonClick
     UiActions ..> FileEntry : onFileClick / onDirectoryClick
 ```
@@ -90,7 +93,8 @@ classDiagram
 - `drawFileBrowser` is a three-column table (Name / Type / Size): `Type` shows `Folder`, `Source`, or the uppercase extension; `Size` is formatted B/KB/MB (one decimal) for files, blank for folders. It reports two intents: file rows call `onFileClick`; directory rows, the virtual-root source entries, and the Gui-pinned `..` row call `onDirectoryClick` (the `..` row passes a synthetic `FileEntry{"..", 0, "Folder", true}` — `..` is never a `FileSystem` entry). `Application::handleDirectoryClick` routes `..` to `navigateToParent()` and everything else to `navigateToEntry()` (see [filesystem.md](filesystem.md)).
 - While `state.isWorking`, the browser is wrapped in `BeginDisabled` (blocks mouse + keyboard/gamepad nav) and a dimmed overlay draws a centered ASCII spinner (`| / - \`, stepped ~8×/s from `ImGui::GetTime()`) beside `Scanning...`; the spinner sits in a fixed-width slot so the label never jitters as the frame char changes width.
 - `drawPlayerBar(status, onButtonClick)` reads `UiState::status`: track line (`title · fileName`, or `No track` when stopped), a display-only `m:ss` progress bar (`positionSeconds/durationSeconds`, no seek), and centered 48×48 transport ImageButtons; the play/pause button shows the `pause` sprite while `PlayerState::PLAYING`, else `play`. A file-local `formatTime(double)` renders `m:ss`.
-- `UiState::status` is a `PlaybackStatus` snapshot from the player domain (see [audio.md](audio.md)). The Metadata tab (`drawFileMetadata`) still shows placeholder key/value rows until TODO_5 supplies typed per-plugin metadata.
+- `UiState::status` is a `PlaybackStatus` snapshot from the player domain (see [audio.md](audio.md)). `UiState::metadata` is a non-owning `TrackMetadata` reference (the variant built by `Application`, see [application.md](application.md)) valid for the frame.
+- **The Metadata tab dispatches on the variant.** `drawFileMetadata(metadata)` runs `std::visit` over a file-local `overloaded{}` lambda set — `std::monostate` renders a centered, dimmed *"No track loaded"*; `ModuleMetadata` calls `drawModuleMetadata`. There is deliberately **no** generic `auto` fallback: adding a plugin's metadata alternative to the variant fails to compile here until its own draw function exists (the exhaustiveness guard is the plugin author's checklist). `drawModuleMetadata` renders a two-column field table (text rows — Title/Artist/Format/Tracker — skipped when empty; count rows — Channels/Patterns/Samples/Instruments — always shown) and, when the song message is non-empty, a scrollable word-wrapped child region drawn with `TextUnformatted` (never printf-formatting user-authored text).
 - `Theme` (`src/gui/Theme.h`) selects one of ImGui's three built-in color palettes; `Gui::applyTheme(Theme)` dispatches to `StyleColorsDark`/`Light`/`Classic` and records `m_theme` (presentation state, drives the Settings menu checkmark). `initialize()` sets the theme-independent style metrics (rounding, padding, spacing) once and then applies the dark default; `applyTheme` only swaps colors, so it is safe to call live from the menu. Theme choice is not yet persisted (TODO_6). The full design lives in [ui-design.md](ui-design.md).
 
 - Sprites are loaded in `initialize()` from `romfs/sprites/sprites.bin` (custom `SPSH` format) + `sprites.png` into one GL texture; `Sprite` holds the UV rect (s/t/p/q) and pixel size.
