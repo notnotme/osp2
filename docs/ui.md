@@ -24,7 +24,7 @@ classDiagram
 
     class UiState {
         <<value object>>
-        +string currentFile
+        +PlaybackStatus status
         +string path
         +const vector~FileEntry~& files
         +bool isWorking
@@ -57,6 +57,7 @@ classDiagram
     Gui *-- Sprite : atlas entries from sprites.bin
     Gui ..> UiState : renders per frame
     Gui ..> UiActions : reports intent through
+    UiState ..> PlaybackStatus : playback snapshot
     UiState ..> FileEntry : non-owning view
     UiActions ..> ButtonId : onButtonClick
     UiActions ..> FileEntry : onFileClick
@@ -66,6 +67,7 @@ classDiagram
 
 - `UiState` (`src/gui/UiState.h`) is a per-frame value object, rebuilt each frame and never stored; its `files` member is a non-owning reference valid only for that frame. `UiActions` (`src/gui/UiActions.h`) is the callback bundle, wired once at startup. Both are produced by `Application`.
 - `drawUserInterface(state, actions)` fans the view model out to the private draw helpers, which keep their focused per-widget parameters (`drawFileBrowser(state.files, actions.onFileClick, state.isWorking)`, etc.).
+- `UiState::status` is a `PlaybackStatus` snapshot from the player domain (see [audio.md](audio.md)); the current-file menu line reads `state.status.fileName`. TODO_3 consumes the rest (title, position/duration progress bar, play/pause sprite swap).
 
 - Sprites are loaded in `initialize()` from `romfs/sprites/sprites.bin` (custom `SPSH` format) + `sprites.png` into one GL texture; `Sprite` holds the UV rect (s/t/p/q) and pixel size.
 - Icon glyphs in labels (e.g. folder/file icons) are Material Symbols codepoints merged into the default font in main.cpp.

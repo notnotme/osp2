@@ -32,6 +32,7 @@ classDiagram
         +getCurrentFileName() string
         +getCurrentPath() path
         +getCurrentTitle() string
+        +getStatus() PlaybackStatus
         +isSupported(path) bool
         +consumeTrackEnded() bool
         -audioCallback(userdata, stream, len)$
@@ -49,6 +50,8 @@ classDiagram
         +getName()* string
         +getSupportedExtensions()* vector~string~
         +getTitle()* string
+        +getPosition()* double
+        +getDuration()* double
     }
 
     class OpenMptPlugin {
@@ -57,7 +60,17 @@ classDiagram
         -unique_ptr~openmpt_module~ m_module
     }
 
+    class PlaybackStatus {
+        <<value object>>
+        +PlayerState state
+        +string title
+        +string fileName
+        +double positionSeconds
+        +double durationSeconds
+    }
+
     PlayerController --> PlayerState : state machine
+    PlayerController ..> PlaybackStatus : getStatus() snapshot
     PlayerController "1" o-- "*" PlayerPlugin : owns, dispatches by extension
     PlayerPlugin <|-- OpenMptPlugin : libopenmpt (mod, xm, s3m, it, ...)
 ```
@@ -66,6 +79,7 @@ classDiagram
 
 - The SDL audio thread pulls samples via `audioCallback` → `decode()` (48 kHz, float32 interleaved stereo, `AUDIO_F32SYS`).
 - `m_mutex` guards `m_state` and `m_activePlugin` (including the decoder inside it); locked by the callback and by play/pause/stop/getters.
+- `getStatus()` returns a `PlaybackStatus` (`src/player/PlaybackStatus.h`) snapshot — state, title, filename, position, duration — built under a **single** `m_mutex` lock (it inlines the reads rather than calling the re-locking getters, since `m_mutex` is non-recursive). The plugin virtuals `getPosition()`/`getDuration()` (seconds) read the shared decoder, so they are contractually **only** called under `m_mutex`. Position/duration are `0` when stopped or unknown.
 - Pause is controller state only — the device runs for the whole app lifetime and the callback emits silence when not PLAYING.
 - End of track: the audio thread flips state to STOPPED and sets `m_trackEnded` (atomic); the main loop consumes it once per frame (`consumeTrackEnded()`) to auto-advance. Track teardown (`close()`) never happens on the audio thread.
 - `destroy()` closes the audio device before destroying plugins.

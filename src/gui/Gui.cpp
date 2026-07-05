@@ -277,7 +277,7 @@ void Gui::drawTabAbout() {
 }
 
 void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
-    drawMainMenuBar(state.currentFile);
+    drawMainMenuBar(state.status.fileName);
     constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove
         | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus;
 
