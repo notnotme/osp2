@@ -21,7 +21,7 @@ classDiagram
 
 ## The file — osp2.ini
 
-Location (config path helper in `main.cpp`): desktop `SDL_GetBasePath() + "osp2.ini"` (lands in the build dir, which is git-ignored); Switch `sdmc:/switch/osp2.ini` (romfs is read-only). Created with defaults on first launch so the user can find and hand-edit it.
+Location (config path helper in `main.cpp`): desktop `SDL_GetBasePath() + "osp2.ini"` (lands in the build dir, which is git-ignored); Switch `/switch/osp2.ini` (romfs is read-only; `/` is libnx's default sdmc device). Created with defaults on first launch so the user can find and hand-edit it.
 
 ```ini
 [user]
