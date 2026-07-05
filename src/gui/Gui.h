@@ -63,7 +63,7 @@ public:
     virtual ~Gui() = default;
 
 private:
-    void drawTopBar();
+    void drawTopBar(const std::function<void(Theme)> &onThemeChange);
     void drawAboutPopup();
     void drawCurrentPath(const std::string &path);
     void drawFileBrowser(const std::vector<FileEntry> &files, const std::function<void(const FileEntry &)> &onFileClick, const std::function<void(const FileEntry &)> &onDirectoryClick, bool isWorking);

@@ -39,6 +39,7 @@ classDiagram
         +function~void(ButtonId)~ onButtonClick
         +function~void(const FileEntry&)~ onFileClick
         +function~void(const FileEntry&)~ onDirectoryClick
+        +function~void(Theme)~ onThemeChange
     }
 
     class Sprite {
@@ -82,13 +83,14 @@ classDiagram
     UiState ..> TrackMetadata : non-owning view
     UiActions ..> ButtonId : onButtonClick
     UiActions ..> FileEntry : onFileClick / onDirectoryClick
+    UiActions ..> Theme : onThemeChange
 ```
 
 ## Notes
 
 - `UiState` (`src/gui/UiState.h`) is a per-frame value object, rebuilt each frame and never stored; its `files` member is a non-owning reference valid only for that frame. `UiActions` (`src/gui/UiActions.h`) is the callback bundle, wired once at startup. Both are produced by `Application`.
 - `drawUserInterface(state, actions)` draws a top bar (`drawTopBar`) then a borderless fullscreen window laid out as: a left pane (~45% width, `drawCurrentPath` + `drawFileBrowser`) beside a right pane (`drawTabsSection` → Metadata + Playlist), both filling the height above a full-width 140 px `drawPlayerBar` pinned to the bottom. Pane/bar geometry is derived each frame from `GetContentRegionAvail()` and `ItemSpacing` (fixed 1280×720). The full layout spec is in [ui-design.md](ui-design.md).
-- `drawTopBar` is the ImGui main menu bar: app title, a **Settings** menu whose **Theme** submenu calls `applyTheme`, an **About** entry, and a right-aligned **view-mode toggle** (fullscreen / fullscreen_exit glyph) flipping `m_viewMode`. About uses a one-frame `m_aboutRequested` latch; `OpenPopup`/`BeginPopupModal` (`drawAboutPopup`, k7 logo + credits) are hosted inside the always-drawn menu-bar window so About works in both view modes. The old Settings/About tabs are gone.
+- `drawTopBar(onThemeChange)` is the ImGui main menu bar: app title, a **Settings** menu whose **Theme** submenu selects a palette, an **About** entry, and a right-aligned **view-mode toggle** (fullscreen / fullscreen_exit glyph) flipping `m_viewMode`. Each Theme item both calls `applyTheme` (immediate visual apply + checkmark state) **and** fires `onThemeChange(theme)` so `Application` can persist the choice (see [application.md](application.md) / [settings.md](settings.md)); the visual apply stays in the Gui because it owns the ImGui style. About uses a one-frame `m_aboutRequested` latch; `OpenPopup`/`BeginPopupModal` (`drawAboutPopup`, k7 logo + credits) are hosted inside the always-drawn menu-bar window so About works in both view modes. The old Settings/About tabs are gone.
 - `ViewMode` (`src/gui/ViewMode.h`) is presentation state on the `Gui`. `WORKSPACE` draws the full UI; `VISUALIZATION` early-returns after the top bar, so panes + player bar are skipped and the area below shows the GL clear color — reserved for the future visualizer (TODO_8). The mode never touches the player, so audio keeps playing while collapsed.
 - `drawFileBrowser` is a three-column table (Name / Type / Size): `Type` shows `Folder`, `Source`, or the uppercase extension; `Size` is formatted B/KB/MB (one decimal) for files, blank for folders. It reports two intents: file rows call `onFileClick`; directory rows, the virtual-root source entries, and the Gui-pinned `..` row call `onDirectoryClick` (the `..` row passes a synthetic `FileEntry{"..", 0, "Folder", true}` — `..` is never a `FileSystem` entry). `Application::handleDirectoryClick` routes `..` to `navigateToParent()` and everything else to `navigateToEntry()` (see [filesystem.md](filesystem.md)).
 - While `state.isWorking`, the browser is wrapped in `BeginDisabled` (blocks mouse + keyboard/gamepad nav) and a dimmed overlay draws a centered ASCII spinner (`| / - \`, stepped ~8×/s from `ImGui::GetTime()`) beside `Scanning...`; the spinner sits in a fixed-width slot so the label never jitters as the frame char changes width.

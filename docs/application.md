@@ -7,14 +7,16 @@ classDiagram
     class Application {
         -PlayerController& m_player
         -FileSystem& m_fileSystem
+        -Settings& m_settings
         -string m_lastRequestedName
         -int m_advanceDirection
         -TrackMetadata m_trackMetadata
         -path m_metadataPath
-        +Application(PlayerController&, FileSystem&)
+        +Application(PlayerController&, FileSystem&, Settings&)
         +handleButtonClick(ButtonId)
         +handleFileClick(const FileEntry&)
         +handleDirectoryClick(const FileEntry&)
+        +handleThemeChange(Theme)
         +playAdjacentTrack(int direction)
         +update()
         +makeUiState() UiState
@@ -30,6 +32,7 @@ classDiagram
 
     Application o-- PlayerController : drives playback
     Application o-- FileSystem : reads listing
+    Application o-- Settings : persists user choices
     Application ..> UiState : builds per frame
     Application ..> UiActions : builds once at init
     Application ..> ButtonId : handleButtonClick
@@ -47,4 +50,5 @@ classDiagram
 - **Metadata is fetched on track change, not per frame.** `update()` compares `player.getCurrentPath()` against `m_metadataPath`; on a difference it refetches `m_trackMetadata = player.getMetadata()` and remembers the new path. This covers manual play, auto-advance, and stop (a cleared path resets `m_trackMetadata` to `monostate`, so the Metadata tab returns to its empty state). Fetching only on change keeps `getMetadata()`'s `m_mutex` lock off the per-frame path. `makeUiState()` exposes `m_trackMetadata` as the `UiState::metadata` reference (valid for the frame); the `Gui` dispatches on the variant (see [ui.md](ui.md)).
 - `handleDirectoryClick(entry)` routes `entry.name == ".."` to `FileSystem::navigateToParent()` and any other entry to `navigateToEntry(entry)` — no path joining, since at the virtual root `entry.name` is a source display name, not a path component (`FileSystem` resolves it against the active source). Wired as the third `UiActions` lambda (`onDirectoryClick`).
 - `makeUiState()` maps `FileSystem`'s empty path (the virtual root) to the label `"Sources"` — a view-model translation that belongs in `Application`, not in `FileSystem` or `Gui`.
-- Later TODOs extend the seam by adding members to `UiState`/`UiActions` rather than changing signatures: `PlaybackStatus` (TODO_2), `onDirectoryClick` (TODO_4), `metadata` (TODO_5), `onThemeChange`/`onPluginSettingChange` (TODO_6).
+- **Theme change flow.** `Application` holds a `Settings &` (persistence domain, see [settings.md](settings.md)). The Gui's Theme menu applies the palette *itself* (`applyTheme` — presentation owns the ImGui style) and also fires `onThemeChange(theme)`; `Application::handleThemeChange` then persists only — `settings.setString("user", "theme", themeToString(theme))` + `settings.save()`. Keeping the visual apply in the Gui avoids dragging ImGui knowledge into the use-case layer, so the persistence handler has a single responsibility. The initial theme is applied at startup by `main.cpp` (the composition root) from `[user] theme`, not by `Application`.
+- Later TODOs extend the seam by adding members to `UiState`/`UiActions` rather than changing signatures: `PlaybackStatus` (TODO_2), `onDirectoryClick` (TODO_4), `metadata` (TODO_5), `onThemeChange` (TODO_6a), `onPluginSettingChange` (TODO_6c).

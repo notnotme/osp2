@@ -28,8 +28,8 @@
 #endif
 
 
-Application::Application(PlayerController &player, FileSystem &fileSystem)
-    : m_player(player), m_fileSystem(fileSystem), m_advanceDirection(0) {}
+Application::Application(PlayerController &player, FileSystem &fileSystem, Settings &settings)
+    : m_player(player), m_fileSystem(fileSystem), m_settings(settings), m_advanceDirection(0) {}
 
 void Application::handleButtonClick(const ButtonId buttonId) {
     switch (buttonId) {
@@ -109,6 +109,12 @@ void Application::playAdjacentTrack(const int direction) {
     m_lastRequestedName.clear();
 }
 
+// The Gui already applied the theme visually (it owns the ImGui style); here we only persist it.
+void Application::handleThemeChange(const Theme theme) {
+    m_settings.setString("user", "theme", themeToString(theme));
+    m_settings.save();
+}
+
 void Application::update() {
     m_fileSystem.update();
 
@@ -151,6 +157,7 @@ UiActions Application::makeUiActions() {
     return {
         [this](const ButtonId buttonId) { handleButtonClick(buttonId); },
         [this](const FileEntry &entry) { handleFileClick(entry); },
-        [this](const FileEntry &entry) { handleDirectoryClick(entry); }
+        [this](const FileEntry &entry) { handleDirectoryClick(entry); },
+        [this](const Theme theme) { handleThemeChange(theme); }
     };
 }

@@ -26,10 +26,12 @@
 #include "filesystem/FileEntry.h"
 #include "filesystem/FileSystem.h"
 #include "gui/ButtonId.h"
+#include "gui/Theme.h"
 #include "gui/UiActions.h"
 #include "gui/UiState.h"
 #include "player/Metadata.h"
 #include "player/PlayerController.h"
+#include "settings/Settings.h"
 
 
 // Use-case layer: turns UI intent into playback/navigation actions and produces
@@ -39,6 +41,7 @@ class Application final {
 private:
     PlayerController &m_player;
     FileSystem &m_fileSystem;
+    Settings &m_settings;
 
     // Playback-request retry state: m_lastRequestedName is the cursor playAdjacentTrack advances
     // from when a fetched sibling fails; m_advanceDirection is the direction (+1/-1, 0 for a direct click).
@@ -53,7 +56,7 @@ private:
 public:
     Application(const Application &) = delete;
     Application &operator=(const Application &) = delete;
-    explicit Application(PlayerController &player, FileSystem &fileSystem);
+    explicit Application(PlayerController &player, FileSystem &fileSystem, Settings &settings);
     ~Application() = default;
 
 public:
@@ -65,6 +68,7 @@ private:
     void handleButtonClick(ButtonId buttonId);
     void handleFileClick(const FileEntry &entry);
     void handleDirectoryClick(const FileEntry &entry);
+    void handleThemeChange(Theme theme);
     void playAdjacentTrack(int direction);
 };
 

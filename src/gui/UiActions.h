@@ -23,6 +23,7 @@
 #include <functional>
 
 #include "ButtonId.h"
+#include "Theme.h"
 #include "../filesystem/FileEntry.h"
 
 
@@ -31,6 +32,7 @@ struct UiActions {
     std::function<void(ButtonId)> onButtonClick;
     std::function<void(const FileEntry &)> onFileClick;
     std::function<void(const FileEntry &)> onDirectoryClick;
+    std::function<void(Theme)> onThemeChange;
 };
 
 

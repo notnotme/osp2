@@ -31,6 +31,7 @@ add_executable(OSP2
     src/gui/Gui.cpp
     src/player/PlayerController.cpp
     src/player/plugins/OpenMptPlugin.cpp
+    src/settings/Settings.cpp
     src/main.cpp
 )
 

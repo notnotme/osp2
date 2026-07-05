@@ -148,7 +148,7 @@ void Gui::applyTheme(const Theme theme) {
     }
 }
 
-void Gui::drawTopBar() {
+void Gui::drawTopBar(const std::function<void(Theme)> &onThemeChange) {
     if (ImGui::BeginMainMenuBar()) {
         ImGui::TextUnformatted("OSP2");
         ImGui::Separator();
@@ -157,12 +157,15 @@ void Gui::drawTopBar() {
             if (ImGui::BeginMenu("Theme")) {
                 if (ImGui::MenuItem("Dark", nullptr, m_theme == Theme::DARK)) {
                     applyTheme(Theme::DARK);
+                    onThemeChange(Theme::DARK);
                 }
                 if (ImGui::MenuItem("Light", nullptr, m_theme == Theme::LIGHT)) {
                     applyTheme(Theme::LIGHT);
+                    onThemeChange(Theme::LIGHT);
                 }
                 if (ImGui::MenuItem("Classic", nullptr, m_theme == Theme::CLASSIC)) {
                     applyTheme(Theme::CLASSIC);
+                    onThemeChange(Theme::CLASSIC);
                 }
                 ImGui::EndMenu();
             }
@@ -486,7 +489,7 @@ void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(B
 }
 
 void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
-    drawTopBar();
+    drawTopBar(actions.onThemeChange);
 
     // VISUALIZATION mode draws only the top bar; the area below is left empty (GL clear
     // color shows through) for the future visualization system. Audio is unaffected.
