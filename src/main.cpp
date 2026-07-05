@@ -156,10 +156,6 @@ int main(int argc, char** argv) {
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
         gui.drawUserInterface(app.makeUiState(), actions);
-        //=======================================
-        bool showDemoWindow = true;
-        ImGui::ShowDemoWindow(&showDemoWindow);
-        //=======================================
         ImGui::Render();
 
         auto *draw_data = ImGui::GetDrawData();

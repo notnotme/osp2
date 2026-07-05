@@ -22,11 +22,32 @@
 #include <imgui.h>
 #include <SDL_image.h>
 
+#include <algorithm>
+#include <cmath>
+#include <cstdio>
 #include <fstream>
+#include <string>
+
+
+namespace {
+    // Formats a duration as "m:ss" (zero-padded seconds). Negative or NaN clamps to "0:00".
+    std::string formatTime(const double seconds) {
+        if (std::isnan(seconds) || seconds < 0.0) {
+            return "0:00";
+        }
+        const auto total_seconds = static_cast<int>(seconds);
+        const auto minutes = total_seconds / 60;
+        const auto remaining_seconds = total_seconds % 60;
+
+        char buffer[16];
+        std::snprintf(buffer, sizeof(buffer), "%d:%02d", minutes, remaining_seconds);
+        return std::string(buffer);
+    }
+}
 
 
 Gui::Gui()
-    : m_texture(0), m_theme(Theme::DARK) {}
+    : m_texture(0), m_theme(Theme::DARK), m_aboutRequested(false) {}
 
 void Gui::initialize(const std::string &basePath) {
     const auto bin_path = basePath + "sprites/sprites.bin";
@@ -110,15 +131,61 @@ void Gui::applyTheme(const Theme theme) {
     }
 }
 
-void Gui::drawMainMenuBar(const std::string &file) {
-    ImGui::BeginMainMenuBar();
-    ImGui::Text("\ue405  %s", file.c_str());
-    ImGui::EndMainMenuBar();
+void Gui::drawTopBar() {
+    if (ImGui::BeginMainMenuBar()) {
+        ImGui::TextUnformatted("OSP2");
+        ImGui::Separator();
+
+        if (ImGui::BeginMenu("  Settings")) {
+            if (ImGui::BeginMenu("Theme")) {
+                if (ImGui::MenuItem("Dark", nullptr, m_theme == Theme::DARK)) {
+                    applyTheme(Theme::DARK);
+                }
+                if (ImGui::MenuItem("Light", nullptr, m_theme == Theme::LIGHT)) {
+                    applyTheme(Theme::LIGHT);
+                }
+                if (ImGui::MenuItem("Classic", nullptr, m_theme == Theme::CLASSIC)) {
+                    applyTheme(Theme::CLASSIC);
+                }
+                ImGui::EndMenu();
+            }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::MenuItem("About")) {
+            m_aboutRequested = true;
+        }
+
+        ImGui::EndMainMenuBar();
+    }
+}
+
+void Gui::drawAboutPopup() {
+    const auto center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    constexpr auto flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
+    if (ImGui::BeginPopupModal("About", nullptr, flags)) {
+        const auto &logo = m_sprites.at("k7");
+        ImGui::Image(m_texture, ImVec2(logo.w, logo.h),
+            ImVec2(logo.s, logo.t),
+            ImVec2(logo.p, logo.q));
+
+        ImGui::Spacing();
+        ImGui::TextUnformatted("OSP2 — chiptune player");
+        ImGui::TextUnformatted("GPL-3.0-or-later");
+        ImGui::Spacing();
+
+        if (ImGui::Button("Close")) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
 }
 
 void Gui::drawCurrentPath(const std::string &path) {
     constexpr auto color = ImVec4(0.9f, 0.7f, 0.2f, 1.0f);
-    ImGui::TextColored(color,"\ue2c7");
+    ImGui::TextColored(color, "");
     ImGui::SameLine();
     ImGui::Text("%s", path.c_str());
 }
@@ -126,67 +193,70 @@ void Gui::drawCurrentPath(const std::string &path) {
 void Gui::drawFileBrowser(const std::vector<FileEntry> &files, const std::function<void(const FileEntry &)> &onFileClick, const bool isWorking) {
     constexpr auto folder_color = ImVec4(0.9f, 0.7f, 0.2f, 1.0f);
     constexpr auto file_color = ImVec4(0.2f, 0.6f, 0.9f, 1.0f);
-    constexpr auto file_browser_flags = ImGuiTableFlags_Borders | ImGuiTableFlags_SizingFixedFit
+    constexpr auto file_browser_flags = ImGuiTableFlags_SizingFixedFit
         | ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg;
 
     const auto file_list_count = static_cast<int32_t>(files.size());
 
-    ImGui::BeginTable("file_browser", 2, file_browser_flags);
-    const auto table_position = ImGui::GetWindowPos();
-    const auto table_size = ImGui::GetWindowSize();
+    // Capture the browser rectangle in screen space before the table, so the loading
+    // overlay covers exactly this area (the left pane), not the whole window.
+    const auto browser_position = ImGui::GetCursorScreenPos();
+    const auto browser_size = ImGui::GetContentRegionAvail();
 
-    ImGui::TableSetupScrollFreeze(0, 2);
-    ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
-    ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed);
-    ImGui::TableHeadersRow();
+    if (ImGui::BeginTable("file_browser", 2, file_browser_flags, browser_size)) {
+        ImGui::TableSetupScrollFreeze(0, 2);
+        ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
+        ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed);
+        ImGui::TableHeadersRow();
 
-    ImGui::TableNextRow();
-    ImGui::TableNextColumn();
-    ImGui::TextColored(folder_color,"\ue2c7");
-    ImGui::SameLine();
-    if (ImGui::Selectable("..", false, ImGuiSelectableFlags_SpanAllColumns)) {
-        // Click
-    }
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextColored(folder_color, "");
+        ImGui::SameLine();
+        if (ImGui::Selectable("..", false, ImGuiSelectableFlags_SpanAllColumns)) {
+            // Directory navigation is wired in TODO_4.
+        }
 
-    ImGuiListClipper clipper;
-    clipper.Begin(file_list_count);
-    while (clipper.Step()) {
-        for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; row++) {
-            const auto &file_entry = files[row];
-            const auto entry_label = file_entry.name.c_str();
+        ImGuiListClipper clipper;
+        clipper.Begin(file_list_count);
+        while (clipper.Step()) {
+            for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; row++) {
+                const auto &file_entry = files[row];
+                const auto entry_label = file_entry.name.c_str();
 
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            if (file_entry.is_directory) {
-                ImGui::TextColored(folder_color,"\ue2c7");
-                ImGui::SameLine();
-                if (ImGui::Selectable(entry_label, false, ImGuiSelectableFlags_SpanAllColumns)) {
-                    // Click
-                }
-            } else {
-                ImGui::TextColored(file_color,"\ueb82");
-                ImGui::SameLine();
-                if (ImGui::Selectable(entry_label, false, ImGuiSelectableFlags_SpanAllColumns)) {
-                    onFileClick(file_entry);
-                }
+                ImGui::TableNextRow();
                 ImGui::TableNextColumn();
-                ImGui::Text("%i Kb", file_entry.file_size);
+                if (file_entry.is_directory) {
+                    ImGui::TextColored(folder_color, "");
+                    ImGui::SameLine();
+                    if (ImGui::Selectable(entry_label, false, ImGuiSelectableFlags_SpanAllColumns)) {
+                        // Directory navigation is wired in TODO_4.
+                    }
+                } else {
+                    ImGui::TextColored(file_color, "");
+                    ImGui::SameLine();
+                    if (ImGui::Selectable(entry_label, false, ImGuiSelectableFlags_SpanAllColumns)) {
+                        onFileClick(file_entry);
+                    }
+                    ImGui::TableNextColumn();
+                    ImGui::Text("%i Kb", file_entry.file_size);
+                }
             }
         }
+        ImGui::EndTable();
     }
-    ImGui::EndTable();
 
     if (isWorking) {
-        constexpr auto overlay_flags = ImGuiWindowFlags_NoDecoration;
+        constexpr auto overlay_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings;
 
         const auto animation_time = -1.0f * static_cast<float>(ImGui::GetTime());
-        const auto bar_size = ImVec2(table_size.x / 2.0f, 32.0f);
-        const auto bar_position_x = (table_size.x - bar_size.x) / 2.0f;
-        const auto bar_position_y = (table_size.y - bar_size.y) / 2.0f;
+        const auto bar_size = ImVec2(browser_size.x / 2.0f, 32.0f);
+        const auto bar_position_x = (browser_size.x - bar_size.x) / 2.0f;
+        const auto bar_position_y = (browser_size.y - bar_size.y) / 2.0f;
 
-        ImGui::SetNextWindowPos(table_position);
-        ImGui::SetNextWindowSize(table_size);
-        ImGui::SetNextWindowBgAlpha(0.8);
+        ImGui::SetNextWindowPos(browser_position);
+        ImGui::SetNextWindowSize(browser_size);
+        ImGui::SetNextWindowBgAlpha(0.8f);
 
         ImGui::Begin("##file_browser_overlay", nullptr, overlay_flags);
         ImGui::SetCursorPosX(bar_position_x);
@@ -196,88 +266,41 @@ void Gui::drawFileBrowser(const std::vector<FileEntry> &files, const std::functi
     }
 }
 
-void Gui::drawPlayerControls(const std::function<void(ButtonId)> &onButtonClick) {
-    constexpr auto button_size = ImVec2(64.0f, 64.0f);
-    constexpr auto total_button_size = button_size.x * 4;
-
-    const auto &style = ImGui::GetStyle();
-    const auto cursor_position_x = ImGui::GetCursorPosX();
-    const auto available_size = ImGui::GetContentRegionAvail();
-    const auto blank_space = style.FramePadding.x * 8 + style.ItemSpacing.x * 3;
-    const auto start_x = (available_size.x - (total_button_size + blank_space)) / 2.0f;
-    ImGui::SetCursorPosX(cursor_position_x + start_x);
-
-    const auto &play_pause = m_sprites.at("play");
-    if (ImGui::ImageButton("play_pause_button", m_texture, button_size,
-        ImVec2(play_pause.s, play_pause.t),
-        ImVec2(play_pause.p, play_pause.q))) {
-        onButtonClick(PLAY_PAUSE);
-    };
-
-    const auto &stop = m_sprites.at("stop");
-    ImGui::SameLine();
-    if (ImGui::ImageButton("stop_button", m_texture, button_size,
-        ImVec2(stop.s, stop.t),
-        ImVec2(stop.p, stop.q))) {
-        onButtonClick(STOP);
-    };
-
-    const auto &previous = m_sprites.at("previous");
-    ImGui::SameLine();
-    if (ImGui::ImageButton("previous_button", m_texture, button_size,
-        ImVec2(previous.s, previous.t),
-        ImVec2(previous.p, previous.q))) {
-        onButtonClick(PREVIOUS);
-    };
-
-    const auto &next = m_sprites.at("next");
-    ImGui::SameLine();
-    if (ImGui::ImageButton("next_button", m_texture, button_size,
-        ImVec2(next.s, next.t),
-        ImVec2(next.p, next.q))) {
-        onButtonClick(NEXT);
-    };
-}
-
-void Gui::drawTrackInformation() {
-    constexpr auto flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Borders | ImGuiTableFlags_SizingStretchProp;
-    ImGui::BeginTable("track_info", 2, flags);
-
-    ImGui::TableNextRow();
-    ImGui::TableNextColumn();
-    ImGui::Text("Title");
-    ImGui::TableNextColumn();
-    ImGui::Text("Placeholders never dies");
-
-    ImGui::TableNextRow();
-    ImGui::TableNextColumn();
-    ImGui::Text("Position");
-    ImGui::TableNextColumn();
-    ImGui::Text("%s / %s", "0:01", "3:37");
-
-    ImGui::TableNextRow();
-    ImGui::TableNextColumn();
-    ImGui::Text("Track");
-    ImGui::TableNextColumn();
-    ImGui::Text("%s / %s", "1", "1");
-
-    ImGui::EndTable();
-}
-
 void Gui::drawTabsSection() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    ImGui::BeginTabBar("tabs_section");
-    drawFileMetadata();
-    drawTabPlaylist();
-    drawTabSettings();
-    drawTabAbout();
-    ImGui::EndTabBar();
+    if (ImGui::BeginTabBar("tabs_section")) {
+        drawFileMetadata();
+        drawTabPlaylist();
+        ImGui::EndTabBar();
+    }
     ImGui::PopStyleVar();
 }
 
 void Gui::drawFileMetadata() {
-    if (ImGui::BeginTabItem("File metadata")) {
-        ImGui::Text("Metadata");
+    if (ImGui::BeginTabItem("Metadata")) {
+        // Placeholder key/value view; TODO_5 supplies typed per-plugin metadata.
+        constexpr auto flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp;
+        if (ImGui::BeginTable("metadata_table", 2, flags)) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("Title");
+            ImGui::TableNextColumn();
+            ImGui::Text("Cool Song");
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("Format");
+            ImGui::TableNextColumn();
+            ImGui::Text("S3M");
+
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::Text("Channels");
+            ImGui::TableNextColumn();
+            ImGui::Text("16");
+
+            ImGui::EndTable();
+        }
         ImGui::EndTabItem();
     }
 }
@@ -289,51 +312,129 @@ void Gui::drawTabPlaylist() {
     }
 }
 
-void Gui::drawTabSettings() {
-    if (ImGui::BeginTabItem("Settings")) {
-        ImGui::Text("Settings");
-        ImGui::EndTabItem();
+void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(ButtonId)> &onButtonClick) {
+    const auto item_spacing_x = ImGui::GetStyle().ItemSpacing.x;
+    constexpr auto row_spacing = 4.0f;
+    constexpr auto progress_bar_height = 18.0f;
+    constexpr auto button_frame_padding = 4.0f;
+    constexpr auto button_size = ImVec2(48.0f, 48.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(item_spacing_x, row_spacing));
+
+    // Vertically center the three rows (track line, progress, transport) in the bar so the
+    // transport buttons keep a clear margin above the bar's bottom edge.
+    const auto text_height = ImGui::GetTextLineHeight();
+    const auto button_height = button_size.y + button_frame_padding * 2.0f;
+    const auto content_height = text_height + row_spacing
+        + std::max(text_height, progress_bar_height) + row_spacing + button_height;
+    const auto slack = ImGui::GetContentRegionAvail().y - content_height;
+    if (slack > 0.0f) {
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + slack / 2.0f);
     }
-}
 
-void Gui::drawTabAbout() {
-    if (ImGui::BeginTabItem("About")) {
-        const auto &style = ImGui::GetStyle();
-        const auto &logo = m_sprites.at("k7");
-        const auto cursor_position_x = ImGui::GetCursorPosX();
-        const auto available_size = ImGui::GetContentRegionAvail();
-        const auto start_x = (available_size.x - static_cast<float>(logo.w)) / 2.0f;
-        ImGui::SetCursorPosX(cursor_position_x + start_x);
-
-        ImGui::Image(m_texture, ImVec2(logo.w, logo.h),
-            ImVec2(logo.s, logo.t),
-            ImVec2(logo.p, logo.q));
-
-        ImGui::EndTabItem();
+    // Track line.
+    if (status.state == PlayerState::STOPPED || status.fileName.empty()) {
+        ImGui::Text("  No track");
+    } else if (status.title.empty()) {
+        ImGui::Text("  %s", status.fileName.c_str());
+    } else {
+        ImGui::Text("  %s · %s", status.title.c_str(), status.fileName.c_str());
     }
+
+    // Progress row: position | display-only bar | duration.
+    const auto position = formatTime(status.positionSeconds);
+    const auto duration = formatTime(status.durationSeconds);
+    auto fraction = 0.0f;
+    if (status.durationSeconds > 0.0) {
+        fraction = std::clamp(static_cast<float>(status.positionSeconds / status.durationSeconds), 0.0f, 1.0f);
+    }
+
+    ImGui::TextUnformatted(position.c_str());
+    ImGui::SameLine();
+    const auto duration_width = ImGui::CalcTextSize(duration.c_str()).x;
+    const auto bar_width = ImGui::GetContentRegionAvail().x - duration_width - item_spacing_x;
+    ImGui::ProgressBar(fraction, ImVec2(bar_width, progress_bar_height), "");
+    ImGui::SameLine();
+    ImGui::TextUnformatted(duration.c_str());
+
+    // Transport: previous, play/pause, stop, next, centered as a group.
+    ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(button_frame_padding, button_frame_padding));
+
+    const auto &transport_style = ImGui::GetStyle();
+    const auto total_buttons = button_size.x * 4.0f;
+    const auto blank_space = transport_style.FramePadding.x * 8.0f + transport_style.ItemSpacing.x * 3.0f;
+    const auto start_x = (ImGui::GetContentRegionAvail().x - (total_buttons + blank_space)) / 2.0f;
+    if (start_x > 0.0f) {
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + start_x);
+    }
+
+    const auto image_button = [&](const char *id, const char *sprite_key, const ButtonId button) {
+        const auto &sprite = m_sprites.at(sprite_key);
+        if (ImGui::ImageButton(id, m_texture, button_size,
+            ImVec2(sprite.s, sprite.t),
+            ImVec2(sprite.p, sprite.q))) {
+            onButtonClick(button);
+        }
+    };
+
+    image_button("previous_button", "previous", PREVIOUS);
+    ImGui::SameLine();
+    image_button("play_pause_button", status.state == PlayerState::PLAYING ? "pause" : "play", PLAY_PAUSE);
+    ImGui::SameLine();
+    image_button("stop_button", "stop", STOP);
+    ImGui::SameLine();
+    image_button("next_button", "next", NEXT);
+
+    ImGui::PopStyleVar();
+    ImGui::PopStyleVar();
 }
 
 void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
-    drawMainMenuBar(state.status.fileName);
+    drawTopBar();
+
     constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove
         | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus;
 
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
+    const ImGuiViewport *viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(viewport->WorkPos);
     ImGui::SetNextWindowSize(viewport->WorkSize);
 
     ImGui::Begin("fullscreen_window", nullptr, flags);
-    ImGui::BeginTable("table_area", 2);
 
-    ImGui::TableNextColumn();
-    drawCurrentPath(state.path);
-    drawFileBrowser(state.files, actions.onFileClick, state.isWorking);
+    // Left/right panes fill the height above a full-width player bar pinned to the bottom.
+    // Geometry is derived from the live content region and ItemSpacing so nothing overflows.
+    const auto &style = ImGui::GetStyle();
+    const auto available = ImGui::GetContentRegionAvail();
+    constexpr auto player_bar_height = 140.0f;
+    const auto panes_height = available.y - style.ItemSpacing.y - player_bar_height;
+    const auto left_width = (available.x - style.ItemSpacing.x) * 0.45f;
+    const auto right_width = (available.x - style.ItemSpacing.x) - left_width;
 
-    ImGui::TableNextColumn();
-    drawPlayerControls(actions.onButtonClick);
-    drawTrackInformation();
-    drawTabsSection();
+    if (ImGui::BeginChild("left_pane", ImVec2(left_width, panes_height), ImGuiChildFlags_Borders)) {
+        drawCurrentPath(state.path);
+        drawFileBrowser(state.files, actions.onFileClick, state.isWorking);
+    }
+    ImGui::EndChild();
 
-    ImGui::EndTable();
+    ImGui::SameLine();
+
+    if (ImGui::BeginChild("right_pane", ImVec2(right_width, panes_height), ImGuiChildFlags_Borders)) {
+        drawTabsSection();
+    }
+    ImGui::EndChild();
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 6.0f));
+    if (ImGui::BeginChild("player_bar", ImVec2(0.0f, player_bar_height), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar)) {
+        drawPlayerBar(state.status, actions.onButtonClick);
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleVar();
+
+    // Opened here (not from the menu) so OpenPopup and BeginPopupModal share this window's ID scope.
+    if (m_aboutRequested) {
+        ImGui::OpenPopup("About");
+        m_aboutRequested = false;
+    }
+    drawAboutPopup();
+
     ImGui::End();
 }

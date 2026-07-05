@@ -28,7 +28,7 @@ icon glyphs.
 │                                │                                     │
 ├────────────────────────────────┴─────────────────────────────────────┤
 │ 🎵 Cool Song · cool.s3m                                              │
-│ 0:42 ━━━━━━━●────────────────────────────────────────────────── 3:37 │  player bar (120 px)
+│ 0:42 ━━━━━━━●────────────────────────────────────────────────── 3:37 │  player bar (140 px)
 │                        ⏮      ⏯      ⏹      ⏭                       │
 └──────────────────────────────────────────────────────────────────────┘
 ```
@@ -157,7 +157,9 @@ About to the top-bar popup.
 
 ## Region: player bar
 
-Full width, pinned to the bottom, fixed **120 px** height.
+Full width, pinned to the bottom, fixed **140 px** height. The three rows (track line,
+progress, transport) are vertically centered as a block so the transport buttons keep a
+clear margin above the bar's bottom edge.
 
 ```
  🎵 Cool Song · cool.s3m                                                    ← track line
@@ -235,7 +237,7 @@ Theme-independent — set **once in `initialize()`** (before the first `applyThe
 | Metric                | Value                        |
 |-----------------------|------------------------------|
 | Menu bar height       | ImGui-computed (~30 px)      |
-| Player bar height     | 120 px                       |
+| Player bar height     | 140 px                       |
 | Left pane width       | 45% of work-area width       |
 | Right pane width      | remaining work-area width    |
 | Transport button size | 48 × 48 px                   |

@@ -32,6 +32,7 @@
 #include "UiActions.h"
 #include "UiState.h"
 #include "../filesystem/FileEntry.h"
+#include "../player/PlaybackStatus.h"
 
 
 class Gui {
@@ -48,6 +49,9 @@ private:
     std::unordered_map<std::string, Sprite> m_sprites;
     GLuint m_texture;
     Theme m_theme;
+    // One-frame latch: the top-bar About entry sets it, the fullscreen window opens the
+    // popup so OpenPopup and BeginPopupModal share the same window ID scope.
+    bool m_aboutRequested;
 
 public:
     Gui(const Gui &) = delete;
@@ -56,16 +60,14 @@ public:
     virtual ~Gui() = default;
 
 private:
-    void drawMainMenuBar(const std::string &file);
+    void drawTopBar();
+    void drawAboutPopup();
     void drawCurrentPath(const std::string &path);
     void drawFileBrowser(const std::vector<FileEntry> &files, const std::function<void(const FileEntry &)> &onFileClick, bool isWorking);
-    void drawPlayerControls(const std::function<void(ButtonId)> &onButtonClick);
-    void drawTrackInformation();
     void drawTabsSection();
     void drawFileMetadata();
     void drawTabPlaylist();
-    void drawTabSettings();
-    void drawTabAbout();
+    void drawPlayerBar(const PlaybackStatus &status, const std::function<void(ButtonId)> &onButtonClick);
 
 public:
     void initialize(const std::string &basePath);

@@ -8,20 +8,19 @@ classDiagram
         -unordered_map~string, Sprite~ m_sprites
         -GLuint m_texture
         -Theme m_theme
+        -bool m_aboutRequested
         +initialize(basePath)
         +finalize()
         +applyTheme(theme)
         +drawUserInterface(state, actions)
-        -drawMainMenuBar(file)
+        -drawTopBar()
+        -drawAboutPopup()
         -drawCurrentPath(path)
         -drawFileBrowser(files, onFileClick, isWorking)
-        -drawPlayerControls(onButtonClick)
-        -drawTrackInformation()
         -drawTabsSection()
         -drawFileMetadata()
         -drawTabPlaylist()
-        -drawTabSettings()
-        -drawTabAbout()
+        -drawPlayerBar(status, onButtonClick)
     }
 
     class UiState {
@@ -76,8 +75,10 @@ classDiagram
 ## Notes
 
 - `UiState` (`src/gui/UiState.h`) is a per-frame value object, rebuilt each frame and never stored; its `files` member is a non-owning reference valid only for that frame. `UiActions` (`src/gui/UiActions.h`) is the callback bundle, wired once at startup. Both are produced by `Application`.
-- `drawUserInterface(state, actions)` fans the view model out to the private draw helpers, which keep their focused per-widget parameters (`drawFileBrowser(state.files, actions.onFileClick, state.isWorking)`, etc.).
-- `UiState::status` is a `PlaybackStatus` snapshot from the player domain (see [audio.md](audio.md)); the current-file menu line reads `state.status.fileName`. TODO_3 consumes the rest (title, position/duration progress bar, play/pause sprite swap).
+- `drawUserInterface(state, actions)` draws a top bar (`drawTopBar`) then a borderless fullscreen window laid out as: a left pane (~45% width, `drawCurrentPath` + `drawFileBrowser`) beside a right pane (`drawTabsSection` → Metadata + Playlist), both filling the height above a full-width 140 px `drawPlayerBar` pinned to the bottom. Pane/bar geometry is derived each frame from `GetContentRegionAvail()` and `ItemSpacing` (fixed 1280×720). The full layout spec is in [ui-design.md](ui-design.md).
+- `drawTopBar` is the ImGui main menu bar: app title, a **Settings** menu whose **Theme** submenu calls `applyTheme`, and an **About** entry. About uses a one-frame `m_aboutRequested` latch so `OpenPopup`/`BeginPopupModal` (`drawAboutPopup`, k7 logo + credits) share the fullscreen window's ID scope. The old Settings/About tabs are gone.
+- `drawPlayerBar(status, onButtonClick)` reads `UiState::status`: track line (`title · fileName`, or `No track` when stopped), a display-only `m:ss` progress bar (`positionSeconds/durationSeconds`, no seek), and centered 48×48 transport ImageButtons; the play/pause button shows the `pause` sprite while `PlayerState::PLAYING`, else `play`. A file-local `formatTime(double)` renders `m:ss`.
+- `UiState::status` is a `PlaybackStatus` snapshot from the player domain (see [audio.md](audio.md)). The Metadata tab (`drawFileMetadata`) still shows placeholder key/value rows until TODO_5 supplies typed per-plugin metadata.
 - `Theme` (`src/gui/Theme.h`) selects one of ImGui's three built-in color palettes; `Gui::applyTheme(Theme)` dispatches to `StyleColorsDark`/`Light`/`Classic` and records `m_theme` (presentation state, drives the Settings menu checkmark). `initialize()` sets the theme-independent style metrics (rounding, padding, spacing) once and then applies the dark default; `applyTheme` only swaps colors, so it is safe to call live from the menu. Theme choice is not yet persisted (TODO_6). The full design lives in [ui-design.md](ui-design.md).
 
 - Sprites are loaded in `initialize()` from `romfs/sprites/sprites.bin` (custom `SPSH` format) + `sprites.png` into one GL texture; `Sprite` holds the UV rect (s/t/p/q) and pixel size.
