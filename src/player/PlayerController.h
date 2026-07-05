@@ -30,6 +30,7 @@
 #include <utility>
 #include <vector>
 
+#include "AudioTap.h"
 #include "Metadata.h"
 #include "PlaybackStatus.h"
 #include "PlayerPlugin.h"
@@ -57,6 +58,11 @@ private:
     // Set by the audio thread at end of track, consumed once by the main loop.
     std::atomic_bool m_trackEnded;
 
+    // Lock-free seqlock publishing the just-decoded block to the visualization reader.
+    // Deliberately NOT guarded by m_mutex: the audio thread never blocks to publish and
+    // the reader never contends the decode lock.
+    AudioTap m_audioTap;
+
 public:
     PlayerController(const PlayerController &) = delete;
     PlayerController &operator=(const PlayerController &) = delete;
@@ -80,6 +86,11 @@ public:
     [[nodiscard]] TrackMetadata getMetadata() const;
     [[nodiscard]] bool isSupported(const std::filesystem::path &path) const;
     [[nodiscard]] bool consumeTrackEnded();
+
+    // Copies up to maxFrames of the most recently decoded interleaved-stereo block into out
+    // (which must hold maxFrames * CHANNELS floats); returns frames copied (0 if nothing has
+    // played yet). Reader-thread safe and lock-free: it never touches m_mutex.
+    [[nodiscard]] std::size_t readLatestAudio(float *out, std::size_t maxFrames) const;
 
     // Applies a setting to a named plugin under m_mutex (same contract as decode/open).
     // pluginName is matched against PlayerPlugin::getName(). No-op if no plugin matches.

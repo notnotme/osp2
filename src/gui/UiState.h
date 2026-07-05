@@ -20,6 +20,7 @@
 #ifndef OSP2_UI_STATE_H
 #define OSP2_UI_STATE_H
 
+#include <cstddef>
 #include <string>
 #include <utility>
 #include <vector>
@@ -39,6 +40,10 @@ struct UiState {
     std::string workingLabel;                 // overlay text while isWorking ("Scanning..." / "Downloading...")
     const TrackMetadata &metadata;            // non-owning view, valid for the frame
     const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings;  // non-owning view, valid for the frame
+    // Default-initialized so Application's aggregate `return {…}` in makeUiState() stays valid untouched;
+    // main.cpp (the visualizer bridge) fills these before drawUserInterface (see visualization.md).
+    std::vector<std::string> visualizerNames{};   // for the Settings→Visualizer picker
+    std::size_t activeVisualizer = 0;             // currently-selected visualizer index
 };
 
 

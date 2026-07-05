@@ -40,8 +40,11 @@
 #include "filesystem/LocalDataSource.h"
 #include "gui/Gui.h"
 #include "gui/Theme.h"
+#include "gui/UiState.h"
 #include "player/PlayerController.h"
 #include "settings/Settings.h"
+#include "visualizer/VisualFrame.h"
+#include "visualizer/VisualizerController.h"
 
 #include <curl/curl.h>
 
@@ -59,6 +62,7 @@ SDL_GLContext opengl_context;
 Gui gui;
 FileSystem file_system;
 PlayerController player;
+VisualizerController visualizer;
 Settings settings;
 Application app(player, file_system, settings);
 
@@ -149,6 +153,10 @@ void initialize() {
 
     gui.initialize(BASE_PATH);
 
+    // GL context + glad are up by now: a no-op for the current ImGui-only plugin, correct for future
+    // GL plugins that allocate shaders/VBOs in create().
+    visualizer.create();
+
     settings.load(configPath());
     gui.applyTheme(themeFromString(settings.getString("user", "theme", "dark")));
 
@@ -231,6 +239,8 @@ void finalize() {
     socketExit();
 #endif
     player.destroy();
+    // Free visualizer GL objects while the GL context is still valid.
+    visualizer.destroy();
     gui.finalize();
 
     ImGui_ImplOpenGL3_Shutdown();
@@ -247,7 +257,26 @@ void finalize() {
 int main(int argc, char** argv) {
     initialize();
 
-    const auto actions = app.makeUiActions();
+    auto actions = app.makeUiActions();
+
+    // Wired here (not in Application) because the visualizer is a platform-layer concern: the callback
+    // reads the audio tap, builds a VisualFrame, and renders the active visualizer inside the ImGui
+    // frame. player and visualizer are globals, so no capture is needed.
+    actions.onRenderVisualization = [](float x, float y, float w, float h) {
+        // Zero-initialized so the frameCount==0 (idle) and partial-read tails are silence, never
+        // indeterminate stack — a plugin that reads samples without gating on frameCount stays safe.
+        float samples[PlayerController::BUFFER_FRAMES * PlayerController::CHANNELS] = {};
+        // decode() publishes nothing when idle, so an ungated read returns the last stale block:
+        // gate on PLAYING and pass frameCount 0 otherwise so the visual decays to rest.
+        const bool playing = player.getState() == PlayerState::PLAYING;
+        const std::size_t frames = playing ? player.readLatestAudio(samples, PlayerController::BUFFER_FRAMES) : 0;
+        const VisualFrame frame{x, y, w, h, samples, frames, PlayerController::CHANNELS, PlayerController::SAMPLE_RATE};
+        visualizer.render(frame);
+    };
+
+    // Settings→Visualizer picker: switch the active visualizer at runtime. visualizer is a global,
+    // so no capture is needed. main.cpp is the sole bridge — Gui/Application stay ignorant of the domain.
+    actions.onSelectVisualizer = [](std::size_t i) { visualizer.select(i); };
 
     bool is_running = true;
     while (is_running) {
@@ -280,7 +309,12 @@ int main(int argc, char** argv) {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
-        gui.drawUserInterface(app.makeUiState(), actions);
+        // Application does not know the visualizer domain, so main.cpp (the bridge) supplies the picker
+        // state onto the per-frame view model before handing it to the Gui.
+        UiState state = app.makeUiState();
+        state.visualizerNames = visualizer.getNames();
+        state.activeVisualizer = visualizer.getActiveIndex();
+        gui.drawUserInterface(state, actions);
         ImGui::Render();
 
         auto *draw_data = ImGui::GetDrawData();
