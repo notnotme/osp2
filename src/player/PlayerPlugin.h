@@ -50,6 +50,10 @@ public:
     [[nodiscard]] virtual const std::vector<std::string> &getSupportedExtensions() const = 0;
     // "" when no track is open or the format has no title.
     [[nodiscard]] virtual std::string getTitle() const = 0;
+    // Playback position and total duration in seconds. Called ONLY under
+    // PlayerController::m_mutex — the decoder object is shared with the audio thread.
+    [[nodiscard]] virtual double getPosition() const = 0;
+    [[nodiscard]] virtual double getDuration() const = 0;
 };
 
 

@@ -48,6 +48,8 @@ public:
     [[nodiscard]] std::string getName() const override;
     [[nodiscard]] const std::vector<std::string> &getSupportedExtensions() const override;
     [[nodiscard]] std::string getTitle() const override;
+    [[nodiscard]] double getPosition() const override;
+    [[nodiscard]] double getDuration() const override;
 };
 
 

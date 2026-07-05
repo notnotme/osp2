@@ -143,6 +143,20 @@ std::string PlayerController::getCurrentTitle() const {
     return m_activePlugin != nullptr ? m_activePlugin->getTitle() : "";
 }
 
+PlaybackStatus PlayerController::getStatus() const {
+    std::scoped_lock lock(m_mutex);
+    if (m_activePlugin == nullptr) {
+        return {m_state, "", m_currentPath.filename().string(), 0.0, 0.0};
+    }
+    return {
+        m_state,
+        m_activePlugin->getTitle(),
+        m_currentPath.filename().string(),
+        m_activePlugin->getPosition(),
+        m_activePlugin->getDuration()
+    };
+}
+
 bool PlayerController::isSupported(const std::filesystem::path &path) const {
     return findPluginFor(path) != nullptr;
 }

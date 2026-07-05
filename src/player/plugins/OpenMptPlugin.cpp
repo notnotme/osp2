@@ -76,3 +76,11 @@ const std::vector<std::string> &OpenMptPlugin::getSupportedExtensions() const {
 std::string OpenMptPlugin::getTitle() const {
     return m_module ? m_module->get_metadata("title") : "";
 }
+
+double OpenMptPlugin::getPosition() const {
+    return m_module ? m_module->get_position_seconds() : 0.0;
+}
+
+double OpenMptPlugin::getDuration() const {
+    return m_module ? m_module->get_duration_seconds() : 0.0;
+}

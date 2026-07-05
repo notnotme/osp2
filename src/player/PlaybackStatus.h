@@ -17,23 +17,21 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef OSP2_UI_STATE_H
-#define OSP2_UI_STATE_H
+#ifndef OSP2_PLAYBACK_STATUS_H
+#define OSP2_PLAYBACK_STATUS_H
 
 #include <string>
-#include <vector>
 
-#include "../filesystem/FileEntry.h"
-#include "../player/PlaybackStatus.h"
+#include "PlayerState.h"
 
 
-// Per-frame view model: rebuilt every frame, never stored across frames.
-struct UiState {
-    PlaybackStatus status;
-    std::string path;
-    const std::vector<FileEntry> &files;   // non-owning view, valid for the frame
-    bool isWorking;
+struct PlaybackStatus {
+    PlayerState state;
+    std::string title;        // from decoder metadata, may be empty
+    std::string fileName;     // basename of the open file
+    double positionSeconds;   // 0 when stopped
+    double durationSeconds;   // 0 when stopped/unknown
 };
 
 
-#endif //OSP2_UI_STATE_H
+#endif //OSP2_PLAYBACK_STATUS_H

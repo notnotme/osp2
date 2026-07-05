@@ -98,7 +98,7 @@ void Application::update() {
 
 UiState Application::makeUiState() const {
     return {
-        m_player.getCurrentFileName(),
+        m_player.getStatus(),
         m_fileSystem.getPath().string(),
         m_fileSystem.getContent(),
         m_fileSystem.isWorking()
