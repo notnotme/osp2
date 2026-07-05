@@ -67,10 +67,10 @@ Settings settings;
 Application app(player, file_system, settings);
 
 // The INI lives next to the executable on desktop (git-ignored build dir); romfs is read-only
-// on the Switch, so it goes to writable sdmc storage instead.
+// on the Switch, so it goes to writable SD-card storage instead ("/" is libnx's default sdmc device).
 std::filesystem::path configPath() {
 #if defined(__SWITCH__)
-    return "sdmc:/switch/osp2.ini";
+    return "/switch/osp2.ini";
 #else
     char *base = SDL_GetBasePath();
     if (!base) {
@@ -83,10 +83,10 @@ std::filesystem::path configPath() {
 }
 
 // Remote sources download to this writable cache root. Mirrors configPath()'s convention:
-// sdmc storage on the Switch (romfs is read-only), next to the executable on desktop.
+// SD-card storage on the Switch (romfs is read-only), next to the executable on desktop.
 std::filesystem::path cachePath() {
 #if defined(__SWITCH__)
-    return "sdmc:/switch/OSP2/cache/";
+    return "/switch/OSP2/cache/";
 #else
     char *base = SDL_GetBasePath();
     if (!base) {
@@ -177,7 +177,7 @@ void initialize() {
     // Prefer a hand-edited default_folder when it names a valid directory; otherwise fall back to
     // the compile-time default (sdmc root on Switch, cwd on desktop).
 #if defined(__SWITCH__)
-    std::filesystem::path start_path = "sdmc:/";
+    std::filesystem::path start_path = "/";
 #else
     std::filesystem::path start_path = std::filesystem::current_path();
 #endif

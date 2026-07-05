@@ -29,11 +29,10 @@ std::string LocalDataSource::getDisplayName() const {
 }
 
 std::filesystem::path LocalDataSource::getRootPath() const {
-#if defined(__SWITCH__)
-    return "sdmc:/";
-#else
+    // On the Switch, sdmc is libnx's default device, so plain "/" paths resolve to the SD card and
+    // std::filesystem decomposes them like any POSIX path (the "sdmc:" device prefix would confuse
+    // parent_path(), breaking upward navigation). Only romfs needs its explicit "romfs:/" prefix.
     return "/";
-#endif
 }
 
 std::optional<std::vector<FileEntry>> LocalDataSource::listDirectory(const std::filesystem::path &path) {

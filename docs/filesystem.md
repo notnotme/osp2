@@ -118,7 +118,9 @@ Header-only domain interface (`DataSource.h`). One implementation per browsable 
 
 `LocalDataSource` scans with `directory_iterator(path, skip_permission_denied, ec)` using the
 `error_code` overloads throughout, returns what was readable on error (never `nullopt`), and
-skips dot-prefixed entries. `getRootPath()` is `"/"` on desktop, `"sdmc:/"` under `__SWITCH__`.
+skips dot-prefixed entries. `getRootPath()` is `"/"` on both platforms — on the Switch, sdmc is
+libnx's default device, so `"/"` resolves to the SD card and decomposes like any POSIX path
+(the `"sdmc:"` device prefix would confuse `parent_path()` and break upward navigation).
 
 **Serialization contract**: FileSystem guarantees at most one `DataSource` call is in flight
 at any time (on the worker, or the TODO_4 inline `fetchFile` on the main thread while no
@@ -241,7 +243,7 @@ style as the audio domain (atomic flag + mutex-guarded handoff, swap on the main
 - **Navigation** (`navigateToEntry`/`navigateToParent`) and `requestFile` are ignored while a
   scan or fetch runs (the UI is blocked by the overlay anyway). Root detection compares
   `m_path == m_activeSource->getRootPath()` (not `parent_path()`, since `parent_path()` of a
-  root like `sdmc:/` returns itself).
+  root like `"/"` returns itself).
 
 ## Virtual root
 
