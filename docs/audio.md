@@ -52,12 +52,14 @@ classDiagram
         +getTitle()* string
         +getPosition()* double
         +getDuration()* double
+        +getMetadata()* TrackMetadata
     }
 
     class OpenMptPlugin {
         -int m_sampleRate
         -vector~string~ m_extensions
         -unique_ptr~openmpt_module~ m_module
+        -TrackMetadata m_metadata
     }
 
     class PlaybackStatus {
@@ -69,10 +71,30 @@ classDiagram
         +double durationSeconds
     }
 
+    class ModuleMetadata {
+        <<value object>>
+        +string title
+        +string artist
+        +string format
+        +string tracker
+        +int channels
+        +int patterns
+        +int samples
+        +int instruments
+        +string message
+    }
+
+    class TrackMetadata {
+        <<variant>>
+        monostate | ModuleMetadata
+    }
+
     PlayerController --> PlayerState : state machine
     PlayerController ..> PlaybackStatus : getStatus() snapshot
+    PlayerController ..> TrackMetadata : getMetadata() cached value
     PlayerController "1" o-- "*" PlayerPlugin : owns, dispatches by extension
     PlayerPlugin <|-- OpenMptPlugin : libopenmpt (mod, xm, s3m, it, ...)
+    TrackMetadata ..> ModuleMetadata : alternative (libopenmpt)
 ```
 
 ## Threading
@@ -83,6 +105,7 @@ classDiagram
 - Pause is controller state only — the device runs for the whole app lifetime and the callback emits silence when not PLAYING.
 - End of track: the audio thread flips state to STOPPED and sets `m_trackEnded` (atomic); the main loop consumes it once per frame (`consumeTrackEnded()`) to auto-advance. Track teardown (`close()`) never happens on the audio thread.
 - `destroy()` closes the audio device before destroying plugins.
+- **Metadata is captured once, not read per frame.** Each library exposes a different metadata shape, so it travels as `TrackMetadata` (`src/player/Metadata.h`) — a `std::variant<std::monostate, ModuleMetadata, ...>`, one struct per plugin family, `monostate` = no track. Reading the decoder every frame would contend with `decode()`, so a plugin's `getMetadata()` returns a value **cached during `open()`** and cleared to `monostate` in `close()`; it must never touch the decoder object. `PlayerController::getMetadata()` still locks `m_mutex` (to read `m_activePlugin` safely) and returns the plugin's cached value, or a default (`monostate`) when nothing is active. `Application` refetches only on track change (see [application.md](application.md)), so the lock is taken rarely, not per frame.
 
 ## Adding a decoder plugin
 

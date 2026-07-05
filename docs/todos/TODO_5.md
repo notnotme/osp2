@@ -4,7 +4,7 @@
 
 ## Task chunks (implement, verify, and commit one at a time)
 
-- [ ] **5a — Metadata backend**: `src/player/Metadata.h`, `PlayerPlugin::getMetadata()` virtual + OpenMptPlugin capture-at-open, `PlayerController::getMetadata()`, Application fetch-on-track-change, `UiState::metadata`. Gui untouched (tab keeps its placeholder). Verify with a temporary `SDL_Log` of the fetched title/format on track change (remove before finishing).
+- [x] **5a — Metadata backend**: `src/player/Metadata.h`, `PlayerPlugin::getMetadata()` virtual + OpenMptPlugin capture-at-open, `PlayerController::getMetadata()`, Application fetch-on-track-change, `UiState::metadata`. Gui untouched (tab keeps its placeholder). Verify with a temporary `SDL_Log` of the fetched title/format on track change (remove before finishing).
 - [ ] **5b — Metadata tab UI**: `drawFileMetadata` visit dispatch (no generic fallback), `drawModuleMetadata` field table + scrollable message region. Verify play/stop/auto-advance refresh the tab, and run the temporary dummy-alternative compile check.
 
 Each chunk ends with green desktop + Switch builds, docs updated (`docs/audio.md`, `docs/application.md`, `docs/ui.md` as touched), user verification, then a commit.

@@ -157,6 +157,11 @@ PlaybackStatus PlayerController::getStatus() const {
     };
 }
 
+TrackMetadata PlayerController::getMetadata() const {
+    std::scoped_lock lock(m_mutex);
+    return m_activePlugin != nullptr ? m_activePlugin->getMetadata() : TrackMetadata{};
+}
+
 bool PlayerController::isSupported(const std::filesystem::path &path) const {
     return findPluginFor(path) != nullptr;
 }

@@ -24,6 +24,8 @@
 #include <string>
 #include <vector>
 
+#include "Metadata.h"
+
 
 class PlayerPlugin {
 public:
@@ -54,6 +56,9 @@ public:
     // PlayerController::m_mutex — the decoder object is shared with the audio thread.
     [[nodiscard]] virtual double getPosition() const = 0;
     [[nodiscard]] virtual double getDuration() const = 0;
+    // Returns a value CACHED during open() — must not read the decoder object, which is shared
+    // with the audio thread. close() clears it to monostate. Main thread only.
+    [[nodiscard]] virtual TrackMetadata getMetadata() const = 0;
 };
 
 

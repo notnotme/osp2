@@ -16,7 +16,7 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
   - [x] 4b — Directory navigation (onDirectoryClick, "..", virtual root)
   - [x] 4c — Browser polish (Type column, sizes, icons, spinner)
 - [ ] [TODO_5 — Typed per-plugin track metadata (std::variant) driving the Metadata tab](TODO_5.md)
-  - [ ] 5a — Metadata backend (capture-at-open, fetch-on-change)
+  - [x] 5a — Metadata backend (capture-at-open, fetch-on-change)
   - [ ] 5b — Metadata tab UI (visit dispatch)
 - [ ] [TODO_6 — Plugin configuration + persisted user settings (INI)](TODO_6.md)
   - [ ] 6a — Settings domain + user settings (theme, default_folder)

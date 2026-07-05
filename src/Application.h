@@ -20,6 +20,7 @@
 #ifndef OSP2_APPLICATION_H
 #define OSP2_APPLICATION_H
 
+#include <filesystem>
 #include <string>
 
 #include "filesystem/FileEntry.h"
@@ -27,6 +28,7 @@
 #include "gui/ButtonId.h"
 #include "gui/UiActions.h"
 #include "gui/UiState.h"
+#include "player/Metadata.h"
 #include "player/PlayerController.h"
 
 
@@ -42,6 +44,11 @@ private:
     // from when a fetched sibling fails; m_advanceDirection is the direction (+1/-1, 0 for a direct click).
     std::string m_lastRequestedName;
     int m_advanceDirection;
+
+    // Track metadata cached across frames; refetched in update() only when the playing path changes
+    // (manual play, auto-advance, stop). m_metadataPath is the path m_trackMetadata was fetched for.
+    TrackMetadata m_trackMetadata;
+    std::filesystem::path m_metadataPath;
 
 public:
     Application(const Application &) = delete;
