@@ -4,7 +4,7 @@ Ordered backlog — items build on each other in this sequence (TODO_1 is the fo
 
 Large items are broken into **task chunks** (see the "Task chunks" section in each file). A chunk is the unit of work: it builds green on desktop + Switch, updates docs/, gets verified by the user, and is committed — never batch several chunks into one commit.
 
-- [ ] [TODO_1 — Separate UI actions from presentation (UiState/UiActions + Application layer)](TODO_1.md) — single chunk
+- [x] [TODO_1 — Separate UI actions from presentation (UiState/UiActions + Application layer)](TODO_1.md) — single chunk
 - [ ] [TODO_2 — Playback status API (PlaybackStatus + position/duration)](TODO_2.md) — single chunk
 - [ ] [TODO_3 — UI redesign: docs/ui-design.md + Gui implementation](TODO_3.md)
   - [ ] 3a — Design doc (`docs/ui-design.md`)

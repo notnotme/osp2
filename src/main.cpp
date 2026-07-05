@@ -27,10 +27,10 @@
 #include <cstdlib>
 #include <stdexcept>
 
+#include "Application.h"
 #include "filesystem/FileSystem.h"
 #include "gui/Gui.h"
 #include "player/PlayerController.h"
-#include "player/PlayerState.h"
 
 #if defined(__SWITCH__)
     #define BASE_PATH "romfs:/"
@@ -45,31 +45,7 @@ SDL_GLContext opengl_context;
 Gui gui;
 FileSystem file_system;
 PlayerController player;
-
-// direction: +1 for NEXT, -1 for PREVIOUS. Plays the nearest playable sibling of the current track.
-void playAdjacentTrack(const int direction) {
-    const auto &entries = file_system.getContent();
-    const auto count = static_cast<int>(entries.size());
-    const auto current = player.getCurrentPath().filename().string();
-
-    auto index = -1;
-    for (int i = 0; i < count; ++i) {
-        if (!entries[i].is_directory && entries[i].name == current) {
-            index = i;
-            break;
-        }
-    }
-
-    for (int i = index + direction; i >= 0 && i < count; i += direction) {
-        const auto &entry = entries[i];
-        if (entry.is_directory || !player.isSupported(entry.name)) {
-            continue;
-        }
-        if (player.play(file_system.getPath() / entry.name)) {
-            return;
-        }
-    }
-}
+Application app(player, file_system);
 
 void initialize() {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) {
@@ -151,6 +127,8 @@ void finalize() {
 int main(int argc, char** argv) {
     initialize();
 
+    const auto actions = app.makeUiActions();
+
     bool is_running = true;
     while (is_running) {
         SDL_Event event;
@@ -174,9 +152,7 @@ int main(int argc, char** argv) {
             }
         }
 
-        if (player.consumeTrackEnded()) {
-            playAdjacentTrack(+1);
-        }
+        app.update();
 
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -184,43 +160,7 @@ int main(int argc, char** argv) {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
-        gui.drawUserInterface(
-            player.getCurrentFileName(),
-            file_system.getPath().string(),
-            file_system.getContent(),
-            [](const ButtonId buttonId) {
-                switch (buttonId) {
-                    case PLAY_PAUSE:
-                        switch (player.getState()) {
-                            case PlayerState::PLAYING:
-                                player.pause();
-                                break;
-                            case PlayerState::PAUSED:
-                                player.play();
-                                break;
-                            case PlayerState::STOPPED:
-                                // TODO(temporary): hardcoded test track until FileSystem returns real directories.
-                                player.play(BASE_PATH "music/test.s3m");
-                                break;
-                        }
-                        break;
-                    case STOP:
-                        player.stop();
-                        break;
-                    case NEXT:
-                        playAdjacentTrack(+1);
-                        break;
-                    case PREVIOUS:
-                        playAdjacentTrack(-1);
-                        break;
-                }
-            },
-            [](const FileEntry &entry) {
-                if (player.isSupported(entry.name)) {
-                    player.play(file_system.getPath() / entry.name);
-                }
-            },
-            file_system.isWorking());
+        gui.drawUserInterface(app.makeUiState(), actions);
         //=======================================
         bool showDemoWindow = true;
         ImGui::ShowDemoWindow(&showDemoWindow);

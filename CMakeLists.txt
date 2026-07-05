@@ -25,6 +25,7 @@ add_executable(OSP2
     external/imgui/backends/imgui_impl_sdl2.cpp
     src/gui/imgui_impl_opengl3_glad.cpp
     # OSP2 sources
+    src/Application.cpp
     src/filesystem/FileSystem.cpp
     src/gui/Gui.cpp
     src/player/PlayerController.cpp

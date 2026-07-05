@@ -1,6 +1,6 @@
 # UI domain
 
-Presentation layer in `src/gui/`. `Gui` is stateless apart from the sprite atlas texture: all data arrives as `drawUserInterface` parameters and user intent leaves through the two callbacks. It never touches the player or filesystem directly — main.cpp wires the callbacks.
+Presentation layer in `src/gui/`. `Gui` is stateless apart from the sprite atlas texture: each frame it receives a `UiState` view model (all data to render) and a `UiActions` bundle (callbacks to report intent). It never touches the player or filesystem directly — `Application` builds `UiState`/`UiActions`, main.cpp just forwards them (see [application.md](application.md)).
 
 ```mermaid
 classDiagram
@@ -9,7 +9,7 @@ classDiagram
         -GLuint m_texture
         +initialize(basePath)
         +finalize()
-        +drawUserInterface(file, path, files, onButtonClick, onFileClick, isWorking)
+        +drawUserInterface(state, actions)
         -drawMainMenuBar(file)
         -drawCurrentPath(path)
         -drawFileBrowser(files, onFileClick, isWorking)
@@ -20,6 +20,20 @@ classDiagram
         -drawTabPlaylist()
         -drawTabSettings()
         -drawTabAbout()
+    }
+
+    class UiState {
+        <<value object>>
+        +string currentFile
+        +string path
+        +const vector~FileEntry~& files
+        +bool isWorking
+    }
+
+    class UiActions {
+        <<value object>>
+        +function~void(ButtonId)~ onButtonClick
+        +function~void(const FileEntry&)~ onFileClick
     }
 
     class Sprite {
@@ -41,11 +55,17 @@ classDiagram
     }
 
     Gui *-- Sprite : atlas entries from sprites.bin
-    Gui ..> ButtonId : onButtonClick callback
-    Gui ..> FileEntry : renders, onFileClick callback
+    Gui ..> UiState : renders per frame
+    Gui ..> UiActions : reports intent through
+    UiState ..> FileEntry : non-owning view
+    UiActions ..> ButtonId : onButtonClick
+    UiActions ..> FileEntry : onFileClick
 ```
 
 ## Notes
+
+- `UiState` (`src/gui/UiState.h`) is a per-frame value object, rebuilt each frame and never stored; its `files` member is a non-owning reference valid only for that frame. `UiActions` (`src/gui/UiActions.h`) is the callback bundle, wired once at startup. Both are produced by `Application`.
+- `drawUserInterface(state, actions)` fans the view model out to the private draw helpers, which keep their focused per-widget parameters (`drawFileBrowser(state.files, actions.onFileClick, state.isWorking)`, etc.).
 
 - Sprites are loaded in `initialize()` from `romfs/sprites/sprites.bin` (custom `SPSH` format) + `sprites.png` into one GL texture; `Sprite` holds the UV rect (s/t/p/q) and pixel size.
 - Icon glyphs in labels (e.g. folder/file icons) are Material Symbols codepoints merged into the default font in main.cpp.
