@@ -41,6 +41,7 @@
 #include "gui/Gui.h"
 #include "gui/Theme.h"
 #include "gui/UiState.h"
+#include "input/CursorEmulator.h"
 #include "player/PlayerController.h"
 #include "settings/Settings.h"
 #include "visualizer/VisualFrame.h"
@@ -57,7 +58,7 @@
 
 
 SDL_Window *window;
-SDL_Joystick *joystick;
+SDL_GameController *controller;
 SDL_GLContext opengl_context;
 Gui gui;
 FileSystem file_system;
@@ -124,7 +125,9 @@ void initialize() {
         throw std::runtime_error(SDL_GetError());
     }
 
-    joystick = SDL_JoystickOpen(0);
+    // A single owned handle: the quit-on-START handler uses it on every platform, and CursorEmulator
+    // opens its own (refcounted) handle for the same controller index on the Switch.
+    controller = SDL_GameControllerOpen(0);
     SDL_GL_MakeCurrent(window, opengl_context);
     SDL_GL_SetSwapInterval(1);
     gladLoadGL();
@@ -141,6 +144,10 @@ void initialize() {
     auto &io = ImGui::GetIO();
     io.LogFilename = nullptr;
     io.IniFilename = nullptr;
+#if defined(__SWITCH__)
+    // The Switch OS draws no cursor, so ImGui must render the emulated one.
+    io.MouseDrawCursor = true;
+#endif
 
     ImFontConfig imFontConfig;
     imFontConfig.MergeMode = true;
@@ -247,7 +254,9 @@ void finalize() {
     ImGui_ImplSDL2_Shutdown();
     ImGui::DestroyContext();
 
-    SDL_JoystickClose(joystick);
+    if (controller) {
+        SDL_GameControllerClose(controller);
+    }
     SDL_GL_DeleteContext(opengl_context);
     SDL_DestroyWindow(window);
     SDL_Quit();
@@ -278,6 +287,15 @@ int main(int argc, char** argv) {
     // so no capture is needed. main.cpp is the sole bridge — Gui/Application stay ignorant of the domain.
     actions.onSelectVisualizer = [](std::size_t i) { visualizer.select(i); };
 
+    // Scoped so any CursorEmulator (and the controller it owns) is destroyed here, before finalize()
+    // calls SDL_Quit() — SDL_Quit force-frees open controllers, so a later close would be a use-after-free.
+    {
+#if defined(__SWITCH__)
+    // The Switch has no mouse: drive the ImGui cursor from the gamepad. Constructed after the
+    // GameController subsystem and ImGui context are up (initialize()); window is 1280x720.
+    CursorEmulator cursorEmulator(1280, 720);
+#endif
+
     bool is_running = true;
     while (is_running) {
         SDL_Event event;
@@ -290,7 +308,7 @@ int main(int argc, char** argv) {
                     }
                 break;
                 case SDL_CONTROLLERBUTTONDOWN:
-                    if (event.jbutton.which == 0 && event.jbutton.button == SDL_CONTROLLER_BUTTON_START) {
+                    if (event.cbutton.button == SDL_CONTROLLER_BUTTON_START) {
                         is_running = false;
                     }
                 break;
@@ -308,6 +326,11 @@ int main(int argc, char** argv) {
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL2_NewFrame();
+#if defined(__SWITCH__)
+        // Inject the emulated cursor between the SDL backend's NewFrame (which seeds IO) and
+        // ImGui::NewFrame (which consumes it) — the ImGui-idiomatic virtual-cursor injection point.
+        cursorEmulator.update(ImGui::GetIO());
+#endif
         ImGui::NewFrame();
         // Application does not know the visualizer domain, so main.cpp (the bridge) supplies the picker
         // state onto the per-frame view model before handing it to the Gui.
@@ -321,6 +344,7 @@ int main(int argc, char** argv) {
         ImGui_ImplOpenGL3_RenderDrawData(draw_data);
 
         SDL_GL_SwapWindow(window);
+    }
     }
 
     finalize();

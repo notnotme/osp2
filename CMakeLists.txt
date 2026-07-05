@@ -30,6 +30,7 @@ add_executable(OSP2
     src/filesystem/FtpDataSource.cpp
     src/filesystem/LocalDataSource.cpp
     src/gui/Gui.cpp
+    src/input/CursorEmulator.cpp
     src/player/PlayerController.cpp
     src/player/plugins/OpenMptPlugin.cpp
     src/player/plugins/GmePlugin.cpp
