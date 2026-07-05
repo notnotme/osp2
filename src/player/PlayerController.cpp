@@ -21,9 +21,11 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdint>
 #include <stdexcept>
 
 #include "plugins/OpenMptPlugin.h"
+#include "plugins/GmePlugin.h"
 
 
 // The tap's fixed capacity is declared independently of PlayerController (to keep AudioTap.h
@@ -41,6 +43,7 @@ PlayerController::PlayerController()
 
 void PlayerController::create() {
     m_plugins.emplace_back(std::make_unique<OpenMptPlugin>());
+    m_plugins.emplace_back(std::make_unique<GmePlugin>());
 
     for (const auto &plugin : m_plugins) {
         plugin->create(SAMPLE_RATE);
@@ -48,7 +51,7 @@ void PlayerController::create() {
 
     SDL_AudioSpec want = {};
     want.freq = SAMPLE_RATE;
-    want.format = AUDIO_F32SYS;
+    want.format = AUDIO_S16SYS;
     want.channels = CHANNELS;
     want.samples = BUFFER_FRAMES;
     want.callback = &PlayerController::audioCallback;
@@ -217,8 +220,8 @@ void PlayerController::decode(Uint8 *stream, const int len) {
         return;
     }
 
-    const auto frames_wanted = len / static_cast<int>(sizeof(float) * CHANNELS);
-    auto *buffer = reinterpret_cast<float *>(stream);
+    const auto frames_wanted = len / static_cast<int>(sizeof(std::int16_t) * CHANNELS);
+    auto *buffer = reinterpret_cast<std::int16_t *>(stream);
     const auto frames_written = m_activePlugin->decode(buffer, frames_wanted);
 
     // Publish only the real decoded frames to the visualization tap, before the
@@ -227,7 +230,7 @@ void PlayerController::decode(Uint8 *stream, const int len) {
 
     if (frames_written < frames_wanted) {
         SDL_memset(buffer + frames_written * CHANNELS, 0,
-                   (frames_wanted - frames_written) * sizeof(float) * CHANNELS);
+                   (frames_wanted - frames_written) * sizeof(std::int16_t) * CHANNELS);
         // Track teardown stays on the main thread; only flip the state here.
         m_state = PlayerState::STOPPED;
         m_trackEnded.store(true);

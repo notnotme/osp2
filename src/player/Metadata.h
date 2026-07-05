@@ -40,9 +40,18 @@ struct ModuleMetadata {              // tracker formats via libopenmpt
     std::string message;             // song message, often multiline, may be empty
 };
 
+struct GmeMetadata {                 // console/arcade formats via libgme
+    std::string game;
+    std::string system;
+    std::string author;
+    std::string copyright;
+    std::string comment;             // often multiline
+    int trackCount;
+};
+
 // One alternative per plugin family; monostate = no track loaded.
-// Future: GmeMetadata, SidMetadata, Sc68Metadata added with their plugins.
-using TrackMetadata = std::variant<std::monostate, ModuleMetadata>;
+// Future: SidMetadata, Sc68Metadata added with their plugins.
+using TrackMetadata = std::variant<std::monostate, ModuleMetadata, GmeMetadata>;
 
 
 #endif //OSP2_METADATA_H

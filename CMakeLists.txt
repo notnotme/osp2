@@ -32,6 +32,7 @@ add_executable(OSP2
     src/gui/Gui.cpp
     src/player/PlayerController.cpp
     src/player/plugins/OpenMptPlugin.cpp
+    src/player/plugins/GmePlugin.cpp
     src/settings/Settings.cpp
     src/visualizer/VisualizerController.cpp
     src/visualizer/visualizers/BarsVisualizer.cpp
@@ -80,9 +81,9 @@ else ()
 endif ()
 
 
-# libgme (re-enable with GmePlugin)
-#pkg_check_modules(libgme REQUIRED IMPORTED_TARGET libgme)
-#target_link_libraries(OSP2 PRIVATE PkgConfig::libgme)
+# libgme
+pkg_check_modules(libgme REQUIRED IMPORTED_TARGET libgme)
+target_link_libraries(OSP2 PRIVATE PkgConfig::libgme)
 
 # libopenmpt
 pkg_check_modules(libopenmpt REQUIRED IMPORTED_TARGET libopenmpt)

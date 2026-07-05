@@ -27,7 +27,9 @@
 
 
 // Lock-free single-producer / single-consumer publisher of the most recently
-// decoded block of interleaved stereo float frames, for the visualization layer.
+// decoded block of interleaved stereo int16 frames, for the visualization layer.
+// The block is stored as int16 (the pipeline's native sample type) and converted
+// to normalized float on read(), because the visualization layer wants float.
 //
 // It is a seqlock (Rigtorp-style): the producer (SDL audio thread) publishes the
 // just-decoded block from PlayerController::decode(); the consumer (main thread)
@@ -51,7 +53,7 @@ private:
     // Even = stable snapshot, odd = write in progress. Starts at 0 (never written).
     std::atomic<std::uint32_t> m_seq;
     // Guarded by m_seq, not by any mutex: only valid between two equal even reads.
-    float m_samples[CAPACITY];
+    std::int16_t m_samples[CAPACITY];
     std::size_t m_frameCount;
 
 public:
@@ -67,9 +69,9 @@ public:
 
     ~AudioTap() = default;
 
-    // Producer (SDL audio thread). Copies frameCount interleaved stereo frames in and
+    // Producer (SDL audio thread). Copies frameCount interleaved stereo int16 frames in and
     // publishes them. Never blocks and never allocates; frameCount is clamped to MAX_FRAMES.
-    void publish(const float *frames, std::size_t frameCount) noexcept {
+    void publish(const std::int16_t *frames, std::size_t frameCount) noexcept {
         if (frameCount > MAX_FRAMES) {
             frameCount = MAX_FRAMES;
         }
@@ -79,7 +81,7 @@ public:
         m_seq.store(seq + 1, std::memory_order_relaxed);
         std::atomic_thread_fence(std::memory_order_release);
 
-        std::memcpy(m_samples, frames, frameCount * CHANNELS * sizeof(float));
+        std::memcpy(m_samples, frames, frameCount * CHANNELS * sizeof(std::int16_t));
         m_frameCount = frameCount;
 
         // Publish: bump seq back to even so readers can capture the new block.
@@ -87,10 +89,11 @@ public:
         m_seq.store(seq + 2, std::memory_order_relaxed);
     }
 
-    // Consumer (main thread). Copies up to maxFrames of the latest published block into
-    // out (which must hold at least maxFrames * CHANNELS floats). Returns the number of
-    // frames copied, or 0 if nothing has been published yet. Never takes a lock; retries
-    // on a torn read, so it can spin briefly under contention but never blocks indefinitely.
+    // Consumer (main thread). Reads up to maxFrames of the latest published block into
+    // out (which must hold at least maxFrames * CHANNELS floats), converting the stored
+    // int16 samples to normalized float. Returns the number of frames copied, or 0 if
+    // nothing has been published yet. Never takes a lock; retries on a torn read, so it
+    // can spin briefly under contention but never blocks indefinitely.
     [[nodiscard]] std::size_t read(float *out, std::size_t maxFrames) const noexcept {
         while (true) {
             const std::uint32_t seq_before = m_seq.load(std::memory_order_acquire);
@@ -101,7 +104,7 @@ public:
 
             // Clamp to both the caller's buffer and the compile-time capacity. m_frameCount is
             // read non-atomically and may momentarily tear to a bogus value mid-write, so the
-            // memcpy length must be bounded by a trusted constant — the sequence check below
+            // conversion length must be bounded by a trusted constant — the sequence check below
             // discards a torn snapshot, but only AFTER the copy has already run.
             std::size_t count = m_frameCount;
             if (count > maxFrames) {
@@ -110,7 +113,10 @@ public:
             if (count > MAX_FRAMES) {
                 count = MAX_FRAMES;
             }
-            std::memcpy(out, m_samples, count * CHANNELS * sizeof(float));
+            const std::size_t samples = count * CHANNELS;
+            for (std::size_t i = 0; i < samples; ++i) {
+                out[i] = static_cast<float>(m_samples[i]) * (1.0f / 32768.0f);
+            }
 
             std::atomic_thread_fence(std::memory_order_acquire);
             const std::uint32_t seq_after = m_seq.load(std::memory_order_relaxed);
