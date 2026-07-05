@@ -26,6 +26,13 @@
 #include "plugins/OpenMptPlugin.h"
 
 
+// The tap's fixed capacity is declared independently of PlayerController (to keep AudioTap.h
+// dependency-free), so pin the two together here where both headers are visible: a mismatched
+// constant would silently truncate the published waveform.
+static_assert(AudioTap::MAX_FRAMES == static_cast<std::size_t>(PlayerController::BUFFER_FRAMES));
+static_assert(AudioTap::CHANNELS == static_cast<std::size_t>(PlayerController::CHANNELS));
+
+
 PlayerController::PlayerController()
     : m_device(0),
       m_activePlugin(nullptr),
@@ -174,6 +181,11 @@ bool PlayerController::consumeTrackEnded() {
     return m_trackEnded.exchange(false);
 }
 
+std::size_t PlayerController::readLatestAudio(float *out, const std::size_t maxFrames) const {
+    // Lock-free seqlock read; intentionally takes no lock (never touches m_mutex).
+    return m_audioTap.read(out, maxFrames);
+}
+
 void PlayerController::applyPluginSetting(const std::string &pluginName, const std::string &key, const int value) {
     std::scoped_lock lock(m_mutex);
     for (const auto &plugin : m_plugins) {
@@ -208,6 +220,11 @@ void PlayerController::decode(Uint8 *stream, const int len) {
     const auto frames_wanted = len / static_cast<int>(sizeof(float) * CHANNELS);
     auto *buffer = reinterpret_cast<float *>(stream);
     const auto frames_written = m_activePlugin->decode(buffer, frames_wanted);
+
+    // Publish only the real decoded frames to the visualization tap, before the
+    // end-of-track zero-padding below rewrites the buffer tail. Never blocks the audio thread.
+    m_audioTap.publish(buffer, static_cast<std::size_t>(frames_written));
+
     if (frames_written < frames_wanted) {
         SDL_memset(buffer + frames_written * CHANNELS, 0,
                    (frames_wanted - frames_written) * sizeof(float) * CHANNELS);
