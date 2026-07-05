@@ -29,18 +29,30 @@ classDiagram
         +BAR_COUNT
     }
 
+    class ShaderQuadVisualizer {
+        -uint m_program
+        -uint m_vao
+        -int m_locTime
+        -int m_locLevel
+        -float m_time
+        -float m_level
+        -int m_vpX m_vpY m_vpW m_vpH
+    }
+
     class VisualizerController {
         -vector~unique_ptr~VisualizerPlugin~~ m_plugins
         -size_t m_activeIndex
         +create()
         +destroy()
         +getNames() vector~string~
+        +getActiveIndex() size_t
         +select(index)
         +render(frame)
     }
 
     VisualizerController "1" o-- "*" VisualizerPlugin : owns, dispatches to active
     VisualizerPlugin <|-- BarsVisualizer : ImGui backend
+    VisualizerPlugin <|-- ShaderQuadVisualizer : raw GL backend
     VisualizerPlugin ..> VisualFrame : render(frame)
     VisualizerController ..> VisualFrame : forwards to active plugin
 ```
@@ -51,9 +63,11 @@ classDiagram
 
 - **`VisualizerPlugin`** (`src/visualizer/VisualizerPlugin.h`) is the abstract base, mirroring `PlayerPlugin`. `create()`/`destroy()` give a raw-GL plugin a clear lifecycle for its shader/VBO (called once from `VisualizerController::create()`/`destroy()` on the main thread, with a live GL context); ImGui plugins leave them empty. `render(frame)` runs inside the ImGui frame (between `NewFrame` and `Render`) once per frame while in VISUALIZATION mode.
 
-- **`VisualizerController`** (`src/visualizer/VisualizerController.{h,cpp}`) mirrors `PlayerController`'s ownership pattern: owns `vector<unique_ptr<VisualizerPlugin>>` and an active index (default 0), one `emplace_back` per plugin in `create()` (registration order = selector order later), and `render()` forwards to the active plugin. It is non-copyable and guards `render()`/`select()` against an empty/out-of-range index, so `render()` is a safe no-op before `create()` / after `destroy()`.
+- **`VisualizerController`** (`src/visualizer/VisualizerController.{h,cpp}`) mirrors `PlayerController`'s ownership pattern: owns `vector<unique_ptr<VisualizerPlugin>>` and an active index (default 0), one `emplace_back` per plugin in `create()` (registration order = selector order), and `render()` forwards to the active plugin. Registration order is `BarsVisualizer` (index 0, default active) then `ShaderQuadVisualizer` (index 1). `getNames()` feeds the Settings→Visualizer picker and `getActiveIndex()` reports which one has the checkmark; `select(index)` (bounds-checked) switches the active plugin at runtime. It is non-copyable and guards `render()`/`select()` against an empty/out-of-range index, so `render()` is a safe no-op before `create()` / after `destroy()`.
 
 - **`BarsVisualizer`** (`src/visualizer/visualizers/BarsVisualizer.{h,cpp}`) is the basic plugin shipped in chunk 8c (ImGui backend, `create()`/`destroy()` empty), and the sole default-active plugin (index 0). It draws `BAR_COUNT` (64) vertical bars whose heights track per-band audio amplitude. Bands are **time-domain**: the sample window is bucketed into `BAR_COUNT` contiguous buckets and each bar's target is the **peak of |mono|** over its bucket (peak, not RMS → transients pop) times an empirical visual `GAIN`, clamped to 1. No FFT → **no dependency, Switch-safe**. Per-bar heights are smoothed with a fast **attack** / gentle **decay** and persisted across frames in `m_levels`, so bars rise sharply on transients and fall smoothly; when `frameCount == 0` all targets are 0, so the bars **decay to rest**. Drawn via `ImGui::GetBackgroundDrawList()->AddRectFilled(...)` inside the reserved rect, growing bottom→up, using the theme accent (`ImGuiCol_PlotHistogram`) for consistency with the player bar. A true FFT **spectrum** and a GL **shader-quad** are follow-on plugins (8d/future).
+
+- **`ShaderQuadVisualizer`** (`src/visualizer/visualizers/ShaderQuadVisualizer.{h,cpp}`) is the raw-GL plugin shipped in chunk 8d (getName() `"Plasma"`, index 1). It renders an animated plasma with a **fullscreen-triangle** fragment shader (attribute-less: the triangle's clip-space corners are derived from `gl_VertexID`, so no VBO — only an empty VAO, which core profile still requires for `glDrawArrays`). Rather than draw immediately, `render()` schedules the GL draw on the background draw list via **`ImDrawList::AddCallback`** and immediately queues `ImDrawCallback_ResetRenderState`; the GL3 backend runs the callback during `ImGui_ImplOpenGL3_RenderDrawData`, then the reset restores the backend's own viewport/scissor/program/blend for the ImGui geometry that follows (the callback deliberately leaves state dirtied and restores nothing itself). The draw is **confined to the reserved rect** with `glViewport` + `glScissor` over the rect converted to framebuffer pixels and **Y-flipped** (GL's framebuffer origin is bottom-left, ImGui's screen origin is top-left; `DisplayFramebufferScale` handles HiDPI backing). The shader uses **`#version 330 core`** — the same version `main.cpp` feeds `ImGui_ImplOpenGL3_Init`, proven portable on desktop **and** Switch here. It obeys the freeze-when-hidden contract by accumulating `ImGui::GetIO().DeltaTime` into `m_time` inside `render()` (never `GetTime()`), and is **audio-reactive** via a `u_level` uniform (mean of `|mono|` over the sample window, gained and clamped to `[0, 1]`; `0` when `frameCount == 0` so the plasma settles to a dim rest). `create()` compiles/links the program (logging any compile/link info log via `SDL_Log` and leaving `m_program == 0` on failure, which makes `render()` a safe no-op); `destroy()` frees the program and VAO. Both plugins' `create()`/`destroy()` run for **all** registered plugins at startup/shutdown (with a live GL context), so the GL resources exist regardless of which plugin is active — selecting only changes which one renders.
 
 - **Animation freezes when hidden.** A visualizer must advance its animation/state from the per-frame delta **inside `render()`** (`BarsVisualizer` drives its attack/decay smoothing from `ImGui::GetIO().DeltaTime`), never from the always-ticking global `ImGui::GetTime()`. Because the controller's `render()` is only called in VISUALIZATION mode, deriving motion from render-time makes a visualizer stop while hidden and resume where it left off — the bars freeze mid-decay when hidden and resume from the same heights, no phase jump on re-entry, no work when off-screen. Audio-reactive plugins get this for free (their state only updates when fed a frame).
 
@@ -62,9 +76,11 @@ classDiagram
 There is **one render call site and one draw order** regardless of a plugin's backend, because `render()` runs inside the ImGui frame:
 
 - **ImGui plugins** (like `BarsVisualizer`) draw **immediately** via `ImGui::GetBackgroundDrawList()` — the background list paints behind every window, directly on the reserved rect in screen coordinates. Portable and identical on desktop + Switch (no shader/CMake changes).
-- A future **GL plugin** schedules its draw through `ImDrawList::AddCallback`, so its raw-GL rendering is ordered into the same ImGui draw data and executed before `ImGui_ImplOpenGL3_RenderDrawData`.
+- **GL plugins** (`ShaderQuadVisualizer`, realized in chunk 8d) schedule their draw through `ImDrawList::AddCallback` on the same background draw list, so the raw-GL rendering is ordered into the same ImGui draw data and executed before the backend draws its own geometry inside `ImGui_ImplOpenGL3_RenderDrawData`; the plugin queues `ImDrawCallback_ResetRenderState` right after so the backend restores its render state for the following ImGui geometry.
 
 The single call site is `main.cpp`'s `onRenderVisualization` callback (wired onto `UiActions`): in VISUALIZATION mode `Gui` invokes it with the reserved rect (`viewport->WorkPos`/`WorkSize`, which already exclude the main menu bar); the callback reads the audio tap, builds a `VisualFrame`, and calls `visualizer.render(frame)`. `Gui` stays presentation-only and knows nothing about the visualizer domain — same principle as `onButtonClick` (see [ui.md](ui.md)).
+
+**Selector (Settings→Visualizer).** The active visualizer is switched at runtime from a **Settings→Visualizer** submenu that lists each registered plugin name with a checkmark on the active one. The wiring keeps `Gui` and `Application` ignorant of the visualizer domain: `main.cpp` fills `UiState::visualizerNames` (from `VisualizerController::getNames()`) and `UiState::activeVisualizer` (from `getActiveIndex()`) onto the per-frame view model before `drawUserInterface`, and wires `UiActions::onSelectVisualizer` to call `VisualizerController::select(index)`. `Gui` merely lists the names and reports the picked index — same presentation-only principle as `onRenderVisualization`. There is **no persistence** of the choice yet (TODO_6 is where a default visualizer would later be stored, alongside theme).
 
 ## Audio tap threading contract
 

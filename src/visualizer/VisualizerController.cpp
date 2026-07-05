@@ -20,6 +20,7 @@
 #include "VisualizerController.h"
 
 #include "visualizers/BarsVisualizer.h"
+#include "visualizers/ShaderQuadVisualizer.h"
 
 
 VisualizerController::VisualizerController()
@@ -27,7 +28,9 @@ VisualizerController::VisualizerController()
 
 void VisualizerController::create() {
     // Registration order = selector order (and dispatch index). Add one emplace_back per plugin.
+    // Bars stays index 0 (the default active plugin); Plasma is index 1.
     m_plugins.emplace_back(std::make_unique<BarsVisualizer>());
+    m_plugins.emplace_back(std::make_unique<ShaderQuadVisualizer>());
 
     for (const auto &plugin : m_plugins) {
         plugin->create();
@@ -48,6 +51,10 @@ std::vector<std::string> VisualizerController::getNames() const {
         names.push_back(plugin->getName());
     }
     return names;
+}
+
+std::size_t VisualizerController::getActiveIndex() const {
+    return m_activeIndex;
 }
 
 void VisualizerController::select(const std::size_t index) {

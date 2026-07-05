@@ -40,6 +40,7 @@
 #include "filesystem/LocalDataSource.h"
 #include "gui/Gui.h"
 #include "gui/Theme.h"
+#include "gui/UiState.h"
 #include "player/PlayerController.h"
 #include "settings/Settings.h"
 #include "visualizer/VisualFrame.h"
@@ -273,6 +274,10 @@ int main(int argc, char** argv) {
         visualizer.render(frame);
     };
 
+    // Settings→Visualizer picker: switch the active visualizer at runtime. visualizer is a global,
+    // so no capture is needed. main.cpp is the sole bridge — Gui/Application stay ignorant of the domain.
+    actions.onSelectVisualizer = [](std::size_t i) { visualizer.select(i); };
+
     bool is_running = true;
     while (is_running) {
         SDL_Event event;
@@ -304,7 +309,12 @@ int main(int argc, char** argv) {
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
-        gui.drawUserInterface(app.makeUiState(), actions);
+        // Application does not know the visualizer domain, so main.cpp (the bridge) supplies the picker
+        // state onto the per-frame view model before handing it to the Gui.
+        UiState state = app.makeUiState();
+        state.visualizerNames = visualizer.getNames();
+        state.activeVisualizer = visualizer.getActiveIndex();
+        gui.drawUserInterface(state, actions);
         ImGui::Render();
 
         auto *draw_data = ImGui::GetDrawData();

@@ -20,6 +20,7 @@
 #ifndef OSP2_UI_ACTIONS_H
 #define OSP2_UI_ACTIONS_H
 
+#include <cstddef>
 #include <functional>
 #include <string>
 
@@ -44,6 +45,9 @@ struct UiActions {
     // Invoked in VISUALIZATION mode with the reserved rect (screen coords) below the top bar.
     // main.cpp reads the audio tap, builds a VisualFrame, and renders the active visualizer.
     std::function<void(float x, float y, float w, float h)> onRenderVisualization;
+    // Fired by the Settings→Visualizer picker with the chosen index; main.cpp calls
+    // VisualizerController::select. Gui stays ignorant of the visualizer domain (same as onButtonClick).
+    std::function<void(std::size_t index)> onSelectVisualizer;
 };
 
 

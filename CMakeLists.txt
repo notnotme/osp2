@@ -35,6 +35,7 @@ add_executable(OSP2
     src/settings/Settings.cpp
     src/visualizer/VisualizerController.cpp
     src/visualizer/visualizers/BarsVisualizer.cpp
+    src/visualizer/visualizers/ShaderQuadVisualizer.cpp
     src/main.cpp
 )
 

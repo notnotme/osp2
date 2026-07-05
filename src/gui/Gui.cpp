@@ -151,7 +151,7 @@ void Gui::applyTheme(const Theme theme) {
     }
 }
 
-void Gui::drawTopBar(const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings, const std::function<void(Theme)> &onThemeChange, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit) {
+void Gui::drawTopBar(const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings, const std::function<void(Theme)> &onThemeChange, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit, const std::vector<std::string> &visualizerNames, const std::size_t activeVisualizer, const std::function<void(std::size_t)> &onSelectVisualizer) {
     if (ImGui::BeginMainMenuBar()) {
         ImGui::TextUnformatted("OSP2");
         ImGui::Separator();
@@ -188,6 +188,18 @@ void Gui::drawTopBar(const std::vector<std::pair<std::string, std::vector<Plugin
                 }
                 if (!any_shown) {
                     ImGui::TextDisabled("No configurable plugins");
+                }
+                ImGui::EndMenu();
+            }
+
+            // Visualizer picker: one entry per registered visualizer, checkmark on the active one.
+            // Selecting fires onSelectVisualizer(i); main.cpp calls VisualizerController::select — Gui
+            // stays ignorant of the visualizer domain (same principle as onRenderVisualization).
+            if (ImGui::BeginMenu("Visualizer")) {
+                for (std::size_t i = 0; i < visualizerNames.size(); ++i) {
+                    if (ImGui::MenuItem(visualizerNames[i].c_str(), nullptr, i == activeVisualizer)) {
+                        onSelectVisualizer(i);
+                    }
                 }
                 ImGui::EndMenu();
             }
@@ -647,7 +659,7 @@ void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(B
 }
 
 void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
-    drawTopBar(state.pluginSettings, actions.onThemeChange, actions.onPluginSettingChange, actions.onPluginSettingCommit);
+    drawTopBar(state.pluginSettings, actions.onThemeChange, actions.onPluginSettingChange, actions.onPluginSettingCommit, state.visualizerNames, state.activeVisualizer, actions.onSelectVisualizer);
 
     // VISUALIZATION mode draws only the top bar; the work area below is handed to the visualizer via
     // onRenderVisualization with the reserved rect (WorkPos/WorkSize already exclude the menu bar).
