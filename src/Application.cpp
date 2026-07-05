@@ -29,8 +29,7 @@
 
 
 Application::Application(PlayerController &player, FileSystem &fileSystem, Settings &settings)
-    : m_player(player), m_fileSystem(fileSystem), m_settings(settings), m_advanceDirection(0),
-      m_pluginSettingsDirty(false) {}
+    : m_player(player), m_fileSystem(fileSystem), m_settings(settings), m_advanceDirection(0) {}
 
 void Application::handleButtonClick(const ButtonId buttonId) {
     switch (buttonId) {
@@ -116,38 +115,42 @@ void Application::handleThemeChange(const Theme theme) {
     m_settings.save();
 }
 
-// Live edit (fires every frame while a slider is dragged): apply to the decoder for immediate
-// feedback, but do NOT persist — the file write is deferred to the commit below on release.
+// Live edit (fires every frame while a slider is dragged, or once per combo change): apply to the
+// decoder for immediate audio preview, but do NOT persist. Also patch the cached descriptor's value
+// in place so m_pluginSettings tracks the live decoder value — this is what a reopened popup seeds
+// from. The in-place int write reallocates nothing and is safe even though makeUiState hands
+// m_pluginSettings to the Gui: during the popup the Gui reads its own working copy and only reads
+// the cache when seeding on open, before any change fires that frame.
 void Application::handlePluginSettingChange(const std::string &pluginName, const std::string &key, const int value) {
     m_player.applyPluginSetting(pluginName, key, value);
+    for (auto &[name, descriptors] : m_pluginSettings) {
+        if (name == pluginName) {
+            for (auto &d : descriptors) {
+                if (d.key == key) {
+                    d.value = value;
+                    break;
+                }
+            }
+        }
+    }
 }
 
-// Commit (fires once the widget is released): the decoder already holds the value, so only persist,
-// then mark the cache dirty so update() refreshes it next frame. The refresh must NOT run here — this
-// callback fires from inside the Gui's draw while it iterates m_pluginSettings by reference, so
-// reassigning that vector now would invalidate the loop and dangle the references.
+// Commit (fired per setting by the popup's Save button): the decoder already holds the value from
+// the live edits, so only persist it to the INI.
 void Application::handlePluginSettingCommit(const std::string &pluginName, const std::string &key, const int value) {
     m_settings.setInt("plugin." + pluginName, key, value);
     m_settings.save();
-    m_pluginSettingsDirty = true;
 }
 
-// Rebuilds the cached plugin-setting descriptors from the player (locks the audio mutex, so it is
-// called only at settled points — from main.cpp after the startup push, and from update() when a
-// committed edit marked the cache dirty — never per frame and never during a draw).
+// Builds the cached plugin-setting descriptors from the player (locks the audio mutex, so it is
+// called only at settled points — once from main.cpp after the startup push — never per frame and
+// never during a draw). Live edits keep the cache current in place, so no rebuild is needed after.
 void Application::refreshPluginSettings() {
     m_pluginSettings = m_player.getPluginSettings();
 }
 
 void Application::update() {
     m_fileSystem.update();
-
-    // Apply a deferred plugin-settings refresh here (before makeUiState builds the frame's view model),
-    // never inside the commit callback which fires mid-draw while the Gui iterates the cache.
-    if (m_pluginSettingsDirty) {
-        refreshPluginSettings();
-        m_pluginSettingsDirty = false;
-    }
 
     // Resolve a pending request first: a successful play() clears the track-ended flag,
     // so an explicit click made just as the current track ends wins over auto-advance

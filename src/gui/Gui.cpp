@@ -252,11 +252,12 @@ void Gui::drawAboutPopup() {
 
 // One modal per plugin, keyed and titled by the plugin name (matches OpenPopup by name above);
 // only the plugin the user picked in the submenu is ever open. Widgets are generic — one per
-// descriptor, driven entirely by the descriptor's shape. Each edit applies to the decoder live
-// (onPluginSettingChange); the value is persisted only when the widget is released
-// (onPluginSettingCommit on IsItemDeactivatedAfterEdit), so dragging a slider does not rewrite
-// the INI every frame. Both callbacks pass the live local `v` — on the release frame it already
-// holds the final value, whereas setting.value trails a frame behind (it is refetched next frame).
+// descriptor, driven entirely by the descriptor's shape. On open the popup seeds a Gui-owned
+// working copy (m_settingsEdit) from the descriptor cache and binds every widget to it, so the
+// slider reads from stable storage and never flashes off a frame-lagging cache. Editing a widget
+// applies to the decoder live (onPluginSettingChange) for immediate audio preview but does not
+// persist. Save writes every value to the INI (onPluginSettingCommit per descriptor) and closes;
+// Close closes without persisting, leaving the live-applied values in the decoder for the session.
 void Gui::drawPluginPopups(const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit) {
     const auto center = ImGui::GetMainViewport()->GetCenter();
     constexpr auto flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
@@ -264,34 +265,43 @@ void Gui::drawPluginPopups(const std::vector<std::pair<std::string, std::vector<
     for (const auto &[pluginName, descriptors] : pluginSettings) {
         ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
         if (!ImGui::BeginPopupModal(pluginName.c_str(), nullptr, flags)) {
+            // Closed — via a button or the Escape key: forget it here (the single place that clears
+            // the latch) so the next open reseeds the working copy from the live-kept cache.
+            if (m_openSettingsPlugin == pluginName) {
+                m_openSettingsPlugin.clear();
+            }
             continue;
         }
+        // Seed the working copy once when this popup becomes the open one, from the current
+        // descriptor values; subsequent frames bind widgets to it (no re-read of the cache).
+        if (m_openSettingsPlugin != pluginName) {
+            m_openSettingsPlugin = pluginName;
+            m_settingsEdit.clear();
+            for (const auto &s : descriptors) {
+                m_settingsEdit[s.key] = s.value;
+            }
+        }
+
         // Scope widget IDs by plugin so descriptor keys need only be unique per plugin
         // (the INI-key contract), not globally — two plugins may share a key.
         ImGui::PushID(pluginName.c_str());
         for (const auto &setting : descriptors) {
             ImGui::PushID(setting.key.c_str());
+            // Reference into the working copy: a stable address across frames, so ImGui sees a
+            // persistent backing value and the widget never flashes.
+            int &v = m_settingsEdit[setting.key];
             std::visit([&](const auto &shape) {
                 using T = std::decay_t<decltype(shape)>;
                 if constexpr (std::is_same_v<T, IntRange>) {
-                    int v = setting.value;
                     if (ImGui::SliderInt(setting.label.c_str(), &v, shape.min, shape.max)) {
                         onPluginSettingChange(pluginName, setting.key, v);
-                    }
-                    if (ImGui::IsItemDeactivatedAfterEdit()) {
-                        onPluginSettingCommit(pluginName, setting.key, v);
                     }
                 } else if constexpr (std::is_same_v<T, EnumOptions>) {
                     std::vector<const char *> items;
                     items.reserve(shape.labels.size());
                     for (const auto &l : shape.labels) items.push_back(l.c_str());
-                    int v = setting.value;
-                    // A combo selection is a discrete one-shot event (no drag spam) and
-                    // IsItemDeactivatedAfterEdit is unreliable for combos, so apply and persist
-                    // together on the single change.
                     if (ImGui::Combo(setting.label.c_str(), &v, items.data(), static_cast<int>(items.size()))) {
                         onPluginSettingChange(pluginName, setting.key, v);
-                        onPluginSettingCommit(pluginName, setting.key, v);
                     }
                 }
             }, setting.shape);
@@ -300,6 +310,13 @@ void Gui::drawPluginPopups(const std::vector<std::pair<std::string, std::vector<
         ImGui::PopID();
 
         ImGui::Separator();
+        if (ImGui::Button("Save")) {
+            for (const auto &setting : descriptors) {
+                onPluginSettingCommit(pluginName, setting.key, m_settingsEdit[setting.key]);
+            }
+            ImGui::CloseCurrentPopup();   // the not-open branch clears m_openSettingsPlugin next frame
+        }
+        ImGui::SameLine();
         if (ImGui::Button("Close")) {
             ImGui::CloseCurrentPopup();
         }
