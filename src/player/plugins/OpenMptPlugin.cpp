@@ -93,7 +93,7 @@ void OpenMptPlugin::close() {
     m_metadata = std::monostate{};
 }
 
-int OpenMptPlugin::decode(float *buffer, const int frames) {
+int OpenMptPlugin::decode(std::int16_t *buffer, const int frames) {
     return static_cast<int>(m_module->read_interleaved_stereo(m_sampleRate, frames, buffer));
 }
 

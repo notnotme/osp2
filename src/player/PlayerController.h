@@ -89,7 +89,8 @@ public:
 
     // Copies up to maxFrames of the most recently decoded interleaved-stereo block into out
     // (which must hold maxFrames * CHANNELS floats); returns frames copied (0 if nothing has
-    // played yet). Reader-thread safe and lock-free: it never touches m_mutex.
+    // played yet). The tap stores int16 and converts to normalized float on read.
+    // Reader-thread safe and lock-free: it never touches m_mutex.
     [[nodiscard]] std::size_t readLatestAudio(float *out, std::size_t maxFrames) const;
 
     // Applies a setting to a named plugin under m_mutex (same contract as decode/open).

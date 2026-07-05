@@ -17,34 +17,46 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef OSP2_OPENMPT_PLUGIN_H
-#define OSP2_OPENMPT_PLUGIN_H
+#ifndef OSP2_SC68_PLUGIN_H
+#define OSP2_SC68_PLUGIN_H
 
 #include <cstdint>
-#include <memory>
+#include <vector>
 
 #include "../PlayerPlugin.h"
 
-namespace openmpt { class module; }
+// libsc68's opaque instance type, forward-declared to keep <sc68/sc68.h> out of this header
+// (mirrors SidPlugin). It is a C API, so the typedef must carry C linkage-compatible naming.
+typedef struct _sc68_s sc68_t;
 
 
-class OpenMptPlugin final : public PlayerPlugin {
+class Sc68Plugin final : public PlayerPlugin {
 private:
     int m_sampleRate;
     std::vector<std::string> m_extensions;
-    std::unique_ptr<openmpt::module> m_module;
-    // Captured once in open() so getMetadata() never touches the audio-thread-shared module.
+    // The libsc68 instance; holds the currently loaded disk between open() and close().
+    sc68_t *m_sc68 = nullptr;
+    // True once sc68_init() succeeded in create(), so destroy() only pairs a shutdown with it.
+    bool m_initialized = false;
+    // Captured once in open() so getMetadata() never touches the audio-thread-shared instance.
     TrackMetadata m_metadata;
-    // Cached render settings, re-applied to each module on open(); m_interpolation is an index
-    // into the Interpolation enum labels (see getSettings()).
-    int m_stereoSeparation;
-    int m_interpolation;
+    // Cached in open() so getTitle() never touches the shared instance.
+    std::string m_title;
+    // Track length in seconds, from music_info time_ms; 0 = unknown.
+    double m_duration = 0.0;
+    // Stereo frames produced so far, accumulated in decode() to derive getPosition().
+    std::uint64_t m_playedFrames = 0;
+    // Set once sc68_process() reports SC68_END (or an error), so decode() stops feeding.
+    bool m_ended = false;
+    // aSIDifier mode (0=off, 1=on, 2=force), applied on the next open() and clamped on store.
+    // Maps directly onto SC68_ASID_OFF/ON/FORCE (see getSettings()).
+    int m_asid = 0;
 
 public:
-    OpenMptPlugin(const OpenMptPlugin &) = delete;
-    OpenMptPlugin &operator=(const OpenMptPlugin &) = delete;
-    explicit OpenMptPlugin();
-    ~OpenMptPlugin() override;
+    Sc68Plugin(const Sc68Plugin &) = delete;
+    Sc68Plugin &operator=(const Sc68Plugin &) = delete;
+    explicit Sc68Plugin();
+    ~Sc68Plugin() override;
 
 public:
     void create(int sampleRate) override;
@@ -63,4 +75,4 @@ public:
 };
 
 
-#endif //OSP2_OPENMPT_PLUGIN_H
+#endif //OSP2_SC68_PLUGIN_H

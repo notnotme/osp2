@@ -36,9 +36,10 @@ std::string BarsVisualizer::getName() const {
 void BarsVisualizer::render(const VisualFrame &frame) {
     // (a) Per-bar target amplitude, time-domain (no FFT). Bucket the frameCount frames into BAR_COUNT
     // contiguous buckets and take the peak of |mono| per bucket — peak, not RMS, so transients pop.
-    // GAIN is an empirical visual boost: raw peaks rarely reach 1.0, so bars would otherwise stay
-    // short. When frameCount == 0 (nothing playing) every target stays 0, driving the decay to rest.
-    constexpr float GAIN = 1.4f;
+    // GAIN is an empirical visual boost so quiet modules aren't all stubs; kept modest so hotter,
+    // near-full-scale content (e.g. GME chiptunes) doesn't slam every bar to the ceiling. When
+    // frameCount == 0 (nothing playing) every target stays 0, driving the decay to rest.
+    constexpr float GAIN = 1.15f;
     std::array<float, BAR_COUNT> targets{};
     if (frame.frameCount > 0 && frame.samples != nullptr) {
         const int channels = std::max(frame.channels, 1);

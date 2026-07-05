@@ -20,6 +20,7 @@
 #ifndef OSP2_PLAYER_PLUGIN_H
 #define OSP2_PLAYER_PLUGIN_H
 
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -44,9 +45,9 @@ public:
     [[nodiscard]] virtual bool open(const std::filesystem::path &path) = 0;
     virtual void close() = 0;
 
-    // Audio thread. Fills `buffer` with `frames` frames of interleaved stereo float samples.
-    // Returns the number of frames written; < frames means end of track.
-    [[nodiscard]] virtual int decode(float *buffer, int frames) = 0;
+    // Audio thread. Fills `buffer` with `frames` frames of interleaved stereo signed-16-bit
+    // (int16) samples. Returns the number of frames written; < frames means end of track.
+    [[nodiscard]] virtual int decode(std::int16_t *buffer, int frames) = 0;
 
     [[nodiscard]] virtual std::string getName() const = 0;
     // Lowercase, without leading dot.

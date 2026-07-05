@@ -37,6 +37,47 @@ namespace {
     // std::visit helper: builds an overload set from lambdas (C++20 aggregate CTAD, no guide needed).
     template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 
+    // Shared building blocks for the per-plugin metadata tables (drawModuleMetadata,
+    // drawGmeMetadata, and future SID/sc68). Text rows are skipped when empty; count rows
+    // are always meaningful (0 = none). Call between BeginTable/EndTable.
+    void metadataTextRow(const char *label, const std::string &value) {
+        if (value.empty()) {
+            return;
+        }
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted(label);
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted(value.c_str());
+    }
+
+    void metadataCountRow(const char *label, const int value) {
+        ImGui::TableNextRow();
+        ImGui::TableNextColumn();
+        ImGui::TextUnformatted(label);
+        ImGui::TableNextColumn();
+        ImGui::Text("%d", value);
+    }
+
+    // A labelled, scrollable, word-wrapped block for often-multiline free text (song message,
+    // GME comment). Skipped when empty. TextUnformatted never treats the (user-authored) text as a
+    // printf format string. Not drawn inside a table.
+    void metadataTextBlock(const char *label, const std::string &text) {
+        if (text.empty()) {
+            return;
+        }
+        ImGui::Spacing();
+        ImGui::TextUnformatted(label);
+        if (ImGui::BeginChild("metadata_message", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders)) {
+            ImGui::PushTextWrapPos(0.0f);
+            ImGui::TextUnformatted(text.c_str());
+            ImGui::PopTextWrapPos();
+        }
+        ImGui::EndChild();
+    }
+
+    constexpr auto metadata_table_flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp;
+
     // Formats a duration as "m:ss" (zero-padded seconds). Negative or NaN clamps to "0:00".
     std::string formatTime(const double seconds) {
         if (std::isnan(seconds) || seconds < 0.0) {
@@ -496,56 +537,60 @@ void Gui::drawFileMetadata(const TrackMetadata &metadata) {
                 ImGui::TextDisabled("%s", text);
             },
             [this](const ModuleMetadata &m) { drawModuleMetadata(m); },
+            [this](const GmeMetadata &m) { drawGmeMetadata(m); },
+            [this](const SidMetadata &m) { drawSidMetadata(m); },
+            [this](const Sc68Metadata &m) { drawSc68Metadata(m); },
         }, metadata);
         ImGui::EndTabItem();
     }
 }
 
 void Gui::drawModuleMetadata(const ModuleMetadata &metadata) {
-    constexpr auto table_flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp;
-    if (ImGui::BeginTable("metadata_table", 2, table_flags)) {
-        // Text fields are skipped when empty; count fields are always meaningful (0 = none).
-        const auto text_row = [](const char *label, const std::string &value) {
-            if (value.empty()) {
-                return;
-            }
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            ImGui::TextUnformatted(label);
-            ImGui::TableNextColumn();
-            ImGui::TextUnformatted(value.c_str());
-        };
-        const auto count_row = [](const char *label, const int value) {
-            ImGui::TableNextRow();
-            ImGui::TableNextColumn();
-            ImGui::TextUnformatted(label);
-            ImGui::TableNextColumn();
-            ImGui::Text("%d", value);
-        };
-
-        text_row("Title", metadata.title);
-        text_row("Artist", metadata.artist);
-        text_row("Format", metadata.format);
-        text_row("Tracker", metadata.tracker);
-        count_row("Channels", metadata.channels);
-        count_row("Patterns", metadata.patterns);
-        count_row("Samples", metadata.samples);
-        count_row("Instruments", metadata.instruments);
-
+    if (ImGui::BeginTable("metadata_table", 2, metadata_table_flags)) {
+        metadataTextRow("Title", metadata.title);
+        metadataTextRow("Artist", metadata.artist);
+        metadataTextRow("Format", metadata.format);
+        metadataTextRow("Tracker", metadata.tracker);
+        metadataCountRow("Channels", metadata.channels);
+        metadataCountRow("Patterns", metadata.patterns);
+        metadataCountRow("Samples", metadata.samples);
+        metadataCountRow("Instruments", metadata.instruments);
         ImGui::EndTable();
     }
+    metadataTextBlock("Message", metadata.message);
+}
 
-    // Song message: often multiline. Scrollable, word-wrapped child; TextUnformatted never
-    // treats the (user-authored) message as a printf format string.
-    if (!metadata.message.empty()) {
-        ImGui::Spacing();
-        ImGui::TextUnformatted("Message");
-        if (ImGui::BeginChild("metadata_message", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders)) {
-            ImGui::PushTextWrapPos(0.0f);
-            ImGui::TextUnformatted(metadata.message.c_str());
-            ImGui::PopTextWrapPos();
-        }
-        ImGui::EndChild();
+void Gui::drawGmeMetadata(const GmeMetadata &metadata) {
+    if (ImGui::BeginTable("metadata_table", 2, metadata_table_flags)) {
+        metadataTextRow("Game", metadata.game);
+        metadataTextRow("System", metadata.system);
+        metadataTextRow("Author", metadata.author);
+        metadataTextRow("Copyright", metadata.copyright);
+        metadataCountRow("Tracks", metadata.trackCount);
+        ImGui::EndTable();
+    }
+    metadataTextBlock("Comment", metadata.comment);
+}
+
+void Gui::drawSidMetadata(const SidMetadata &metadata) {
+    if (ImGui::BeginTable("metadata_table", 2, metadata_table_flags)) {
+        metadataTextRow("Title", metadata.title);
+        metadataTextRow("Author", metadata.author);
+        metadataTextRow("Released", metadata.released);
+        metadataTextRow("SID model", metadata.sidModel);
+        metadataTextRow("Clock", metadata.clock);
+        ImGui::EndTable();
+    }
+}
+
+void Gui::drawSc68Metadata(const Sc68Metadata &metadata) {
+    if (ImGui::BeginTable("metadata_table", 2, metadata_table_flags)) {
+        metadataTextRow("Title", metadata.title);
+        metadataTextRow("Author", metadata.author);
+        metadataTextRow("Composer", metadata.composer);
+        metadataTextRow("Hardware", metadata.hardware);
+        metadataTextRow("Ripper", metadata.ripper);
+        ImGui::EndTable();
     }
 }
 

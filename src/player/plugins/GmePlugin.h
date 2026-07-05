@@ -17,34 +17,38 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef OSP2_OPENMPT_PLUGIN_H
-#define OSP2_OPENMPT_PLUGIN_H
+#ifndef OSP2_GME_PLUGIN_H
+#define OSP2_GME_PLUGIN_H
 
 #include <cstdint>
 #include <memory>
 
 #include "../PlayerPlugin.h"
 
-namespace openmpt { class module; }
+struct Music_Emu;
 
 
-class OpenMptPlugin final : public PlayerPlugin {
+class GmePlugin final : public PlayerPlugin {
 private:
     int m_sampleRate;
     std::vector<std::string> m_extensions;
-    std::unique_ptr<openmpt::module> m_module;
-    // Captured once in open() so getMetadata() never touches the audio-thread-shared module.
+    // Custom deleter (&gme_delete, set in the .cpp ctor) so the emulator is torn down via RAII.
+    std::unique_ptr<Music_Emu, void (*)(Music_Emu *)> m_emu;
+    // Captured once in open() so getMetadata() never touches the audio-thread-shared emulator.
     TrackMetadata m_metadata;
-    // Cached render settings, re-applied to each module on open(); m_interpolation is an index
-    // into the Interpolation enum labels (see getSettings()).
-    int m_stereoSeparation;
-    int m_interpolation;
+    // Cached in open() so getTitle()/getDuration() never touch the shared emulator.
+    std::string m_title;
+    double m_duration;
+    // Cached render settings, re-applied to each emulator on open(). m_stereoDepth is a 0..100
+    // percent (mapped to gme's 0.0..1.0 depth); m_accuracy is 0/1 (see getSettings()).
+    int m_stereoDepth;
+    int m_accuracy;
 
 public:
-    OpenMptPlugin(const OpenMptPlugin &) = delete;
-    OpenMptPlugin &operator=(const OpenMptPlugin &) = delete;
-    explicit OpenMptPlugin();
-    ~OpenMptPlugin() override;
+    GmePlugin(const GmePlugin &) = delete;
+    GmePlugin &operator=(const GmePlugin &) = delete;
+    explicit GmePlugin();
+    ~GmePlugin() override;
 
 public:
     void create(int sampleRate) override;
@@ -63,4 +67,4 @@ public:
 };
 
 
-#endif //OSP2_OPENMPT_PLUGIN_H
+#endif //OSP2_GME_PLUGIN_H
