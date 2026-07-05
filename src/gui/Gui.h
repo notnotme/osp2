@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "ButtonId.h"
+#include "Theme.h"
 #include "UiActions.h"
 #include "UiState.h"
 #include "../filesystem/FileEntry.h"
@@ -46,6 +47,7 @@ private:
 
     std::unordered_map<std::string, Sprite> m_sprites;
     GLuint m_texture;
+    Theme m_theme;
 
 public:
     Gui(const Gui &) = delete;
@@ -68,6 +70,7 @@ private:
 public:
     void initialize(const std::string &basePath);
     void finalize();
+    void applyTheme(Theme theme);
     void drawUserInterface(const UiState &state, const UiActions &actions);
 };
 

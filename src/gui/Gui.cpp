@@ -26,7 +26,7 @@
 
 
 Gui::Gui()
-    : m_texture(0) {}
+    : m_texture(0), m_theme(Theme::DARK) {}
 
 void Gui::initialize(const std::string &basePath) {
     const auto bin_path = basePath + "sprites/sprites.bin";
@@ -67,10 +67,47 @@ void Gui::initialize(const std::string &basePath) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, image->w, image->h, 0, GL_RGBA, GL_UNSIGNED_BYTE, image->pixels);
     SDL_FreeSurface(image);
+
+    // Shared style metrics are theme-independent: set them once here. applyTheme only
+    // swaps colors afterwards, so these survive runtime theme switches.
+    auto &style = ImGui::GetStyle();
+    style.WindowRounding = 0.0f;
+    style.ChildRounding = 6.0f;
+    style.FrameRounding = 6.0f;
+    style.PopupRounding = 6.0f;
+    style.GrabRounding = 6.0f;
+    style.TabRounding = 6.0f;
+    style.ScrollbarRounding = 6.0f;
+    style.WindowPadding = ImVec2(12.0f, 12.0f);
+    style.FramePadding = ImVec2(10.0f, 8.0f);
+    style.ItemSpacing = ImVec2(10.0f, 8.0f);
+    style.ItemInnerSpacing = ImVec2(8.0f, 6.0f);
+    style.ScrollbarSize = 14.0f;
+    style.GrabMinSize = 12.0f;
+    style.WindowBorderSize = 0.0f;
+    style.ChildBorderSize = 1.0f;
+    style.FrameBorderSize = 0.0f;
+
+    applyTheme(m_theme);
 }
 
 void Gui::finalize() {
     glDeleteTextures(1, &m_texture);
+}
+
+void Gui::applyTheme(const Theme theme) {
+    m_theme = theme;
+    switch (theme) {
+        case Theme::DARK:
+            ImGui::StyleColorsDark();
+            break;
+        case Theme::LIGHT:
+            ImGui::StyleColorsLight();
+            break;
+        case Theme::CLASSIC:
+            ImGui::StyleColorsClassic();
+            break;
+    }
 }
 
 void Gui::drawMainMenuBar(const std::string &file) {
