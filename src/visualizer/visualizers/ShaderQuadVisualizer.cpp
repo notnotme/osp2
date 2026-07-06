@@ -31,7 +31,7 @@ namespace {
     // #version 330 core: the same version main.cpp feeds ImGui_ImplOpenGL3_Init, and proven portable
     // on both desktop GL and the Switch here. Attribute-less: the fullscreen triangle is derived from
     // gl_VertexID, so no VBO/attributes are needed (only a bound VAO, which core profile still requires).
-    const char *const kVertexShader = R"(#version 330 core
+    const auto kVertexShader = R"(#version 330 core
 out vec2 v_uv;
 void main() {
     vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
@@ -44,7 +44,7 @@ void main() {
     // advances faster when the music is loud, see render()), so the whole field visibly churns with the
     // music. u_level (a smoothed audio envelope) additionally swells the radial ripple and lifts the
     // brightness. Deliberately cheap (a handful of sines, no loops, no derivatives) so it's Switch-safe.
-    const char *const kFragmentShader = R"(#version 330 core
+    const auto kFragmentShader = R"(#version 330 core
 in vec2 v_uv;
 out vec4 frag_color;
 uniform float u_time;
@@ -149,9 +149,9 @@ void ShaderQuadVisualizer::render(const VisualFrame &frame) {
 
     // Instantaneous loudness: mean of |mono| over the sample window, with an empirical gain. Raw, this
     // fluctuates every frame and makes the visual flicker on transients, so we don't feed it directly.
-    constexpr float GAIN = 4.0f;
     float target = 0.0f;
     if (frame.frameCount > 0 && frame.samples != nullptr) {
+        constexpr float GAIN = 4.0f;
         const int channels = std::max(frame.channels, 1);
         float sum = 0.0f;
         for (std::size_t f = 0; f < frame.frameCount; ++f) {
@@ -201,7 +201,7 @@ void ShaderQuadVisualizer::render(const VisualFrame &frame) {
 }
 
 void ShaderQuadVisualizer::glDrawCallback(const ImDrawList * /*parentList*/, const ImDrawCmd *cmd) {
-    auto *self = static_cast<ShaderQuadVisualizer *>(cmd->UserCallbackData);
+    const auto *self = static_cast<ShaderQuadVisualizer *>(cmd->UserCallbackData);
 
     // Confine the draw to the reserved rect: viewport places the fullscreen triangle over it, scissor
     // clips anything outside it. Both use the same Y-flipped framebuffer rect captured in render().

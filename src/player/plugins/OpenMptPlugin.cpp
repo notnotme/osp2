@@ -144,7 +144,7 @@ void OpenMptPlugin::applySetting(const std::string &key, const int value) {
             m_module->set_render_param(openmpt::module::RENDER_STEREOSEPARATION_PERCENT, m_stereoSeparation);
         }
     } else if (key == "interpolation") {
-        m_interpolation = (value >= 0 && value <= 4) ? value : 0;
+        m_interpolation = value >= 0 && value <= 4 ? value : 0;
         if (m_module) {
             m_module->set_render_param(
                 openmpt::module::RENDER_INTERPOLATIONFILTER_LENGTH, interpolationLength(m_interpolation)

@@ -86,7 +86,7 @@ private:
         std::size_t activeVisualizer,
         const std::function<void(std::size_t)> &onSelectVisualizer
     );
-    void drawAboutPopup();
+    void drawAboutPopup() const;
     void drawPluginPopups(
         const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings,
         const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange,
@@ -109,7 +109,7 @@ private:
     void drawSidMetadata(const SidMetadata &metadata);
     void drawSc68Metadata(const Sc68Metadata &metadata);
     void drawTabPlaylist();
-    void drawPlayerBar(const PlaybackStatus &status, const std::function<void(ButtonId)> &onButtonClick);
+    void drawPlayerBar(const PlaybackStatus &status, const std::function<void(ButtonId)> &onButtonClick) const;
 
 public:
     void initialize();

@@ -80,7 +80,7 @@ void CursorEmulator::update(ImGuiIO &io) {
         SDL_GameControllerGetAxis(m_pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > kTriggerThreshold;
     const bool fastHeld = SDL_GameControllerGetButton(m_pad, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) != 0 ||
         SDL_GameControllerGetAxis(m_pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > kTriggerThreshold;
-    const float speedMul = slowHeld ? kSlowMul : (fastHeld ? kFastMul : 1.0f);
+    const float speedMul = slowHeld ? kSlowMul : fastHeld ? kFastMul : 1.0f;
 
     // SDL LEFTY is positive when the stick is pushed down and screen Y grows downward, so adding the
     // scaled raw deflection directly moves the cursor in the intuitive direction on both axes.

@@ -41,7 +41,7 @@ namespace {
     }
 
     // libcurl write callback: appends the received bytes to the std::string handed via CURLOPT_WRITEDATA.
-    size_t writeToString(char *ptr, size_t size, size_t nmemb, void *userdata) {
+    size_t writeToString(char *ptr, const size_t size, const size_t nmemb, void *userdata) {
         const size_t byte_count = size * nmemb;
         auto *accumulator = static_cast<std::string *>(userdata);
         accumulator->append(ptr, byte_count);
@@ -50,7 +50,7 @@ namespace {
 
     // libcurl write callback: streams received bytes to the std::ofstream handed via CURLOPT_WRITEDATA.
     // Returning a short count aborts the transfer (used to surface a disk-write failure to curl).
-    size_t writeToFile(char *ptr, size_t size, size_t nmemb, void *userdata) {
+    size_t writeToFile(char *ptr, const size_t size, const size_t nmemb, void *userdata) {
         const size_t byte_count = size * nmemb;
         auto *out = static_cast<std::ofstream *>(userdata);
         out->write(ptr, static_cast<std::streamsize>(byte_count));
@@ -67,7 +67,7 @@ namespace {
     // to the server actively rejecting a command. Used to decide whether the LIST fallback is worth it:
     // a rejected MLSD command means the connection is alive, so LIST is cheap; a dead connection must
     // NOT be retried, else we burn the connect/stall timeout a second time and double the UI freeze.
-    bool isConnectionFailure(CURLcode code) {
+    bool isConnectionFailure(const CURLcode code) {
         return code == CURLE_COULDNT_RESOLVE_PROXY || code == CURLE_COULDNT_RESOLVE_HOST ||
             code == CURLE_COULDNT_CONNECT || code == CURLE_OPERATION_TIMEDOUT;
     }
@@ -93,9 +93,9 @@ namespace {
         size_t start = 0;
         while (start < facts.size()) {
             const auto semicolon = facts.find(';', start);
-            const auto end = (semicolon == std::string::npos) ? facts.size() : semicolon;
+            const auto end = semicolon == std::string::npos ? facts.size() : semicolon;
             const std::string fact = facts.substr(start, end - start);
-            start = (semicolon == std::string::npos) ? facts.size() : semicolon + 1;
+            start = semicolon == std::string::npos ? facts.size() : semicolon + 1;
 
             const auto equals = fact.find('=');
             if (equals == std::string::npos) {
@@ -109,7 +109,7 @@ namespace {
                 if (value == "cdir" || value == "pdir") {
                     return LineOutcome::Skip; // "." / ".." self and parent references
                 }
-                is_directory = (value == "dir");
+                is_directory = value == "dir";
             } else if (key == "size") {
                 file_size = static_cast<std::int64_t>(std::strtoll(value.c_str(), nullptr, 10));
             }
@@ -138,10 +138,10 @@ namespace {
         std::vector<FileEntry> entries;
         size_t start = 0;
         while (start < response.size()) {
-            auto newline = response.find('\n', start);
-            const auto end = (newline == std::string::npos) ? response.size() : newline;
+            const auto newline = response.find('\n', start);
+            const auto end = newline == std::string::npos ? response.size() : newline;
             std::string line = response.substr(start, end - start);
-            start = (newline == std::string::npos) ? response.size() : newline + 1;
+            start = newline == std::string::npos ? response.size() : newline + 1;
 
             if (!line.empty() && line.back() == '\r') {
                 line.pop_back();
@@ -223,7 +223,7 @@ namespace {
             return LineOutcome::Skip;
         }
 
-        const bool is_directory = (type == 'd');
+        const bool is_directory = type == 'd';
         const auto file_size = static_cast<std::int64_t>(std::strtoll(fields[4].c_str(), nullptr, 10));
         out = FileEntry{name, is_directory ? 0 : file_size, "", is_directory};
         return LineOutcome::Parsed;
@@ -235,10 +235,10 @@ namespace {
         std::vector<FileEntry> entries;
         size_t start = 0;
         while (start < response.size()) {
-            auto newline = response.find('\n', start);
-            const auto end = (newline == std::string::npos) ? response.size() : newline;
+            const auto newline = response.find('\n', start);
+            const auto end = newline == std::string::npos ? response.size() : newline;
             std::string line = response.substr(start, end - start);
-            start = (newline == std::string::npos) ? response.size() : newline + 1;
+            start = newline == std::string::npos ? response.size() : newline + 1;
 
             if (!line.empty() && line.back() == '\r') {
                 line.pop_back();
@@ -326,7 +326,7 @@ bool FtpDataSource::ensureHandle() {
     return true;
 }
 
-std::string FtpDataSource::buildUrl(const std::filesystem::path &path, bool trailingSlash) const {
+std::string FtpDataSource::buildUrl(const std::filesystem::path &path, const bool trailingSlash) const {
     std::string url = "ftp://" + m_host;
     for (const auto &component : path) {
         const std::string part = component.string();
@@ -386,7 +386,7 @@ std::optional<std::string> FtpDataSource::readListingCache(const std::filesystem
 
     // Read exactly the expected size and verify the count: a short read (I/O error, or the file
     // shrinking under us) yields fewer bytes, which we reject rather than serve a truncated listing.
-    std::string content(static_cast<std::size_t>(expected), '\0');
+    std::string content(expected, '\0');
     in.read(content.data(), static_cast<std::streamsize>(expected));
     if (static_cast<std::uintmax_t>(in.gcount()) != expected) {
         return std::nullopt;
@@ -477,44 +477,48 @@ std::optional<std::vector<FileEntry>> FtpDataSource::listDirectory(const std::fi
         if (const CURLcode result = curl_easy_perform(m_curl); result == CURLE_OK) {
             writeListingCache(cacheFile, response); // best-effort; refreshes the mtime/TTL
             return parseMlsdListing(response);
-        } else if (result == CURLE_ABORTED_BY_CALLBACK) {
-            // The user cancelled: abort the navigation entirely and stay put, rather than falling
-            // back to a stale cache (which would drop them inside the folder showing old data).
-            SDL_Log("FtpDataSource: listing cancelled for '%s'", path.string().c_str());
-            return std::nullopt;
-        } else if (!isConnectionFailure(result)) {
-            // MLSD reached the server and was rejected (server lacks it): the control connection is
-            // alive, so a LIST retry is cheap. On a dead connection we skip straight to the stale-cache
-            // fallback instead — retrying would burn the connect/stall timeout a second time.
-            SDL_Log(
-                "FtpDataSource: MLSD failed for '%s': %s — trying LIST",
-                path.string().c_str(),
-                curl_easy_strerror(result)
-            );
-
-            // LIST fallback: a plain LIST on the directory URL (no CUSTOMREQUEST). NOT cached — the
-            // .listing cache stores raw MLSD text and the cache-hit path re-parses it with
-            // parseMlsdListing, so caching LIST text there would corrupt cache-hit parsing.
-            response.clear();
-            curl_easy_reset(m_curl);
-            applyCommonOptions();
-
-            curl_easy_setopt(m_curl, CURLOPT_URL, url.c_str());
-            curl_easy_setopt(m_curl, CURLOPT_WRITEFUNCTION, writeToString);
-            curl_easy_setopt(m_curl, CURLOPT_WRITEDATA, &response);
-
-            if (const CURLcode listResult = curl_easy_perform(m_curl); listResult == CURLE_OK) {
-                return parseListListing(response);
-            } else if (listResult == CURLE_ABORTED_BY_CALLBACK) {
+        } else {
+            if (result == CURLE_ABORTED_BY_CALLBACK) {
+                // The user cancelled: abort the navigation entirely and stay put, rather than falling
+                // back to a stale cache (which would drop them inside the folder showing old data).
                 SDL_Log("FtpDataSource: listing cancelled for '%s'", path.string().c_str());
                 return std::nullopt;
-            } else {
-                SDL_Log(
-                    "FtpDataSource: LIST failed for '%s': %s", path.string().c_str(), curl_easy_strerror(listResult)
-                );
             }
-        } else {
-            SDL_Log("FtpDataSource: MLSD failed for '%s': %s", path.string().c_str(), curl_easy_strerror(result));
+            if (!isConnectionFailure(result)) {
+                // MLSD reached the server and was rejected (server lacks it): the control connection is
+                // alive, so a LIST retry is cheap. On a dead connection we skip straight to the stale-cache
+                // fallback instead — retrying would burn the connect/stall timeout a second time.
+                SDL_Log(
+                    "FtpDataSource: MLSD failed for '%s': %s — trying LIST",
+                    path.string().c_str(),
+                    curl_easy_strerror(result)
+                );
+
+                // LIST fallback: a plain LIST on the directory URL (no CUSTOMREQUEST). NOT cached — the
+                // .listing cache stores raw MLSD text and the cache-hit path re-parses it with
+                // parseMlsdListing, so caching LIST text there would corrupt cache-hit parsing.
+                response.clear();
+                curl_easy_reset(m_curl);
+                applyCommonOptions();
+
+                curl_easy_setopt(m_curl, CURLOPT_URL, url.c_str());
+                curl_easy_setopt(m_curl, CURLOPT_WRITEFUNCTION, writeToString);
+                curl_easy_setopt(m_curl, CURLOPT_WRITEDATA, &response);
+
+                if (const CURLcode listResult = curl_easy_perform(m_curl); listResult == CURLE_OK) {
+                    return parseListListing(response);
+                } else {
+                    if (listResult == CURLE_ABORTED_BY_CALLBACK) {
+                        SDL_Log("FtpDataSource: listing cancelled for '%s'", path.string().c_str());
+                        return std::nullopt;
+                    }
+                    SDL_Log(
+                        "FtpDataSource: LIST failed for '%s': %s", path.string().c_str(), curl_easy_strerror(listResult)
+                    );
+                }
+            } else {
+                SDL_Log("FtpDataSource: MLSD failed for '%s': %s", path.string().c_str(), curl_easy_strerror(result));
+            }
         }
     }
 

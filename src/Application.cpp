@@ -160,7 +160,7 @@ void Application::update() {
     // Resolve a pending request first: a successful play() clears the track-ended flag,
     // so an explicit click made just as the current track ends wins over auto-advance
     // (rather than being clobbered by it when both land in the same frame).
-    if (auto r = m_fileSystem.consumeFetchResult()) {
+    if (const auto r = m_fileSystem.consumeFetchResult()) {
         if (r->succeeded && m_player.play(r->localPath)) {
             m_lastRequestedName.clear();
         } else if (m_advanceDirection != 0) {
@@ -175,7 +175,7 @@ void Application::update() {
 
     // Refetch metadata only when the playing path changes (manual play, auto-advance, stop),
     // not per frame — getMetadata() locks the audio mutex. A cleared path resets to monostate.
-    if (auto path = m_player.getCurrentPath(); path != m_metadataPath) {
+    if (const auto path = m_player.getCurrentPath(); path != m_metadataPath) {
         m_metadataPath = path;
         m_trackMetadata = m_player.getMetadata();
     }

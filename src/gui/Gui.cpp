@@ -296,7 +296,7 @@ void Gui::drawTopBar(
     }
 }
 
-void Gui::drawAboutPopup() {
+void Gui::drawAboutPopup() const {
     const auto center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 
@@ -636,7 +636,7 @@ void Gui::drawTabPlaylist() {
     }
 }
 
-void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(ButtonId)> &onButtonClick) {
+void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(ButtonId)> &onButtonClick) const {
     const auto item_spacing_x = ImGui::GetStyle().ItemSpacing.x;
     constexpr auto row_spacing = 4.0f;
     constexpr auto button_frame_padding = 4.0f;
@@ -646,8 +646,8 @@ void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(B
     // Vertically center the three rows (track line, progress, transport) in the bar so the
     // transport buttons keep a clear margin above the bar's bottom edge. The progress row is as
     // tall as the timer labels; its playhead knob is smaller, so text_height sizes the row.
+    constexpr auto button_height = button_size.y + button_frame_padding * 2.0f;
     const auto text_height = ImGui::GetTextLineHeight();
-    const auto button_height = button_size.y + button_frame_padding * 2.0f;
     const auto content_height = text_height + row_spacing + text_height + row_spacing + button_height;
     const auto slack = ImGui::GetContentRegionAvail().y - content_height;
     if (slack > 0.0f) {
@@ -679,7 +679,6 @@ void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(B
     ImGui::SameLine();
 
     constexpr auto line_half_height = 1.5f; // 3 px-thick track line
-    constexpr auto knob_radius = 6.0f;
     const auto track_width = ImGui::GetContentRegionAvail().x - duration_width - item_spacing_x;
     const auto track_origin = ImGui::GetCursorScreenPos();
     const auto track_y = track_origin.y + text_height * 0.5f;
@@ -696,6 +695,7 @@ void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(B
     // the row is just the empty track line (no knob). Same "track loaded" test as the title row above.
     // The knob's travel is inset by its radius so it never overflows the line ends or the timer labels.
     if (status.state != PlayerState::STOPPED && !status.fileName.empty()) {
+        constexpr auto knob_radius = 6.0f;
         const auto knob_x = track_x0 + knob_radius + (track_width - knob_radius * 2.0f) * fraction;
         const auto accent = ImGui::GetColorU32(ImGuiCol_PlotHistogram);
         draw_list->AddRectFilled(
@@ -716,8 +716,8 @@ void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(B
     // Transport: previous, play/pause, stop, next, centered as a group.
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(button_frame_padding, button_frame_padding));
 
+    constexpr auto total_buttons = button_size.x * 4.0f;
     const auto &transport_style = ImGui::GetStyle();
-    const auto total_buttons = button_size.x * 4.0f;
     const auto blank_space = transport_style.FramePadding.x * 8.0f + transport_style.ItemSpacing.x * 3.0f;
     const auto start_x = (ImGui::GetContentRegionAvail().x - (total_buttons + blank_space)) / 2.0f;
     if (start_x > 0.0f) {
@@ -784,7 +784,7 @@ void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
     constexpr auto player_bar_height = 140.0f;
     const auto panes_height = available.y - style.ItemSpacing.y - player_bar_height;
     const auto left_width = (available.x - style.ItemSpacing.x) * 0.45f;
-    const auto right_width = (available.x - style.ItemSpacing.x) - left_width;
+    const auto right_width = available.x - style.ItemSpacing.x - left_width;
 
     if (ImGui::BeginChild("left_pane", ImVec2(left_width, panes_height), ImGuiChildFlags_Borders)) {
         drawCurrentPath(state.path);

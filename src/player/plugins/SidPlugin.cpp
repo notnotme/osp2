@@ -87,7 +87,7 @@ namespace {
         if (!file.is_open()) {
             return {}; // absent ROM is expected (they are optional) — no log noise
         }
-        std::vector<std::uint8_t> data{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+        std::vector<std::uint8_t> data{std::istreambuf_iterator(file), std::istreambuf_iterator<char>()};
         if (data.size() != expectedSize) {
             SDL_Log(
                 "SidPlugin: ignoring ROM %s (expected %zu bytes, got %zu)",
@@ -152,11 +152,11 @@ bool SidPlugin::configure() {
     cfg.sidEmulation = m_builder.get();
     if (m_model != 0) {
         cfg.forceSidModel = true;
-        cfg.defaultSidModel = (m_model == 2) ? SidConfig::MOS8580 : SidConfig::MOS6581;
+        cfg.defaultSidModel = m_model == 2 ? SidConfig::MOS8580 : SidConfig::MOS6581;
     }
     if (m_clock != 0) {
         cfg.forceC64Model = true;
-        cfg.defaultC64Model = (m_clock == 2) ? SidConfig::NTSC : SidConfig::PAL;
+        cfg.defaultC64Model = m_clock == 2 ? SidConfig::NTSC : SidConfig::PAL;
     }
     if (!m_engine->config(cfg)) {
         SDL_Log("SidPlugin: engine config failed: %s", m_engine->error());
@@ -175,7 +175,7 @@ bool SidPlugin::open(const std::filesystem::path &path) {
             SDL_Log("SidPlugin: cannot open %s", path.c_str());
             return false;
         }
-        const std::vector<char> data{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+        const std::vector<char> data{std::istreambuf_iterator(file), std::istreambuf_iterator<char>()};
 
         auto tune = std::make_unique<SidTune>(
             reinterpret_cast<const uint_least8_t *>(data.data()), static_cast<uint_least32_t>(data.size())
@@ -277,8 +277,7 @@ int SidPlugin::decode(std::int16_t *buffer, const int frames) {
         if (m_mixBuffer.size() < needed) {
             m_mixBuffer.resize(needed); // safety net; open() pre-sizes so this should never fire
         }
-        const unsigned int mixed =
-            m_engine->mix(reinterpret_cast<short *>(m_mixBuffer.data()), static_cast<unsigned int>(samples));
+        const unsigned int mixed = m_engine->mix(m_mixBuffer.data(), static_cast<unsigned int>(samples));
         m_mixFrames = mixed / CHANNELS;
         m_mixPos = 0;
     }

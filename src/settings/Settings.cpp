@@ -23,6 +23,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <ranges>
 #include <string>
 #include <system_error>
 
@@ -146,7 +147,7 @@ int Settings::getInt(const std::string &section, const std::string &key, const i
 std::vector<std::string> Settings::getSectionNames(const std::string &prefix) const {
     std::vector<std::string> names;
     // m_data is a std::map, so iteration is already in sorted section order.
-    for (const auto &[section, entries] : m_data) {
+    for (const auto &section : m_data | std::views::keys) {
         if (section.rfind(prefix, 0) == 0) {
             names.push_back(section);
         }

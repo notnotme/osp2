@@ -134,7 +134,7 @@ bool Sc68Plugin::open(const std::filesystem::path &path) {
             SDL_Log("Sc68Plugin: cannot open %s", path.c_str());
             return false;
         }
-        data.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+        data.assign(std::istreambuf_iterator(file), std::istreambuf_iterator<char>());
     } catch (const std::exception &e) {
         SDL_Log("Sc68Plugin: failed to read %s: %s", path.c_str(), e.what());
         return false;
@@ -209,8 +209,7 @@ int Sc68Plugin::decode(std::int16_t *buffer, const int frames) {
     int emptyPasses = 0;
     while (written < frames) {
         int n = frames - written; // frames still needed; sc68 writes ≤ 4*n bytes from the cursor
-        const int code =
-            sc68_process(m_sc68, static_cast<void *>(buffer + static_cast<std::size_t>(written) * CHANNELS), &n);
+        const int code = sc68_process(m_sc68, buffer + static_cast<std::size_t>(written) * CHANNELS, &n);
         // SC68_ERROR is ~0 (every bit set), so a fatal result must be tested with equality — a bitwise
         // `code & SC68_ERROR` would also match the normal SC68_END/SC68_CHANGE/SC68_IDLE status bits.
         if (code == SC68_ERROR) {

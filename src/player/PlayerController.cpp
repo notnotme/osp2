@@ -165,7 +165,7 @@ PlaybackStatus PlayerController::getStatus() const {
     // A track that ended with no next to auto-advance to stays STOPPED with its plugin still loaded
     // (teardown is main-thread only). Honor PlaybackStatus's "0 when stopped" contract so the timer
     // resets to 0:00 rather than freezing on the finished track's final position/duration.
-    const bool stopped = (m_state == PlayerState::STOPPED);
+    const bool stopped = m_state == PlayerState::STOPPED;
     return {
         m_state,
         m_activePlugin->getTitle(),
