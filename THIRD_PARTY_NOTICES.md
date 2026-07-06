@@ -9,6 +9,11 @@ OSP2 is licensed under the GPL-3.0-or-later (see `LICENSE`). It includes or link
 - **Dear ImGui** (git submodule, `external/imgui`) — MIT License, Copyright (c) 2014-2026 Omar Cornut — https://github.com/ocornut/imgui — license text in `external/imgui/LICENSE.txt`. Bundles the stb libraries (public domain / MIT).
 - **glad** (OpenGL loader) — MIT License, Copyright (c) 2013-2021 David Herberth — https://github.com/Dav1dde/glad
 - **libopenmpt** — BSD-3-Clause License — https://lib.openmpt.org/
+- **libgme** (game-music-emu) — LGPL-2.1-or-later; the optional MAME YM2612 emulator core, if built in, makes that configuration GPL-2.0-or-later — https://github.com/libgme/game-music-emu
+- **libsidplayfp** — GPL-2.0-or-later — https://github.com/libsidplayfp/libsidplayfp
+- **libresidfp** (reSID-fp SID emulation engine, linked via libsidplayfp) — GPL-2.0-or-later — https://github.com/libsidplayfp/libresidfp
+- **sc68** (`libsc68` + `file68` + `unice68`) — GPL-3.0-or-later, Copyright (c) 1998-2016 Benjamin Gerard — https://sourceforge.net/projects/sc68/
+- **libcurl** — curl License (a permissive MIT/X-derived license; SPDX identifier `curl`) — https://curl.se/
 
 ## Fonts (`romfs/font/`)
 
