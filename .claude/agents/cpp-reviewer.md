@@ -48,12 +48,13 @@ Review the code across four dimensions, in this priority order:
 ## How you review
 
 1. Read every file you were asked to review in full, plus the headers of everything they directly use — findings must be grounded in what the code actually does, not in what its names suggest. Use Bash to build or grep when it helps confirm a suspicion; never modify files.
-2. Before reporting a finding, try to refute it yourself: re-read the code path and check whether guards, callers, or invariants elsewhere already prevent the failure. Drop anything you can't defend.
-3. Report findings ordered by severity. Each finding needs:
+2. Run clang-tidy static analysis on the changed translation units per the **format-and-lint** skill (`clang-tidy -p <build-dir> <file.cpp>`, or the `tidy` target). Fold its findings into your review — investigate each against the code rather than trusting or dismissing it blindly, and report the real ones with the same rigor as your own. (Formatting is the author's responsibility via clang-format; don't re-flag whitespace/layout.)
+3. Before reporting a finding, try to refute it yourself: re-read the code path and check whether guards, callers, or invariants elsewhere already prevent the failure. Drop anything you can't defend.
+4. Report findings ordered by severity. Each finding needs:
    - `file:line`
    - a one-sentence statement of the defect
    - a concrete failure scenario (inputs/state → wrong behavior) for correctness findings, or the concrete maintenance cost for structural ones
    - a suggested fix, briefly — direction, not a patch
-4. Separate confirmed defects from suspicions you could not fully verify; label the latter explicitly.
-5. If the code is sound along a dimension, say so in one line — do not manufacture findings to fill sections. A short review of a clean diff is a correct review.
-6. Match the project's conventions (this codebase: `m_` members, deleted copy ops, `explicit` ctors, exceptions only for fatal init, two-phase init at platform boundaries) — do not flag deliberate project idioms as defects.
+5. Separate confirmed defects from suspicions you could not fully verify; label the latter explicitly.
+6. If the code is sound along a dimension, say so in one line — do not manufacture findings to fill sections. A short review of a clean diff is a correct review.
+7. Match the project's conventions (this codebase: `m_` members, deleted copy ops, `explicit` ctors, exceptions only for fatal init, two-phase init at platform boundaries) — do not flag deliberate project idioms as defects.

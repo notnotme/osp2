@@ -38,7 +38,7 @@ Keep desktop and Switch paths working when touching CMakeLists.txt or platform-d
 
 The `run_program_on_switch` skill deploys the `.nro` to real hardware over the network — **always ask the user before running it**; the Switch must be on the netloader screen and the user decides when to test on hardware.
 
-There are no tests or linters configured. New source files must be added manually to the `add_executable` list in CMakeLists.txt.
+There are no tests configured. New source files must be added manually to the `add_executable` list in CMakeLists.txt. Formatting and static analysis are configured via `.clang-format` and `.clang-tidy` (scoped to `src/`, exported from CLion) — see the `format-and-lint` skill for the tools and `format` / `format-check` / `tidy` targets. The cpp-expert agent formats its output; the cpp-reviewer agent runs clang-tidy.
 
 ## License headers
 
