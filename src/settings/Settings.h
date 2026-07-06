@@ -52,7 +52,8 @@ public:
     void load(const std::filesystem::path &path);
     void save() const;
 
-    [[nodiscard]] std::string getString(const std::string &section, const std::string &key, const std::string &fallback) const;
+    [[nodiscard]] std::string
+    getString(const std::string &section, const std::string &key, const std::string &fallback) const;
     [[nodiscard]] int getInt(const std::string &section, const std::string &key, int fallback) const;
     // Section names beginning with `prefix` (the prefix is included in each returned name), in the
     // stored sorted order. Lets main.cpp discover user-defined [source.NAME] sections without Settings

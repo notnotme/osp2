@@ -27,10 +27,10 @@
 
 struct PlaybackStatus {
     PlayerState state;
-    std::string title;        // from decoder metadata, may be empty
-    std::string fileName;     // basename of the open file
-    double positionSeconds;   // 0 when stopped
-    double durationSeconds;   // 0 when stopped/unknown
+    std::string title;      // from decoder metadata, may be empty
+    std::string fileName;   // basename of the open file
+    double positionSeconds; // 0 when stopped
+    double durationSeconds; // 0 when stopped/unknown
 };
 
 

@@ -25,15 +25,20 @@
 #include <vector>
 
 
-struct IntRange    { int min; int max; };
+struct IntRange {
+    int min;
+    int max;
+};
 // value (in PluginSetting) is an index into labels: 0 selects labels[0], and so on.
-struct EnumOptions { std::vector<std::string> labels; };
+struct EnumOptions {
+    std::vector<std::string> labels;
+};
 
 struct PluginSetting {
-    std::string key;                             // INI key, e.g. "stereo_separation"
-    std::string label;                           // UI label, e.g. "Stereo separation"
-    std::variant<IntRange, EnumOptions> shape;   // drives the widget in 6c
-    int value;                                   // current value
+    std::string key;                           // INI key, e.g. "stereo_separation"
+    std::string label;                         // UI label, e.g. "Stereo separation"
+    std::variant<IntRange, EnumOptions> shape; // drives the widget in 6c
+    int value;                                 // current value
 };
 
 

@@ -36,8 +36,8 @@ public:
     explicit VisualizerPlugin() = default;
     virtual ~VisualizerPlugin() = default;
 
-    virtual void create() = 0;                    // allocate GL objects if any (ImGui plugins: empty)
-    virtual void destroy() = 0;                   // free them
+    virtual void create() = 0;  // allocate GL objects if any (ImGui plugins: empty)
+    virtual void destroy() = 0; // free them
     [[nodiscard]] virtual std::string getName() const = 0;
     virtual void render(const VisualFrame &frame) = 0;
 };

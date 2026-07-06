@@ -34,7 +34,7 @@
 #include <string_view>
 
 #if defined(__SWITCH__)
-    #include <switch.h>
+#include <switch.h>
 #endif
 
 #include "Paths.h"
@@ -51,7 +51,7 @@ Platform::Platform()
     : m_app(m_player, m_fileSystem, m_settings) {}
 
 void Platform::create() {
-    initNetwork();   // before m_fileSystem.create() spawns the worker
+    initNetwork(); // before m_fileSystem.create() spawns the worker
     initSdlAndGl();
     initImGui();
 
@@ -61,8 +61,9 @@ void Platform::create() {
     initPlayerAndSettings();
 
     const std::filesystem::path start_path = resolveStartPath();
-    m_fileSystem.create(buildDataSources(), start_path,
-        [this](const std::filesystem::path &p) { return m_player.isSupported(p); });
+    m_fileSystem.create(buildDataSources(), start_path, [this](const std::filesystem::path &p) {
+        return m_player.isSupported(p);
+    });
 }
 
 void Platform::run() {
@@ -100,20 +101,20 @@ void Platform::run() {
         while (SDL_PollEvent(&event)) {
             ImGui_ImplSDL2_ProcessEvent(&event);
             switch (event.type) {
-                case SDL_KEYDOWN:
-                    if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
-                        is_running = false;
-                    }
-                break;
-                case SDL_CONTROLLERBUTTONDOWN:
-                    if (event.cbutton.button == SDL_CONTROLLER_BUTTON_START) {
-                        is_running = false;
-                    }
-                break;
-                case SDL_QUIT:
+            case SDL_KEYDOWN:
+                if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
                     is_running = false;
+                }
                 break;
-                default:
+            case SDL_CONTROLLERBUTTONDOWN:
+                if (event.cbutton.button == SDL_CONTROLLER_BUTTON_START) {
+                    is_running = false;
+                }
+                break;
+            case SDL_QUIT:
+                is_running = false;
+                break;
+            default:
                 break;
             }
         }
@@ -242,9 +243,14 @@ void Platform::loadFonts() {
     imFontConfig.MergeMode = true;
     imFontConfig.GlyphOffset.y = 2.0f;
 
-    constexpr ImWchar icon_ranges[] = { 0x0030, 0xFFCB, 0 };
+    constexpr ImWchar icon_ranges[] = {0x0030, 0xFFCB, 0};
     io.Fonts->AddFontFromFileTTF(assetPath("font/Roboto-Regular.ttf").string().c_str(), kFontSize);
-    io.Fonts->AddFontFromFileTTF(assetPath("font/MaterialSymbolsSharp_Filled-Regular.ttf").string().c_str(), kFontSize, &imFontConfig, icon_ranges);
+    io.Fonts->AddFontFromFileTTF(
+        assetPath("font/MaterialSymbolsSharp_Filled-Regular.ttf").string().c_str(),
+        kFontSize,
+        &imFontConfig,
+        icon_ranges
+    );
     io.Fonts->Build();
 }
 
@@ -259,8 +265,9 @@ void Platform::initPlayerAndSettings() {
     for (const auto &[pluginName, descriptors] : m_player.getPluginSettings()) {
         const std::string section = "plugin." + pluginName;
         for (const auto &setting : descriptors) {
-            m_player.applyPluginSetting(pluginName, setting.key,
-                                        m_settings.getInt(section, setting.key, setting.value));
+            m_player.applyPluginSetting(
+                pluginName, setting.key, m_settings.getInt(section, setting.key, setting.value)
+            );
         }
     }
     // Seed the Application's cached descriptors with the post-push values (kept off the per-frame path).
@@ -299,8 +306,9 @@ void Platform::initNetwork() {
 std::vector<std::unique_ptr<DataSource>> Platform::buildDataSources() const {
     std::vector<std::unique_ptr<DataSource>> sources;
     sources.push_back(std::make_unique<LocalDataSource>());
-    sources.push_back(std::make_unique<FtpDataSource>(
-        "Modland (FTP)", "ftp.modland.com", "/pub/modules", cachePath() / "modland"));
+    sources.push_back(
+        std::make_unique<FtpDataSource>("Modland (FTP)", "ftp.modland.com", "/pub/modules", cachePath() / "modland")
+    );
 
     // Cache subdirs must be unique, so no user source collides with a built-in source's cache dir
     // or with another user source that sanitizes to the same component (cross-contaminated caches).
@@ -328,8 +336,7 @@ std::vector<std::unique_ptr<DataSource>> Platform::buildDataSources() const {
             continue;
         }
         const std::string path = m_settings.getString(section, "path", "/");
-        sources.push_back(std::make_unique<FtpDataSource>(
-            name, host, path, cachePath() / subdir));
+        sources.push_back(std::make_unique<FtpDataSource>(name, host, path, cachePath() / subdir));
     }
     return sources;
 }

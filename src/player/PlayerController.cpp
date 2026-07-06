@@ -233,8 +233,9 @@ void PlayerController::decode(Uint8 *stream, const int len) {
     m_audioTap.publish(buffer, static_cast<std::size_t>(frames_written));
 
     if (frames_written < frames_wanted) {
-        SDL_memset(buffer + frames_written * CHANNELS, 0,
-                   (frames_wanted - frames_written) * sizeof(std::int16_t) * CHANNELS);
+        SDL_memset(
+            buffer + frames_written * CHANNELS, 0, (frames_wanted - frames_written) * sizeof(std::int16_t) * CHANNELS
+        );
         // Track teardown stays on the main thread; only flip the state here.
         m_state = PlayerState::STOPPED;
         m_trackEnded.store(true);

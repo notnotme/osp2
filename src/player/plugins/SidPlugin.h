@@ -43,8 +43,8 @@ private:
     // libsidplayfp's v3 API produces a variable number of samples per play() call; decode() drains
     // this mixed interleaved-stereo scratch before running the emulation for another chunk.
     std::vector<std::int16_t> m_mixBuffer;
-    std::size_t m_mixPos;      // frame cursor into m_mixBuffer
-    std::size_t m_mixFrames;   // valid frames currently held in m_mixBuffer
+    std::size_t m_mixPos;    // frame cursor into m_mixBuffer
+    std::size_t m_mixFrames; // valid frames currently held in m_mixBuffer
     // Captured once in open() so getMetadata() never touches the audio-thread-shared engine.
     TrackMetadata m_metadata;
     // Cached in open() so getTitle() never touches the shared engine.

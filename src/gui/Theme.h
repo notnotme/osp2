@@ -23,22 +23,18 @@
 #include <string>
 
 // Color theme, mapped to ImGui's three built-in palettes by Gui::applyTheme.
-enum class Theme {
-    DARK,
-    LIGHT,
-    CLASSIC
-};
+enum class Theme { DARK, LIGHT, CLASSIC };
 
 // Lossless round-trip for INI persistence: every variant serializes so CLASSIC survives.
 inline std::string themeToString(const Theme theme) {
     switch (theme) {
-        case Theme::LIGHT:
-            return "light";
-        case Theme::CLASSIC:
-            return "classic";
-        case Theme::DARK:
-        default:
-            return "dark";
+    case Theme::LIGHT:
+        return "light";
+    case Theme::CLASSIC:
+        return "classic";
+    case Theme::DARK:
+    default:
+        return "dark";
     }
 }
 

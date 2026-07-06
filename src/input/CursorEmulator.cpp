@@ -52,7 +52,7 @@ namespace {
         }
         return 0.0f;
     }
-}
+} // namespace
 
 CursorEmulator::CursorEmulator(const int windowWidth, const int windowHeight)
     : m_pad(SDL_GameControllerOpen(0)),
@@ -76,10 +76,10 @@ void CursorEmulator::update(ImGuiIO &io) {
     // that side works, whichever is easier to reach. The physical L/R shoulders and triggers are NOT
     // rotated by SDL's position naming the way the face buttons are, so they map to the physical
     // left/right side directly on both platforms — no #ifdef needed. Both sides held: slow wins.
-    const bool slowHeld = SDL_GameControllerGetButton(m_pad, SDL_CONTROLLER_BUTTON_LEFTSHOULDER) != 0
-                       || SDL_GameControllerGetAxis(m_pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > kTriggerThreshold;
-    const bool fastHeld = SDL_GameControllerGetButton(m_pad, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) != 0
-                       || SDL_GameControllerGetAxis(m_pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > kTriggerThreshold;
+    const bool slowHeld = SDL_GameControllerGetButton(m_pad, SDL_CONTROLLER_BUTTON_LEFTSHOULDER) != 0 ||
+        SDL_GameControllerGetAxis(m_pad, SDL_CONTROLLER_AXIS_TRIGGERLEFT) > kTriggerThreshold;
+    const bool fastHeld = SDL_GameControllerGetButton(m_pad, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) != 0 ||
+        SDL_GameControllerGetAxis(m_pad, SDL_CONTROLLER_AXIS_TRIGGERRIGHT) > kTriggerThreshold;
     const float speedMul = slowHeld ? kSlowMul : (fastHeld ? kFastMul : 1.0f);
 
     // SDL LEFTY is positive when the stick is pushed down and screen Y grows downward, so adding the
@@ -94,8 +94,10 @@ void CursorEmulator::update(ImGuiIO &io) {
     // scroll-up and (counter-intuitively) positive wheel_x as scroll-LEFT, so both axes are negated to
     // map an up/right stick push to an up/right scroll. The held L/R speed modifier scales scroll too.
     // Gate on real deflection so we don't emit a zero wheel event every frame at rest.
-    const float wheelX = -deflection(SDL_GameControllerGetAxis(m_pad, SDL_CONTROLLER_AXIS_RIGHTX)) * kScrollSpeed * speedMul;
-    const float wheelY = -deflection(SDL_GameControllerGetAxis(m_pad, SDL_CONTROLLER_AXIS_RIGHTY)) * kScrollSpeed * speedMul;
+    const float wheelX =
+        -deflection(SDL_GameControllerGetAxis(m_pad, SDL_CONTROLLER_AXIS_RIGHTX)) * kScrollSpeed * speedMul;
+    const float wheelY =
+        -deflection(SDL_GameControllerGetAxis(m_pad, SDL_CONTROLLER_AXIS_RIGHTY)) * kScrollSpeed * speedMul;
     if (wheelX != 0.0f || wheelY != 0.0f) {
         io.AddMouseWheelEvent(wheelX, wheelY);
     }

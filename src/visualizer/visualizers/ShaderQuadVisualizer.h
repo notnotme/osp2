@@ -38,14 +38,14 @@ struct ImDrawCmd;
 // rect with glViewport + glScissor (Y-flipped, since GL's framebuffer origin is bottom-left).
 class ShaderQuadVisualizer final : public VisualizerPlugin {
 private:
-    unsigned int m_program = 0;   // GL program (0 = not built / build failed → render() is a no-op)
-    unsigned int m_vao = 0;       // empty VAO required by core profile for the attribute-less draw
+    unsigned int m_program = 0; // GL program (0 = not built / build failed → render() is a no-op)
+    unsigned int m_vao = 0;     // empty VAO required by core profile for the attribute-less draw
     int m_locTime = -1;
     int m_locLevel = -1;
     // Captured in render() for the deferred GL callback, which runs later inside RenderDrawData:
-    float m_time = 0.0f;          // accumulated render-delta (freeze-when-hidden contract, not GetTime())
-    float m_level = 0.0f;         // audio amplitude in [0, 1], drives the plasma's pulse
-    int m_vpX = 0, m_vpY = 0, m_vpW = 0, m_vpH = 0;   // reserved rect in framebuffer pixels, Y-flipped
+    float m_time = 0.0f;  // accumulated render-delta (freeze-when-hidden contract, not GetTime())
+    float m_level = 0.0f; // audio amplitude in [0, 1], drives the plasma's pulse
+    int m_vpX = 0, m_vpY = 0, m_vpW = 0, m_vpH = 0; // reserved rect in framebuffer pixels, Y-flipped
 
 public:
     void create() override;

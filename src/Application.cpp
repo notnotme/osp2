@@ -24,33 +24,36 @@
 
 
 Application::Application(PlayerController &player, FileSystem &fileSystem, Settings &settings)
-    : m_player(player), m_fileSystem(fileSystem), m_settings(settings), m_advanceDirection(0) {}
+    : m_player(player),
+      m_fileSystem(fileSystem),
+      m_settings(settings),
+      m_advanceDirection(0) {}
 
 void Application::handleButtonClick(const ButtonId buttonId) {
     switch (buttonId) {
-        case PLAY_PAUSE:
-            switch (m_player.getState()) {
-                case PlayerState::PLAYING:
-                    m_player.pause();
-                    break;
-                case PlayerState::PAUSED:
-                    m_player.play();
-                    break;
-                case PlayerState::STOPPED:
-                    // TODO(temporary): hardcoded test track until FileSystem returns real directories.
-                    m_player.play(assetPath("music/test.s3m"));
-                    break;
-            }
+    case PLAY_PAUSE:
+        switch (m_player.getState()) {
+        case PlayerState::PLAYING:
+            m_player.pause();
             break;
-        case STOP:
-            m_player.stop();
+        case PlayerState::PAUSED:
+            m_player.play();
             break;
-        case NEXT:
-            playAdjacentTrack(+1);
+        case PlayerState::STOPPED:
+            // TODO(temporary): hardcoded test track until FileSystem returns real directories.
+            m_player.play(assetPath("music/test.s3m"));
             break;
-        case PREVIOUS:
-            playAdjacentTrack(-1);
-            break;
+        }
+        break;
+    case STOP:
+        m_player.stop();
+        break;
+    case NEXT:
+        playAdjacentTrack(+1);
+        break;
+    case PREVIOUS:
+        playAdjacentTrack(-1);
+        break;
     }
 }
 
@@ -76,9 +79,8 @@ void Application::handleDirectoryClick(const FileEntry &entry) {
 void Application::playAdjacentTrack(const int direction) {
     const auto &entries = m_fileSystem.getContent();
     const auto count = static_cast<int>(entries.size());
-    const auto current = m_lastRequestedName.empty()
-        ? m_player.getCurrentPath().filename().string()
-        : m_lastRequestedName;
+    const auto current =
+        m_lastRequestedName.empty() ? m_player.getCurrentPath().filename().string() : m_lastRequestedName;
 
     auto index = -1;
     for (int i = 0; i < count; ++i) {
@@ -162,7 +164,7 @@ void Application::update() {
         if (r->succeeded && m_player.play(r->localPath)) {
             m_lastRequestedName.clear();
         } else if (m_advanceDirection != 0) {
-            playAdjacentTrack(m_advanceDirection);   // skip a broken sibling
+            playAdjacentTrack(m_advanceDirection); // skip a broken sibling
         }
         // Direct-click failure (direction 0): SDL_Log inside the player is enough.
     }
@@ -206,8 +208,12 @@ UiActions Application::makeUiActions() {
         [this](const FileEntry &entry) { handleFileClick(entry); },
         [this](const FileEntry &entry) { handleDirectoryClick(entry); },
         [this](const Theme theme) { handleThemeChange(theme); },
-        [this](const std::string &pluginName, const std::string &key, const int value) { handlePluginSettingChange(pluginName, key, value); },
-        [this](const std::string &pluginName, const std::string &key, const int value) { handlePluginSettingCommit(pluginName, key, value); },
+        [this](const std::string &pluginName, const std::string &key, const int value) {
+            handlePluginSettingChange(pluginName, key, value);
+        },
+        [this](const std::string &pluginName, const std::string &key, const int value) {
+            handlePluginSettingCommit(pluginName, key, value);
+        },
         [this]() { handleCancelWork(); }
     };
 }

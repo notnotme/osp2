@@ -28,41 +28,41 @@
 // as a variant of one struct per plugin family rather than a flat, mostly-empty struct. The Gui
 // dispatches with std::visit; adding a plugin forces (compile error) the UI to handle its shape.
 
-struct ModuleMetadata {              // tracker formats via libopenmpt
+struct ModuleMetadata { // tracker formats via libopenmpt
     std::string title;
     std::string artist;
-    std::string format;              // e.g. "ScreamTracker 3" (type_long)
-    std::string tracker;             // authoring tool, may be empty
+    std::string format;  // e.g. "ScreamTracker 3" (type_long)
+    std::string tracker; // authoring tool, may be empty
     int channels;
     int patterns;
     int samples;
     int instruments;
-    std::string message;             // song message, often multiline, may be empty
+    std::string message; // song message, often multiline, may be empty
 };
 
-struct GmeMetadata {                 // console/arcade formats via libgme
+struct GmeMetadata { // console/arcade formats via libgme
     std::string game;
     std::string system;
     std::string author;
     std::string copyright;
-    std::string comment;             // often multiline
+    std::string comment; // often multiline
     int trackCount;
 };
 
-struct SidMetadata {                 // Commodore 64 SID files via libsidplayfp
+struct SidMetadata { // Commodore 64 SID files via libsidplayfp
     std::string title;
     std::string author;
-    std::string released;            // copyright / release line (PSID info string 2)
-    std::string sidModel;            // "MOS 6581" / "MOS 8580", may be empty (unknown)
-    std::string clock;               // "PAL" / "NTSC", may be empty (unknown)
+    std::string released; // copyright / release line (PSID info string 2)
+    std::string sidModel; // "MOS 6581" / "MOS 8580", may be empty (unknown)
+    std::string clock;    // "PAL" / "NTSC", may be empty (unknown)
 };
 
-struct Sc68Metadata {                // Atari ST / Amiga / SNDH files via libsc68
+struct Sc68Metadata { // Atari ST / Amiga / SNDH files via libsc68
     std::string title;
     std::string author;
-    std::string composer;            // from a "composer" tag, may be empty (absent)
-    std::string hardware;            // e.g. "Atari ST", may be empty (unknown)
-    std::string ripper;              // who ripped the tune, may be empty
+    std::string composer; // from a "composer" tag, may be empty (absent)
+    std::string hardware; // e.g. "Atari ST", may be empty (unknown)
+    std::string ripper;   // who ripped the tune, may be empty
 };
 
 // One alternative per plugin family; monostate = no track loaded. The variant is complete: sc68

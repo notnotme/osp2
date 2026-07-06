@@ -29,14 +29,17 @@
 
 
 // decode() renders straight into the int16 output buffer via gme_play, which takes short*.
-static_assert(sizeof(short) == sizeof(std::int16_t), "GmePlugin decodes gme_play's short output directly into the int16 audio buffer");
+static_assert(
+    sizeof(short) == sizeof(std::int16_t),
+    "GmePlugin decodes gme_play's short output directly into the int16 audio buffer"
+);
 
 namespace {
     // Maps a possibly-null C string (libgme leaves absent fields as nullptr) to a std::string.
     std::string toString(const char *value) {
         return value != nullptr ? std::string(value) : std::string();
     }
-}
+} // namespace
 
 GmePlugin::GmePlugin()
     : m_sampleRate(0),
@@ -162,8 +165,8 @@ TrackMetadata GmePlugin::getMetadata() const {
 
 std::vector<PluginSetting> GmePlugin::getSettings() const {
     return {
-        {"stereo_depth", "Stereo depth", IntRange{0, 100}, m_stereoDepth},
-        {"accuracy", "Emulation accuracy", EnumOptions{{"Fast", "Accurate"}}, m_accuracy}
+        {"stereo_depth", "Stereo depth",       IntRange{0, 100},                  m_stereoDepth},
+        {"accuracy",     "Emulation accuracy", EnumOptions{{"Fast", "Accurate"}}, m_accuracy   }
     };
 }
 

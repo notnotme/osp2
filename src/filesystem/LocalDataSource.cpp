@@ -39,11 +39,11 @@ std::optional<std::vector<FileEntry>> LocalDataSource::listDirectory(const std::
     std::vector<FileEntry> entries;
 
     std::error_code ec;
-    auto iterator = std::filesystem::directory_iterator(
-        path, std::filesystem::directory_options::skip_permission_denied, ec);
+    auto iterator =
+        std::filesystem::directory_iterator(path, std::filesystem::directory_options::skip_permission_denied, ec);
     if (ec) {
         SDL_Log("LocalDataSource: cannot open '%s': %s", path.string().c_str(), ec.message().c_str());
-        return entries;   // partial (here empty) is fine — never nullopt for the local source
+        return entries; // partial (here empty) is fine — never nullopt for the local source
     }
 
     const std::filesystem::directory_iterator end;
@@ -55,7 +55,7 @@ std::optional<std::vector<FileEntry>> LocalDataSource::listDirectory(const std::
 
         const auto name = iterator->path().filename().string();
         if (!name.empty() && name.front() == '.') {
-            continue;   // skip hidden (dot-prefixed) entries
+            continue; // skip hidden (dot-prefixed) entries
         }
 
         std::error_code directory_ec;

@@ -79,7 +79,7 @@ void main() {
         }
         return shader;
     }
-}
+} // namespace
 
 
 void ShaderQuadVisualizer::create() {
@@ -142,7 +142,7 @@ std::string ShaderQuadVisualizer::getName() const {
 
 void ShaderQuadVisualizer::render(const VisualFrame &frame) {
     if (m_program == 0) {
-        return;   // shader failed to build → nothing to draw
+        return; // shader failed to build → nothing to draw
     }
 
     const float dt = ImGui::GetIO().DeltaTime;
@@ -168,8 +168,8 @@ void ShaderQuadVisualizer::render(const VisualFrame &frame) {
     // Envelope-follow the target: quick attack, gentle decay (frame-rate aware). This turns the jittery
     // per-frame loudness into a smooth loudness *contour*, so the visual reacts without blinking. When
     // idle (target 0) it eases back toward 0.
-    constexpr float ATTACK_SPEED = 8.0f;   // 1/s toward a louder target
-    constexpr float DECAY_SPEED = 3.0f;    // 1/s toward a quieter target
+    constexpr float ATTACK_SPEED = 8.0f; // 1/s toward a louder target
+    constexpr float DECAY_SPEED = 3.0f;  // 1/s toward a quieter target
     const float rate = std::clamp(dt * (target > m_level ? ATTACK_SPEED : DECAY_SPEED), 0.0f, 1.0f);
     m_level += (target - m_level) * rate;
 
@@ -177,8 +177,8 @@ void ShaderQuadVisualizer::render(const VisualFrame &frame) {
     // and calms when quiet — the clearest "reacting to the music" cue, and blink-free. Accumulating the
     // rate (not scaling the whole clock) keeps motion smooth with no phase jump. Freeze-when-hidden
     // still holds: render() only runs in VISUALIZATION mode, so the clock stops while hidden.
-    constexpr float BASE_SPEED = 0.5f;     // idle churn so it's never frozen-looking
-    constexpr float SPEED_GAIN = 2.5f;     // extra churn at full loudness
+    constexpr float BASE_SPEED = 0.5f; // idle churn so it's never frozen-looking
+    constexpr float SPEED_GAIN = 2.5f; // extra churn at full loudness
     m_time += dt * (BASE_SPEED + SPEED_GAIN * m_level);
 
     // Convert the reserved rect (ImGui screen coords) to framebuffer pixels, Y-flipped: GL's framebuffer

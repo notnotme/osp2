@@ -44,7 +44,7 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
   - [x] 12a — Shared Paths.h (dedup BASE_PATH + config/cache helpers)
   - [x] 12b — Extract a Platform class; eliminate globals
 - [ ] [TODO_13 — Enable clang-format + lint tooling](TODO_13.md) — do early (after TODO_12); scoped to src/
-  - [ ] 13a — .clang-format + one-time sweep
+  - [x] 13a — .clang-format + one-time sweep
   - [ ] 13b — CMake format/format-check targets + .clang-tidy
 - [ ] [TODO_14 — Persist selected visualizer](TODO_14.md) — requires TODO_6 + TODO_8; single chunk
 - [ ] [TODO_15 — Quit-app button](TODO_15.md) — single chunk

@@ -63,8 +63,8 @@ void BarsVisualizer::render(const VisualFrame &frame) {
     // ImGui::GetTime()) so the smoothing only advances while this plugin is actually rendered — the
     // documented "freeze when hidden" contract. Fast attack = snappy rise on transients; gentle decay
     // = smooth fall to rest on stop/pause.
-    constexpr float ATTACK_SPEED = 40.0f;   // 1/s toward a rising target
-    constexpr float DECAY_SPEED = 5.0f;     // 1/s toward a falling target
+    constexpr float ATTACK_SPEED = 40.0f; // 1/s toward a rising target
+    constexpr float DECAY_SPEED = 5.0f;   // 1/s toward a falling target
     const float dt = ImGui::GetIO().DeltaTime;
     for (int b = 0; b < BAR_COUNT; ++b) {
         const float speed = targets[b] > m_levels[b] ? ATTACK_SPEED : DECAY_SPEED;
@@ -85,7 +85,7 @@ void BarsVisualizer::render(const VisualFrame &frame) {
     constexpr float GAP = 2.0f;
     const float barW = (frame.w - GAP * (BAR_COUNT - 1)) / BAR_COUNT;
     if (barW <= 0.0f) {
-        return;   // reserved rect too narrow for 64 bars; nothing sensible to draw
+        return; // reserved rect too narrow for 64 bars; nothing sensible to draw
     }
     ImDrawList *draw = ImGui::GetBackgroundDrawList();
     const ImU32 color = ImGui::GetColorU32(ImGuiCol_PlotHistogram);

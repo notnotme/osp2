@@ -25,7 +25,9 @@
 
 #include "../PlayerPlugin.h"
 
-namespace openmpt { class module; }
+namespace openmpt {
+    class module;
+}
 
 
 class OpenMptPlugin final : public PlayerPlugin {

@@ -64,7 +64,9 @@ public:
 
     // Setting descriptors for the UI. Plain cached values, main thread, no decoder access.
     // Plugins with no config return {} (the default).
-    [[nodiscard]] virtual std::vector<PluginSetting> getSettings() const { return {}; }
+    [[nodiscard]] virtual std::vector<PluginSetting> getSettings() const {
+        return {};
+    }
     // Apply a setting to the live decoder. Called ONLY under PlayerController::m_mutex
     // (may touch the audio-thread-shared decoder object). No-op default for plugins with no config.
     virtual void applySetting(const std::string &key, int value) {}
