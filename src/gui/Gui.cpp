@@ -19,6 +19,8 @@
 
 #include "Gui.h"
 
+#include "../Paths.h"
+
 #include <imgui.h>
 #include <SDL_image.h>
 
@@ -110,8 +112,8 @@ namespace {
 Gui::Gui()
     : m_texture(0), m_theme(Theme::DARK), m_viewMode(ViewMode::WORKSPACE), m_aboutRequested(false) {}
 
-void Gui::initialize(const std::string &basePath) {
-    const auto bin_path = basePath + "sprites/sprites.bin";
+void Gui::initialize() {
+    const auto bin_path = assetPath("sprites/sprites.bin");
     auto file = std::ifstream(bin_path, std::ifstream::in | std::ifstream::binary);
     if (!file.is_open()) {
         throw std::runtime_error("Failed to open sprites.bin");
@@ -135,7 +137,7 @@ void Gui::initialize(const std::string &basePath) {
         m_sprites.emplace(name, sprite);
     }
 
-    const auto png_path = basePath + "sprites/sprites.png";
+    const auto png_path = assetPath("sprites/sprites.png").string();
     const auto image = IMG_Load(png_path.c_str());
     if (!image) {
         throw std::runtime_error("Failed to open sprites.png");

@@ -1,6 +1,6 @@
 # Input domain
 
-Platform-layer controller input in `src/input/CursorEmulator.{h,cpp}`. The Switch has no mouse, and ImGui is entirely mouse/nav-driven, so `CursorEmulator` synthesizes a virtual cursor from an `SDL_GameController` and injects it into ImGui IO. It lives in the platform layer alongside `main.cpp` — no domain, gui, or player type depends on it.
+Platform-layer controller input in `src/input/CursorEmulator.{h,cpp}`. The Switch has no mouse, and ImGui is entirely mouse/nav-driven, so `CursorEmulator` synthesizes a virtual cursor from an `SDL_GameController` and injects it into ImGui IO. It lives in the platform layer, constructed by `Platform` — no domain, gui, or player type depends on it.
 
 ```mermaid
 classDiagram
@@ -43,4 +43,4 @@ classDiagram
 - **Click edges.** A/X button state is emitted to ImGui only on change (`m_leftDown`/`m_rightDown` mirror the physical state), so a held button is not re-fired oddly — though ImGui tolerates repeated same-state events.
 - **Switch button labels.** SDL names controller buttons by *Xbox position*, but the Switch's physical labels are rotated: its physical **A** is at the east position (`SDL_CONTROLLER_BUTTON_B`) and physical **X** at the north (`SDL_CONTROLLER_BUTTON_Y`). Under `__SWITCH__`, `update()` reads `B`/`Y` so the console's usual confirm button (**A**) left-clicks and **X** right-clicks; the desktop build (never actually invoked — cursor emulation is Switch-only) keeps the plain `A`/`X` positions.
 - **Constants.** Dead-zone (~8000 of the signed-16-bit axis range), base speed (~12 px/frame at full tilt), the L/R speed multipliers (~0.35× / ~2.5×), and scroll speed (~0.5 wheel units/frame at full tilt) are local constants in `CursorEmulator.cpp`. They could later be surfaced as [Settings](settings.md) (TODO_6) without changing the `update(io)` interface.
-- **Controller ownership.** `CursorEmulator` opens its own handle via `SDL_GameControllerOpen(0)` (closed in its destructor). `main.cpp` independently opens the same index (`controller`) as the single owner used by the quit-on-START handler; `SDL_GameControllerOpen` is refcounted per index, so the two opens and their matching closes are safe. `SDL_GameControllerOpen(0)` may return `nullptr` (no pad present) — every pad read is guarded.
+- **Controller ownership.** `CursorEmulator` opens its own handle via `SDL_GameControllerOpen(0)` (closed in its destructor). `Platform` independently opens the same index (`m_controller`) as the single owner used by the quit-on-START handler; `SDL_GameControllerOpen` is refcounted per index, so the two opens and their matching closes are safe. `SDL_GameControllerOpen(0)` may return `nullptr` (no pad present) — every pad read is guarded.

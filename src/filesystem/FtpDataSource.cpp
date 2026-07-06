@@ -305,6 +305,11 @@ std::filesystem::path FtpDataSource::getRootPath() const {
     return m_basePath;
 }
 
+std::string FtpDataSource::getCacheId() const {
+    // m_cacheDir is <cache root>/<id>; the id is the component the caller derived per source.
+    return m_cacheDir.filename().string();
+}
+
 bool FtpDataSource::ensureHandle() {
     if (m_curl) {
         return true;

@@ -10,7 +10,7 @@ classDiagram
         -Theme m_theme
         -ViewMode m_viewMode
         -bool m_aboutRequested
-        +initialize(basePath)
+        +initialize()
         +finalize()
         +applyTheme(theme)
         +drawUserInterface(state, actions)

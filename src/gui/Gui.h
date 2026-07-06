@@ -92,7 +92,7 @@ private:
     void drawPlayerBar(const PlaybackStatus &status, const std::function<void(ButtonId)> &onButtonClick);
 
 public:
-    void initialize(const std::string &basePath);
+    void initialize();
     void finalize();
     void applyTheme(Theme theme);
     void drawUserInterface(const UiState &state, const UiActions &actions);

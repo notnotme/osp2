@@ -18,6 +18,7 @@ classDiagram
         <<interface>>
         +getDisplayName() string
         +getRootPath() path
+        +getCacheId() string
         +listDirectory(path) optional~vector~FileEntry~~
         +fetchFile(path) path
         +cancel()
@@ -39,6 +40,7 @@ classDiagram
         -atomic_bool m_cancelRequested
         +getDisplayName() string
         +getRootPath() path
+        +getCacheId() string
         +listDirectory(path) optional~vector~FileEntry~~
         +fetchFile(path) path
         +cancel()
@@ -104,6 +106,7 @@ Header-only domain interface (`DataSource.h`). One implementation per browsable 
 
 - `getDisplayName()` — `"Local files"` (TODO_7: `"Modland (FTP)"`).
 - `getRootPath()` — top of the source; `".."` here exits to the virtual root.
+- `getCacheId()` — the source's on-disk cache subdirectory name (the component under the cache root); empty when the source has no cache (local disk). `Platform::buildDataSources` seeds its "taken cache dirs" set from the built-in sources' ids so a user `[source.*]` can't collide with them, instead of hardcoding the names.
 - `listDirectory(path)` — **blocking**; raw entries (name, byte size, `is_directory`) of one
   directory, hidden entries skipped, no filtering/sorting (FileSystem applies `isPlayable`,
   derives `type`, sorts). `nullopt` = hard failure (already `SDL_Log`ged) → FileSystem keeps
