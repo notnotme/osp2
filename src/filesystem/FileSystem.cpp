@@ -276,7 +276,7 @@ void FileSystem::scan(DataSource *source, std::filesystem::path path) {
     m_working.store(false);
 }
 
-void FileSystem::fetch(DataSource *source, std::filesystem::path path) {
+void FileSystem::fetch(DataSource *source, const std::filesystem::path &path) {
     const auto localPath = source->fetchFile(path);
     {
         std::scoped_lock lock(m_mutex);

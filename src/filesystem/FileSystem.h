@@ -106,7 +106,7 @@ private:
     void startFetch(const std::filesystem::path &path);
     void showVirtualRoot();
     void scan(DataSource *source, std::filesystem::path path);
-    void fetch(DataSource *source, std::filesystem::path path);
+    void fetch(DataSource *source, const std::filesystem::path &path);
 };
 
 

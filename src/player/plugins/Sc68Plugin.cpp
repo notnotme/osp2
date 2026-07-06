@@ -159,7 +159,7 @@ bool Sc68Plugin::open(const std::filesystem::path &path) {
 
     Sc68Metadata metadata;
     sc68_music_info_t info = {};
-    if (sc68_music_info(m_sc68, &info, SC68_DEF_TRACK, 0) == SC68_OK) {
+    if (sc68_music_info(m_sc68, &info, SC68_DEF_TRACK, nullptr) == SC68_OK) {
         // Fields point into the loaded disk (valid only until sc68_close), so copy every string.
         metadata.title = toString(info.title);
         if (metadata.title.empty()) {

@@ -94,7 +94,7 @@ namespace {
 
         char buffer[16];
         std::snprintf(buffer, sizeof(buffer), "%d:%02d", minutes, remaining_seconds);
-        return std::string(buffer);
+        return {buffer};
     }
 
     // Formats a byte count as "N B", "N.N KB", or "N.N MB".
@@ -107,7 +107,7 @@ namespace {
         } else {
             std::snprintf(buffer, sizeof(buffer), "%.1f MB", static_cast<double>(bytes) / (1024.0 * 1024.0));
         }
-        return std::string(buffer);
+        return {buffer};
     }
 } // namespace
 

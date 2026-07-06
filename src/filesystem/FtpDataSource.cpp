@@ -224,7 +224,7 @@ namespace {
         }
 
         const bool is_directory = (type == 'd');
-        const std::int64_t file_size = static_cast<std::int64_t>(std::strtoll(fields[4].c_str(), nullptr, 10));
+        const auto file_size = static_cast<std::int64_t>(std::strtoll(fields[4].c_str(), nullptr, 10));
         out = FileEntry{name, is_directory ? 0 : file_size, "", is_directory};
         return LineOutcome::Parsed;
     }
@@ -270,6 +270,9 @@ namespace {
 // Also neutralizes "." / ".." so a hostile or broken server can't escape the cache dir via traversal.
 std::string sanitizeCachePathComponent(const std::string &component) {
     if (component == "." || component == "..") {
+        // Braced-init would select the initializer_list<char> ctor and narrow size() to a
+        // char, changing behavior, so keep the explicit (size_t, char) constructor.
+        // NOLINTNEXTLINE(modernize-return-braced-init-list)
         return std::string(component.size(), '_'); // "." -> "_", ".." -> "__"
     }
     std::string sanitized = component;

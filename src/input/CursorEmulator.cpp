@@ -43,7 +43,7 @@ namespace {
     // Maps a raw axis reading to a [-1, 1] deflection with a dead-zone at rest. The magnitude is
     // rescaled so motion starts smoothly from zero at the dead-zone edge rather than jumping.
     float deflection(const Sint16 axis) {
-        const float value = static_cast<float>(axis);
+        const auto value = static_cast<float>(axis);
         if (value > kDeadZone) {
             return (value - kDeadZone) / (kAxisMax - kDeadZone);
         }
