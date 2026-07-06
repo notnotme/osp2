@@ -123,8 +123,10 @@ void FileSystem::navigateToParent() {
 
     // parent_path() of a source root (e.g. "/") returns itself, so detect the root by value.
     if (m_path == m_activeSource->getRootPath()) {
-        m_activeSource = nullptr;
-        showVirtualRoot();
+        // Defer to update(): this runs inside a Gui callback while the browser is drawing, and
+        // showVirtualRoot() would clear m_content out from under the list clipper. See the flag's
+        // declaration and docs/filesystem.md.
+        m_pendingVirtualRoot = true;
         return;
     }
 
@@ -157,6 +159,23 @@ std::optional<FetchResult> FileSystem::consumeFetchResult() {
 }
 
 void FileSystem::update() {
+    // Apply a deferred virtual-root transition first (requested mid-draw by navigateToParent).
+    if (m_pendingVirtualRoot) {
+        m_pendingVirtualRoot = false;
+        // A scan launched before the click may have finished without update() swapping it yet: the
+        // worker can clear m_working *after* this frame's makeUiState() snapshot, re-enabling the
+        // browser for one frame so ".." is clickable. Join and discard that finished worker here so
+        // a later update() can't swap its stale listing back over the virtual root. (m_working is
+        // false — navigateToParent only sets the flag while idle — so join() cannot block.)
+        if (m_worker.joinable()) {
+            m_worker.join();
+            m_workKind = WorkKind::None;
+        }
+        m_activeSource = nullptr;
+        showVirtualRoot();
+        return;
+    }
+
     // A scan is pending exactly when a worker exists and has finished (cleared m_working).
     if (!m_worker.joinable() || m_working.load()) {
         return;

@@ -209,12 +209,13 @@ style as the audio domain (atomic flag + mutex-guarded handoff, swap on the main
 
 | Data | Protection |
 |---|---|
-| `m_path`, `m_content` (refs handed to the Gui) | main thread only — `update()` swap, or the synchronous virtual-root build while `!m_working` |
+| `m_path`, `m_content` (refs handed to the Gui) | main thread only, mutated **outside the draw** — `update()` swap (scan result or deferred virtual root), or the synchronous virtual-root build in `create()` |
 | `m_pendingPath`, `m_pendingContent`, `m_scanSucceeded` | `m_mutex` (worker writes, `update()` reads/swaps) |
 | `m_working` | `std::atomic_bool` (worker clears; Gui overlay + navigate/request guards read) |
 | `m_worker` | main thread only (launch in `startScan`, join in `update`/`destroy`) |
 | `m_sources`, `m_isPlayable` | immutable after `create()` until `destroy()` releases the sources (worker already joined); `m_isPlayable` is called on the worker: `PlayerController::isSupported` reads only immutable plugin extension lists |
 | `m_activeSource`, `m_sourceBeforeScan`, `m_workKind` | main thread only, mutated while the worker is idle; the worker uses the source pointer captured at launch. `m_workKind` is set in `startScan`/`startFetch` and read in `update()` |
+| `m_pendingVirtualRoot` | main thread only — set by `navigateToParent()` (mid-draw), applied and cleared by `update()` |
 | `m_fetchResult` | `m_mutex` (worker writes in `fetch()`; `consumeFetchResult()` reads on the main thread) |
 
 - **Worker lifecycle**: `startScan(path)` joins any finished-but-unswapped worker, sets
@@ -243,16 +244,31 @@ style as the audio domain (atomic flag + mutex-guarded handoff, swap on the main
 - **Navigation** (`navigateToEntry`/`navigateToParent`) and `requestFile` are ignored while a
   scan or fetch runs (the UI is blocked by the overlay anyway). Root detection compares
   `m_path == m_activeSource->getRootPath()` (not `parent_path()`, since `parent_path()` of a
-  root like `"/"` returns itself).
+  root like `"/"` returns itself); reaching the root defers the virtual-root transition to
+  `update()` via `m_pendingVirtualRoot` (see **Virtual root**) rather than mutating `m_content`
+  from inside the drawing callback.
 
 ## Virtual root
 
 `m_activeSource == nullptr` means "at the sources list": `getPath()` is empty and `m_content`
-holds one `FileEntry{displayName, 0, "Source", true}` per source, built synchronously on the
-main thread while `!m_working` (the one exception to "`m_content` mutated only in `update()`",
-still main-thread-only and guarded by `!m_working`). `navigateToParent()` from a source root
-clears the active source and shows this list; entering a source entry activates it and scans
-its `getRootPath()`.
+holds one `FileEntry{displayName, 0, "Source", true}` per source, built by `showVirtualRoot()`.
+`navigateToParent()` from a source root transitions here; entering a source entry activates it
+and scans its `getRootPath()`.
+
+`showVirtualRoot()` mutates `m_content` synchronously, so it must never run **during a draw** —
+`UiState::files` is a reference to `m_content`, and the Gui fires navigation callbacks mid-frame
+while its list clipper is iterating that vector; clearing it in place would shrink the vector
+under the clipper and index out of bounds (a hardened libstdc++ `operator[]` assertion; a silent
+OOB read otherwise). It is therefore only ever called at two safe points, both outside a draw:
+`create()` (before the first frame), and `update()` (between frames). `navigateToParent()` reaching
+a source root does **not** call it directly — it sets `m_pendingVirtualRoot`, and the next
+`update()` performs the transition (clear `m_activeSource`, rebuild the list). This mirrors how
+scans defer their listing swap to `update()`: no listing change ever happens while the Gui draws.
+
+Before rebuilding, that `update()` branch **joins and discards any finished-but-unswapped worker**:
+a scan can clear `m_working` after a frame's `makeUiState()` snapshot, re-enabling the browser for
+one frame so `".."` is clickable with a stale listing still on screen — draining it here stops a
+later `update()` from swapping that listing back over the just-built virtual root.
 
 ## Fetch flow
 

@@ -60,6 +60,11 @@ private:
     enum class WorkKind { None, Scan, Fetch };
     WorkKind m_workKind = WorkKind::None;   // main thread only: what the current/last worker is doing
 
+    // Set by navigateToParent() when it reaches the virtual root, applied by update() next frame.
+    // Deferred (not swapped in place) because navigation callbacks fire mid-draw while the Gui is
+    // iterating m_content: clearing it synchronously would shrink the vector under the list clipper.
+    bool m_pendingVirtualRoot = false;   // main thread only
+
     // Worker synchronization.
     std::atomic_bool m_working;
     std::thread m_worker;
