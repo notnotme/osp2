@@ -17,7 +17,7 @@ All four are missing from the notice. Confirm exact upstream license names/URLs 
 
 ## Task chunks (implement, verify, and commit one at a time)
 
-- [ ] **11a — Back-fill the four missing dependencies**: add `libgme`, `libsidplayfp` (+ `libresidfp`), `libsc68`/`file68`/`unice68`, and `libcurl` to the `## Libraries` list in `THIRD_PARTY_NOTICES.md`, each with its verified upstream license and URL, matching the existing bullet format. Cross-check the final list against the `target_link_libraries` / `pkg_check_modules` stanzas in `CMakeLists.txt:64–111` so every linked third party is credited. Verify: every library in CMakeLists appears in the notice with a plausible license; desktop + Switch builds still green (unchanged — pure doc).
+- [x] **11a — Back-fill the four missing dependencies**: add `libgme`, `libsidplayfp` (+ `libresidfp`), `libsc68`/`file68`/`unice68`, and `libcurl` to the `## Libraries` list in `THIRD_PARTY_NOTICES.md`, each with its verified upstream license and URL, matching the existing bullet format. Cross-check the final list against the `target_link_libraries` / `pkg_check_modules` stanzas in `CMakeLists.txt:64–111` so every linked third party is credited. Verify: every library in CMakeLists appears in the notice with a plausible license; desktop + Switch builds still green (unchanged — pure doc).
 
 This chunk ends with green desktop + Switch builds (unchanged), the notice updated, user verification, then a commit.
 
