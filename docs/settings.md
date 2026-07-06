@@ -21,7 +21,7 @@ classDiagram
 
 ## The file — osp2.ini
 
-Location (config path helper in `main.cpp`): desktop `SDL_GetBasePath() + "osp2.ini"` (lands in the build dir, which is git-ignored); Switch `/switch/osp2.ini` (romfs is read-only; `/` is libnx's default sdmc device). Created with defaults on first launch so the user can find and hand-edit it.
+Location (`paths::configPath()` in `src/Paths.h`, the single source of path truth): desktop `SDL_GetBasePath() + "osp2.ini"` (lands in the build dir, which is git-ignored); Switch `/switch/OSP2/osp2.ini` (romfs is read-only; `/` is libnx's default sdmc device, and `/switch/OSP2/` also holds the download cache). Created with defaults on first launch so the user can find and hand-edit it.
 
 ```ini
 [user]
@@ -63,7 +63,7 @@ path = /pub/modules
 
 ## Persistence rules
 
-- **Storage**: `std::map<std::string, std::map<std::string, std::string>>` — ordered, so `save()` output is deterministic. `save()` truncates and rewrites every section (`[section]` then `key = value` lines, one blank line between sections).
+- **Storage**: `std::map<std::string, std::map<std::string, std::string>>` — ordered, so `save()` output is deterministic. `save()` first `create_directories(parent_path())` (best-effort) so a nested config location writes even when its directory doesn't exist yet (e.g. the Switch's `/switch/OSP2/`), then truncates and rewrites every section (`[section]` then `key = value` lines, one blank line between sections).
 - **Unknown sections/keys survive** a load→save round-trip (they live in `m_data`).
 - **Comments are NOT preserved** by the writer (documented limitation).
 - **Setters mutate only**; callers call `save()` explicitly after a batch of changes.

@@ -51,10 +51,9 @@
 
 #if defined(__SWITCH__)
     #include <switch.h>
-    #define BASE_PATH "romfs:/"
-#else
-    #define BASE_PATH "romfs/"
 #endif
+
+#include "Paths.h"
 
 
 SDL_Window *window;
@@ -66,38 +65,6 @@ PlayerController player;
 VisualizerController visualizer;
 Settings settings;
 Application app(player, file_system, settings);
-
-// The INI lives next to the executable on desktop (git-ignored build dir); romfs is read-only
-// on the Switch, so it goes to writable SD-card storage instead ("/" is libnx's default sdmc device).
-std::filesystem::path configPath() {
-#if defined(__SWITCH__)
-    return "/switch/osp2.ini";
-#else
-    char *base = SDL_GetBasePath();
-    if (!base) {
-        return "osp2.ini";
-    }
-    std::filesystem::path path = std::filesystem::path(base) / "osp2.ini";
-    SDL_free(base);
-    return path;
-#endif
-}
-
-// Remote sources download to this writable cache root. Mirrors configPath()'s convention:
-// SD-card storage on the Switch (romfs is read-only), next to the executable on desktop.
-std::filesystem::path cachePath() {
-#if defined(__SWITCH__)
-    return "/switch/OSP2/cache/";
-#else
-    char *base = SDL_GetBasePath();
-    if (!base) {
-        return "cache/";
-    }
-    std::filesystem::path path = std::filesystem::path(base) / "cache/";
-    SDL_free(base);
-    return path;
-#endif
-}
 
 void initialize() {
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) {
@@ -164,7 +131,7 @@ void initialize() {
     // GL plugins that allocate shaders/VBOs in create().
     visualizer.create();
 
-    settings.load(configPath());
+    settings.load(paths::configPath());
     gui.applyTheme(themeFromString(settings.getString("user", "theme", "dark")));
 
     player.create();
@@ -208,7 +175,7 @@ void initialize() {
     std::vector<std::unique_ptr<DataSource>> sources;
     sources.push_back(std::make_unique<LocalDataSource>());
     sources.push_back(std::make_unique<FtpDataSource>(
-        "Modland (FTP)", "ftp.modland.com", "/pub/modules", cachePath() / "modland"));
+        "Modland (FTP)", "ftp.modland.com", "/pub/modules", paths::cachePath() / "modland"));
 
     // Register each user-defined [source.NAME] INI section as an extra FTP source. Hand-edit only:
     // these are not seeded and not surfaced in the UI — they simply appear at the virtual root.
@@ -230,7 +197,7 @@ void initialize() {
         }
         const std::string path = settings.getString(section, "path", "/");
         sources.push_back(std::make_unique<FtpDataSource>(
-            name, host, path, cachePath() / subdir));
+            name, host, path, paths::cachePath() / subdir));
     }
 
     file_system.create(std::move(sources), start_path,
