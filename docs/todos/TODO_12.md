@@ -18,7 +18,7 @@
 ## Task chunks (implement, verify, and commit one at a time)
 
 - [x] **12a — Shared `Paths.h`**: new header-only `src/Paths.h` (GPL header) exposing the asset root once (`BASE_PATH` macro or a `constexpr` helper) and a single writable-base helper backing `configPath()`/`cachePath()` (keeping the `__SWITCH__` → `sdmc:/switch/…` vs `SDL_GetBasePath()` split in one place). Remove the duplicated `BASE_PATH` macro from `main.cpp`, `Application.cpp`, `SidPlugin.cpp` and include `Paths.h` instead; collapse `configPath()`/`cachePath()` onto the shared helper. Header-only → no CMake change; add to `add_executable` only if a `.cpp` is introduced. Verify: desktop + Switch build; at runtime fonts still load, `osp2.ini` lands in the same spot, cache path unchanged, SID C64 ROM paths (`SidPlugin.cpp:116–118`) still resolve.
-- [ ] **12b — Split `initialize()` + hoist constants**: extract cohesive helpers (e.g. `initSDLandGL()`, `initImGui()`/`loadFonts()`, `initPlayerAndSettings()`, `buildDataSources()`) out of the 136-line `initialize()`; lift the scattered magic numbers (window size, font size, GL version, deadzone/glyph range, clear color) to named `constexpr`s shared by their two use sites; fix the `SDL_QUIT` fall-through. Strictly behaviour-preserving. Verify: identical startup + shutdown behaviour on desktop and Switch (window opens, fonts render, a track plays, data sources build, clean exit); no functional diff.
+- [x] **12b — Extract a `Platform` class; eliminate globals** *(redefined — supersedes the earlier "split initialize() into free functions" plan)*: move the platform/lifecycle logic and the file-scope globals out of `main.cpp` into a new `src/Platform.{h,cpp}` class that owns the SDL/OpenGL/ImGui handles **and** the subsystems (`Gui`, `PlayerController`, `FileSystem`, `VisualizerController`, `Settings`, `Application`) as value members, exposing `create()`/`run()`/`destroy()`. The 136-line `initialize()` becomes `create()` orchestrating cohesive private methods (`initSdlAndGl()`, `initImGui()`/`loadFonts()`, `initPlayerAndSettings()`, `resolveStartPath()`, `initNetwork()`, `buildDataSources()`); `run()` is the event/render loop; `destroy()` is the old `finalize()`. `main.cpp` shrinks to constructing a `Platform` and calling the three. Shared window size → private static `constexpr`; single-use tunables (GL version, font size) → function-local `constexpr`; clear colour stays inline literals; fix the `SDL_QUIT` fall-through. Strictly behaviour-preserving. Verify: identical startup + shutdown on desktop and Switch (window opens, fonts render, a track plays, data sources build, clean exit); no functional diff.
 
 Each chunk ends with green desktop + Switch builds, docs updated (`docs/application.md`), user verification, then a commit. Run cpp-reviewer on the diff before committing.
 
@@ -32,7 +32,8 @@ Each chunk ends with green desktop + Switch builds, docs updated (`docs/applicat
 
 ## Docs
 
-- **`docs/application.md`** — note the new `src/Paths.h` as the single source of path truth, and the split `initialize()` helper structure (update the lifecycle classDiagram/notes as touched).
+- **12a** — `docs/application.md`: note `src/Paths.h` as the single source of path truth.
+- **12b** — new **`docs/platform.md`** (classDiagram of `Platform` owning the subsystems + lifecycle/ordering notes); trim the composition-root mentions in `docs/application.md`, and update the `main.cpp` → `Platform` references in `CLAUDE.md`, `docs/settings.md`, `docs/visualization.md`, `docs/input.md`.
 
 ## Coordination
 

@@ -41,6 +41,10 @@ public:
     [[nodiscard]] virtual std::string getDisplayName() const = 0;         // "Local files", "Modland (FTP)"
     [[nodiscard]] virtual std::filesystem::path getRootPath() const = 0;  // top of the source; ".." here exits to the virtual root
 
+    // Identifier of this source's on-disk cache subdirectory (the component under the cache root),
+    // used to keep per-source caches from colliding. Empty for sources with no cache (local disk).
+    [[nodiscard]] virtual std::string getCacheId() const { return {}; }
+
     // Blocking. Raw entries (name, byte size, is_directory) of one directory, hidden entries already
     // skipped; no filtering/sorting (FileSystem applies isPlayable, type derivation, and sort).
     // nullopt = hard failure (already SDL_Logged) -> FileSystem keeps the current listing.

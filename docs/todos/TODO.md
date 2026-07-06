@@ -40,9 +40,9 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
   - [x] 10a — Controller cursor + clicks (left stick move, A/X click)
   - [x] 10b — Scroll + speed modifiers + polish (right stick scroll, L/R slow/fast)
 - [x] [TODO_11 — Back-fill THIRD_PARTY_NOTICES.md](TODO_11.md) — priority; single chunk; docs-only
-- [ ] [TODO_12 — main.cpp cleanup + shared Paths.h (BASE_PATH dedup)](TODO_12.md) — behaviour-preserving; do early
+- [x] [TODO_12 — main.cpp cleanup + shared Paths.h (BASE_PATH dedup)](TODO_12.md) — behaviour-preserving; do early
   - [x] 12a — Shared Paths.h (dedup BASE_PATH + config/cache helpers)
-  - [ ] 12b — Split initialize() + hoist magic constants
+  - [x] 12b — Extract a Platform class; eliminate globals
 - [ ] [TODO_13 — Enable clang-format + lint tooling](TODO_13.md) — do early (after TODO_12); scoped to src/
   - [ ] 13a — .clang-format + one-time sweep
   - [ ] 13b — CMake format/format-check targets + .clang-tidy

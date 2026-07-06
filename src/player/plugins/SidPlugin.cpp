@@ -71,7 +71,7 @@ namespace {
 
     // Reads a whole ROM file into a byte vector, or returns empty if it can't be opened or has the
     // wrong size. C64 ROMs are fixed-size; a size mismatch means a wrong/corrupt file, so skip it.
-    std::vector<std::uint8_t> loadRom(const char *path, const std::size_t expectedSize) {
+    std::vector<std::uint8_t> loadRom(const std::filesystem::path &path, const std::size_t expectedSize) {
         std::ifstream file(path, std::ios::binary);
         if (!file.is_open()) {
             return {};   // absent ROM is expected (they are optional) — no log noise
@@ -79,7 +79,7 @@ namespace {
         std::vector<std::uint8_t> data{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
         if (data.size() != expectedSize) {
             SDL_Log("SidPlugin: ignoring ROM %s (expected %zu bytes, got %zu)",
-                    path, expectedSize, data.size());
+                    path.string().c_str(), expectedSize, data.size());
             return {};
         }
         return data;
@@ -109,9 +109,9 @@ void SidPlugin::loadRoms() {
     // them. Without any ROM, PSID tunes still play; RSID tunes that boot like a real C64 need at
     // least the KERNAL. setRoms() copies the data internally, so these buffers can go out of scope
     // immediately (as libsidplayfp's own demo does). Loaded once — the ROMs are engine-global.
-    const std::vector<std::uint8_t> kernal = loadRom(BASE_PATH "roms/kernal-901227-03.bin", 8192);
-    const std::vector<std::uint8_t> basic = loadRom(BASE_PATH "roms/basic-901226-01.bin", 8192);
-    const std::vector<std::uint8_t> chargen = loadRom(BASE_PATH "roms/chargen-901225-01.bin", 4096);
+    const std::vector<std::uint8_t> kernal = loadRom(assetPath("roms/kernal-901227-03.bin"), 8192);
+    const std::vector<std::uint8_t> basic = loadRom(assetPath("roms/basic-901226-01.bin"), 8192);
+    const std::vector<std::uint8_t> chargen = loadRom(assetPath("roms/chargen-901225-01.bin"), 4096);
     m_engine->setRoms(
         kernal.empty() ? nullptr : kernal.data(),
         basic.empty() ? nullptr : basic.data(),

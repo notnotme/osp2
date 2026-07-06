@@ -45,6 +45,7 @@ public:
 
     [[nodiscard]] std::string getDisplayName() const override;
     [[nodiscard]] std::filesystem::path getRootPath() const override;
+    [[nodiscard]] std::string getCacheId() const override;   // the cache dir's final component
     [[nodiscard]] std::optional<std::vector<FileEntry>> listDirectory(const std::filesystem::path &path) override;
     [[nodiscard]] std::filesystem::path fetchFile(const std::filesystem::path &path) override;
     void cancel() override;
@@ -84,7 +85,7 @@ private:
 
 
 // Maps one path component to a cache-safe form: FAT-illegal chars and controls -> '_', "."/".."
-// neutralized (traversal guard). Shared by the cache-path mirror (cacheFileFor) and main.cpp's
+// neutralized (traversal guard). Shared by the cache-path mirror (cacheFileFor) and Platform's
 // per-source cache-subdir derivation so both layouts sanitize identically.
 [[nodiscard]] std::string sanitizeCachePathComponent(const std::string &component);
 

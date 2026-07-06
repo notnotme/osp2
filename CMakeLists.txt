@@ -26,6 +26,7 @@ add_executable(OSP2
     src/gui/imgui_impl_opengl3_glad.cpp
     # OSP2 sources
     src/Application.cpp
+    src/Platform.cpp
     src/filesystem/FileSystem.cpp
     src/filesystem/FtpDataSource.cpp
     src/filesystem/LocalDataSource.cpp

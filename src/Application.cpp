@@ -38,7 +38,7 @@ void Application::handleButtonClick(const ButtonId buttonId) {
                     break;
                 case PlayerState::STOPPED:
                     // TODO(temporary): hardcoded test track until FileSystem returns real directories.
-                    m_player.play(BASE_PATH "music/test.s3m");
+                    m_player.play(assetPath("music/test.s3m"));
                     break;
             }
             break;

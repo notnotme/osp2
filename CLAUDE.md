@@ -23,7 +23,7 @@ Run the binary from the repository root — asset paths are relative (`romfs/`):
 ./cmake-build-debug/OSP2
 ```
 
-Nintendo Switch builds use the devkitPro CMake toolchain, which defines `NINTENDO_SWITCH`; that branch in CMakeLists.txt switches glad to pkg-config, adds ImGui compile definitions, and packages a `.nro` with `romfs/` embedded (accessed as `romfs:/` via the `__SWITCH__` define in main.cpp).
+Nintendo Switch builds use the devkitPro CMake toolchain, which defines `NINTENDO_SWITCH`; that branch in CMakeLists.txt switches glad to pkg-config, adds ImGui compile definitions, and packages a `.nro` with `romfs/` embedded (accessed as `romfs:/` via the `__SWITCH__` branch in `assetPath()`, src/Paths.h).
 
 **Every change must compile for the Switch too.** devkitPro is installed at `/opt/devkitpro`. Verify in `cmake-build-switch`:
 
@@ -94,7 +94,7 @@ Maintain `docs/` — one markdown file per domain (`audio.md`, `ui.md`, `filesys
 
 The codebase is intentionally small, with a strict separation between platform/lifecycle, an application/orchestration layer, presentation, and data:
 
-- **src/main.cpp** — owns everything platform-related: SDL/OpenGL/ImGui init and shutdown, font loading, the event loop, and the per-frame render loop. It constructs the `Application` and, each frame, calls `app.update()`, builds a `UiState` snapshot via `app.makeUiState()`, and hands it to `gui.drawUserInterface(state, actions)`.
+- **src/Platform.cpp** — owns everything platform-related: SDL/OpenGL/ImGui init and shutdown, font loading, the event loop, and the per-frame render loop. It also owns the subsystems (`Gui`, `PlayerController`, `FileSystem`, `VisualizerController`, `Settings`, `Application`) as value members — there are no globals — and exposes `create()`/`run()`/`destroy()`. Each frame it calls `app.update()`, builds a `UiState` snapshot via `app.makeUiState()`, and hands it to `gui.drawUserInterface(state, actions)`. **src/main.cpp** is just the entry point: it constructs a `Platform` and calls the three lifecycle methods. See docs/platform.md.
 - **src/Application.cpp** — the orchestration layer between presentation and data. It wires `Gui`, `PlayerController`, `FileSystem`, `Settings`, and `VisualizerController` together, exposes `makeUiState()` (an immutable per-frame view snapshot) and `makeUiActions()` (the callback bundle the Gui fires), and routes UI actions — button clicks, directory/file navigation, theme/visualizer/plugin-setting changes — to the right subsystem.
 - **src/gui/** — `Gui` is presentation-only. `drawUserInterface(const UiState &state, const UiActions &actions)` takes an immutable per-frame `UiState` snapshot (src/gui/UiState.h) plus a `UiActions` bundle of callbacks (src/gui/UiActions.h), including `onButtonClick` keyed by `ButtonId` (src/gui/ButtonId.h). The Gui holds only presentation state — sprite atlas texture, current theme, view mode, and popup/settings-edit latches — never application/domain state.
 - **src/filesystem/** — `FileSystem` is a threaded directory browser over a set of `DataSource`s: local storage (`LocalDataSource`) and the remote Modland archive over FTP (`FtpDataSource`, libcurl). Directory scans run on a worker thread; the main thread reads finished listings (`FileEntry`: name, size, is_directory) via `update()`, and the `Application` feeds them to the Gui. See docs/filesystem.md for the threading contract.

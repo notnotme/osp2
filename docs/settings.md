@@ -21,7 +21,7 @@ classDiagram
 
 ## The file — osp2.ini
 
-Location (`paths::configPath()` in `src/Paths.h`, the single source of path truth): desktop `SDL_GetBasePath() + "osp2.ini"` (lands in the build dir, which is git-ignored); Switch `/switch/OSP2/osp2.ini` (romfs is read-only; `/` is libnx's default sdmc device, and `/switch/OSP2/` also holds the download cache). Created with defaults on first launch so the user can find and hand-edit it.
+Location (`configPath()` in `src/Paths.h`, the single source of path truth): desktop `SDL_GetBasePath() + "osp2.ini"` (lands in the build dir, which is git-ignored); Switch `/switch/OSP2/osp2.ini` (romfs is read-only; `/` is libnx's default sdmc device, and `/switch/OSP2/` also holds the download cache). Created with defaults on first launch so the user can find and hand-edit it.
 
 ```ini
 [user]
@@ -44,7 +44,7 @@ Each optional `[source.NAME]` section adds an extra FTP source at the virtual ro
 - `host` (**required**) — FTP hostname, no scheme (`ftp://` is added internally). An empty or missing `host` (or an empty `NAME`) skips the section with an `SDL_Log`.
 - `path` (optional, default `/`) — base directory to browse.
 
-The cache subdir for each source is derived from `NAME`, FAT-sanitized (illegal chars and `.`/`..` mapped to `_`) so it is writable on the Switch's SD card. Like `default_folder`, these sections are **hand-edit only** — never seeded on first run and never surfaced in the UI. `main.cpp` discovers them via `Settings::getSectionNames("source.")` (all section names starting with a given prefix, in sorted order — `Settings` itself knows nothing about the source schema).
+The cache subdir for each source is derived from `NAME`, FAT-sanitized (illegal chars and `.`/`..` mapped to `_`) so it is writable on the Switch's SD card. Like `default_folder`, these sections are **hand-edit only** — never seeded on first run and never surfaced in the UI. `Platform` discovers them via `Settings::getSectionNames("source.")` (all section names starting with a given prefix, in sorted order — `Settings` itself knows nothing about the source schema).
 
 ```ini
 [source.Modland Mirror]
@@ -71,6 +71,6 @@ path = /pub/modules
 
 ## Startup wiring & change flow
 
-`main.cpp` (composition root) loads settings, then applies the persisted `[user] theme` via `Gui::applyTheme` before the loop, and resolves the browser start path from `[user] default_folder` when it names a valid directory. Runtime changes go through `Application` (which holds a `Settings &`): the UI reports intent, the presentation layer applies the visible effect, and `Application` persists it (`set…` + `save()`). See [application.md](application.md) for the theme change flow.
+`Platform` (composition root) loads settings, then applies the persisted `[user] theme` via `Gui::applyTheme` before the loop, and resolves the browser start path from `[user] default_folder` when it names a valid directory. Runtime changes go through `Application` (which holds a `Settings &`): the UI reports intent, the presentation layer applies the visible effect, and `Application` persists it (`set…` + `save()`). See [application.md](application.md) for the theme change flow.
 
-**Plugin settings** live in `[plugin.<name>]` sections, where `<name>` is each decoder plugin's `PlayerPlugin::getName()`. After `player.create()`, `main.cpp` iterates `player.getPluginSettings()` and, for every descriptor, pushes `getInt("plugin."+name, key, descriptor.value)` back through `player.applyPluginSetting(...)` — so an absent key keeps the plugin's own default, and no plugin name is hardcoded in `main.cpp`. The plugin clamps values on store, so a malformed hand-edited value cannot break playback. The INI is **not** seeded with plugin sections on first run (they materialize once chunk 6c writes them on change); reading tolerates their absence. See [audio.md](audio.md) for the descriptor/threading contract.
+**Plugin settings** live in `[plugin.<name>]` sections, where `<name>` is each decoder plugin's `PlayerPlugin::getName()`. After `player.create()`, `Platform` iterates `player.getPluginSettings()` and, for every descriptor, pushes `getInt("plugin."+name, key, descriptor.value)` back through `player.applyPluginSetting(...)` — so an absent key keeps the plugin's own default, and no plugin name is hardcoded in `Platform`. The plugin clamps values on store, so a malformed hand-edited value cannot break playback. The INI is **not** seeded with plugin sections on first run (they materialize once chunk 6c writes them on change); reading tolerates their absence. See [audio.md](audio.md) for the descriptor/threading contract.

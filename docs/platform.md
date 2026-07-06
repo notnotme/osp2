@@ -1,0 +1,80 @@
+# Platform domain
+
+Platform / lifecycle layer in `src/Platform.{h,cpp}` (plus the tiny `src/main.cpp` entry point).
+`Platform` owns everything platform-related — the SDL window, the OpenGL context, the game
+controller handle, and Dear ImGui — **and** owns the process's subsystems (`Gui`,
+`PlayerController`, `FileSystem`, `VisualizerController`, `Settings`, `Application`) as value
+members. It brings them up, runs the event + render loop, and tears them down, exposing
+`create()` / `run()` / `destroy()`. `main.cpp` reduces to constructing a `Platform` and calling the
+three in order — there are no file-scope globals.
+
+This is the platform layer; `Application` is the orchestration layer above it (see
+[application.md](application.md)). The visualizer bridge (audio tap → `VisualFrame` → active
+visualizer) lives here, not in `Application`, because it is a platform-layer concern —
+`Gui`/`Application` stay ignorant of the visualizer domain.
+
+```mermaid
+classDiagram
+    class Platform {
+        -SDL_Window* m_window
+        -SDL_GameController* m_controller
+        -SDL_GLContext m_glContext
+        -Gui m_gui
+        -PlayerController m_player
+        -FileSystem m_fileSystem
+        -VisualizerController m_visualizer
+        -Settings m_settings
+        -Application m_app
+        +create()
+        +run()
+        +destroy()
+        -initSdlAndGl()
+        -initImGui()
+        -loadFonts()
+        -initPlayerAndSettings()
+        -resolveStartPath() path
+        -initNetwork()
+        -buildDataSources() vector~unique_ptr~DataSource~~
+    }
+
+    Platform *-- Gui : owns
+    Platform *-- PlayerController : owns
+    Platform *-- FileSystem : owns
+    Platform *-- VisualizerController : owns
+    Platform *-- Settings : owns
+    Platform *-- Application : owns
+    Application o-- PlayerController : references
+    Application o-- FileSystem : references
+    Application o-- Settings : references
+```
+
+## Notes
+
+- **Ownership vs. wiring.** `Platform` *owns* the subsystems by value; `Application` (also a member)
+  holds *references* to `m_player`/`m_fileSystem`/`m_settings`. Member **declaration order is
+  load-bearing**: those three precede `m_app`, so they are constructed before `Application`'s
+  constructor binds references to them. `Platform` is non-copyable and non-movable (deleted copy +
+  user-declared destructor) and lives as a `main()` local, so those references never dangle.
+- **`create()` order is load-bearing** and mirrors the old `initialize()`:
+  `initSdlAndGl()` → `initImGui()` (context + backends + `loadFonts()` + `m_gui.initialize()`) →
+  `m_visualizer.create()` (GL context must be up) → `initPlayerAndSettings()` (settings load +
+  theme + `m_player.create()` + the persisted plugin-setting push) → `resolveStartPath()` →
+  `initNetwork()` (`curl_global_init`, and `socketInitializeDefault()` on Switch) **before**
+  `m_fileSystem.create(...)` spawns its worker thread.
+- **`destroy()` is the exact reverse teardown** (`m_fileSystem.destroy()` joins the worker first,
+  then `curl_global_cleanup()` / Switch `socketExit()`, then player/visualizer/gui, ImGui shutdown,
+  controller close, GL context + window, `SDL_Quit`, `IMG_Quit`). Exceptions from `create()` are
+  left uncaught (init failure terminates the process, as before).
+- **Switch cursor lifetime.** On the Switch the gamepad drives an emulated ImGui cursor via a
+  `CursorEmulator` (see [input.md](input.md)) constructed as a **local inside `run()`**, so it (and
+  the controller it owns) is destroyed when `run()` returns — before `destroy()` calls `SDL_Quit`,
+  which force-frees open controllers (a later close would be a use-after-free).
+- **The entry point stays wrapped as `SDL_main`.** `main.cpp` keeps `#include <SDL.h>` so SDL's
+  `#define main SDL_main` applies there; the build links `SDL2::SDL2main`, whose real `main` calls
+  it. `Platform.h` uses granular SDL includes (`<SDL_video.h>`, `<SDL_gamecontroller.h>`) so it does
+  not drag `SDL_main` into other translation units.
+- **Named constants.** Window size is `Platform::kWindowWidth`/`kWindowHeight` (1280×720), a private
+  static `constexpr` shared by `SDL_CreateWindow` and the Switch `CursorEmulator`. Single-use
+  tunables (the GL context version, the merged font point size) are `constexpr` locals in the method
+  that uses them. Read-only asset paths come from `assetPath()`, writable paths from `configPath()` /
+  `cachePath()` — all in `src/Paths.h`.
