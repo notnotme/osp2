@@ -64,6 +64,24 @@ make -j$(nproc)
 
 This produces `OSP2.nro` with `romfs/` embedded, ready to run through hbmenu or nxlink.
 
+## Formatting & linting
+
+House style is enforced with **clang-format** and **clang-tidy** (both pinned to **18** — output differs across releases), configured by `.clang-format` and `.clang-tidy` at the repo root. Both are scoped to `src/` only; `external/` (vendored ImGui) and `cmake-build-*` are never formatted or linted.
+
+```sh
+sudo apt install clang-format-18 clang-tidy-18
+```
+
+The CMake targets glob all of `src/` (including the Switch-only `switch_compat.c`) and are decoupled from the normal build:
+
+```sh
+cmake --build build --target format         # rewrite src/ in place
+cmake --build build --target format-check   # dry-run; non-zero exit on any diff (CI / pre-commit)
+cmake --build build --target tidy           # clang-tidy over src/ (needs a configured desktop build dir)
+```
+
+`format-check` must pass and `tidy` findings should be addressed before committing. `clang-tidy` reads the desktop `compile_commands.json` (emitted automatically when you configure a build dir).
+
 ## Project layout
 
 | Path | Contents |

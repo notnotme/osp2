@@ -39,13 +39,14 @@ typedef void CURL;
 // serializes DataSource calls (see DataSource.h).
 class FtpDataSource final : public DataSource {
 public:
-    FtpDataSource(std::string displayName, std::string host,
-                  std::filesystem::path basePath, std::filesystem::path cacheDir);
+    FtpDataSource(
+        std::string displayName, std::string host, std::filesystem::path basePath, std::filesystem::path cacheDir
+    );
     ~FtpDataSource() override;
 
     [[nodiscard]] std::string getDisplayName() const override;
     [[nodiscard]] std::filesystem::path getRootPath() const override;
-    [[nodiscard]] std::string getCacheId() const override;   // the cache dir's final component
+    [[nodiscard]] std::string getCacheId() const override; // the cache dir's final component
     [[nodiscard]] std::optional<std::vector<FileEntry>> listDirectory(const std::filesystem::path &path) override;
     [[nodiscard]] std::filesystem::path fetchFile(const std::filesystem::path &path) override;
     void cancel() override;
@@ -68,15 +69,14 @@ private:
     void writeListingCache(const std::filesystem::path &cacheFile, const std::string &response) const;
     // Renames a fully-written <target>.part into target; removes it and logs on failure. Returns
     // success. Shared by writeListingCache and fetchFile's download staging.
-    [[nodiscard]] bool commitPart(const std::filesystem::path &partFile,
-                                  const std::filesystem::path &target) const;
+    [[nodiscard]] bool commitPart(const std::filesystem::path &partFile, const std::filesystem::path &target) const;
     // NOSIGNAL + connect/stall timeouts, re-applied after every curl_easy_reset.
     void applyCommonOptions() const;
 
     std::string m_displayName;
     std::string m_host;
     std::filesystem::path m_basePath;
-    std::filesystem::path m_cacheDir;   // download target root (chunk 7b)
+    std::filesystem::path m_cacheDir; // download target root (chunk 7b)
     CURL *m_curl = nullptr;
     // Set from the main thread (cancel()), read on the worker by the curl progress callback to abort
     // a blocking perform(). mutable so the const applyCommonOptions() can hand its address to curl.

@@ -29,14 +29,17 @@
 
 
 // decode() renders straight into the int16 output buffer via gme_play, which takes short*.
-static_assert(sizeof(short) == sizeof(std::int16_t), "GmePlugin decodes gme_play's short output directly into the int16 audio buffer");
+static_assert(
+    sizeof(short) == sizeof(std::int16_t),
+    "GmePlugin decodes gme_play's short output directly into the int16 audio buffer"
+);
 
 namespace {
     // Maps a possibly-null C string (libgme leaves absent fields as nullptr) to a std::string.
     std::string toString(const char *value) {
         return value != nullptr ? std::string(value) : std::string();
     }
-}
+} // namespace
 
 GmePlugin::GmePlugin()
     : m_sampleRate(0),
@@ -66,7 +69,7 @@ bool GmePlugin::open(const std::filesystem::path &path) {
             return false;
         }
 
-        const std::vector<char> data{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+        const std::vector<char> data{std::istreambuf_iterator(file), std::istreambuf_iterator<char>()};
 
         Music_Emu *raw = nullptr;
         if (const gme_err_t error = gme_open_data(data.data(), static_cast<long>(data.size()), &raw, m_sampleRate)) {
@@ -130,7 +133,7 @@ int GmePlugin::decode(std::int16_t *buffer, const int frames) {
     }
 
     // gme_play writes frames*2 interleaved-stereo 16-bit samples straight into the caller buffer.
-    if (gme_play(m_emu.get(), frames * 2, reinterpret_cast<short *>(buffer))) {
+    if (gme_play(m_emu.get(), frames * 2, buffer)) {
         return 0;
     }
     return frames;
@@ -162,8 +165,8 @@ TrackMetadata GmePlugin::getMetadata() const {
 
 std::vector<PluginSetting> GmePlugin::getSettings() const {
     return {
-        {"stereo_depth", "Stereo depth", IntRange{0, 100}, m_stereoDepth},
-        {"accuracy", "Emulation accuracy", EnumOptions{{"Fast", "Accurate"}}, m_accuracy}
+        {"stereo_depth", "Stereo depth",       IntRange{0, 100},                  m_stereoDepth},
+        {"accuracy",     "Emulation accuracy", EnumOptions{{"Fast", "Accurate"}}, m_accuracy   }
     };
 }
 
@@ -176,7 +179,7 @@ void GmePlugin::applySetting(const std::string &key, const int value) {
             gme_set_stereo_depth(m_emu.get(), m_stereoDepth / 100.0);
         }
     } else if (key == "accuracy") {
-        m_accuracy = (value == 1) ? 1 : 0;
+        m_accuracy = value == 1 ? 1 : 0;
         if (m_emu) {
             gme_enable_accuracy(m_emu.get(), m_accuracy);
         }

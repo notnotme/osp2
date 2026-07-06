@@ -23,12 +23,14 @@
  * the Switch build only. No <string.h>/<libgen.h> include: their asm aliases
  * would rename this symbol and defeat the purpose.
  */
-char *basename(char *path)
-{
+char *basename(char *path) {
     char *last = path;
-    if (path)
-        for (char *s = path; *s; ++s)
-            if (*s == '/')
+    if (path) {
+        for (char *s = path; *s; ++s) {
+            if (*s == '/') {
                 last = s + 1;
+            }
+        }
+    }
     return last;
 }

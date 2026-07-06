@@ -63,7 +63,7 @@ void VisualizerController::select(const std::size_t index) {
     }
 }
 
-void VisualizerController::render(const VisualFrame &frame) {
+void VisualizerController::render(const VisualFrame &frame) const {
     // Guarded so render() is a safe no-op before create() / after destroy() and if the active index
     // ever falls out of range (e.g. plugins removed at runtime).
     if (m_activeIndex < m_plugins.size()) {

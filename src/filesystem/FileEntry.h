@@ -26,8 +26,9 @@
 
 struct FileEntry {
     std::string name;
-    std::int64_t file_size;   // bytes
-    std::string type;         // uppercase ext without dot ("S3M"), "Folder", or "Source"; empty when a source hands it over pre-derivation
+    std::int64_t file_size; // bytes
+    std::string
+        type; // uppercase ext without dot ("S3M"), "Folder", or "Source"; empty when a source hands it over pre-derivation
     bool is_directory;
 };
 

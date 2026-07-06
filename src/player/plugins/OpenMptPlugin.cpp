@@ -31,14 +31,19 @@ namespace {
     // Maps the "interpolation" setting index to a libopenmpt filter length. Out-of-range → 0.
     std::int32_t interpolationLength(const int index) {
         switch (index) {
-            case 1:  return 1;  // None
-            case 2:  return 2;  // Linear
-            case 3:  return 4;  // Cubic
-            case 4:  return 8;  // Sinc
-            default: return 0;  // Default
+        case 1:
+            return 1; // None
+        case 2:
+            return 2; // Linear
+        case 3:
+            return 4; // Cubic
+        case 4:
+            return 8; // Sinc
+        default:
+            return 0; // Default
         }
     }
-}
+} // namespace
 
 OpenMptPlugin::OpenMptPlugin()
     : m_sampleRate(0),
@@ -67,8 +72,9 @@ bool OpenMptPlugin::open(const std::filesystem::path &path) {
         m_module = std::make_unique<openmpt::module>(file);
         m_module->set_repeat_count(0);
         m_module->set_render_param(openmpt::module::RENDER_STEREOSEPARATION_PERCENT, m_stereoSeparation);
-        m_module->set_render_param(openmpt::module::RENDER_INTERPOLATIONFILTER_LENGTH,
-                                   interpolationLength(m_interpolation));
+        m_module->set_render_param(
+            openmpt::module::RENDER_INTERPOLATIONFILTER_LENGTH, interpolationLength(m_interpolation)
+        );
         m_metadata = ModuleMetadata{
             m_module->get_metadata("title"),
             m_module->get_metadata("artist"),
@@ -123,9 +129,8 @@ TrackMetadata OpenMptPlugin::getMetadata() const {
 
 std::vector<PluginSetting> OpenMptPlugin::getSettings() const {
     return {
-        {"stereo_separation", "Stereo separation", IntRange{0, 200}, m_stereoSeparation},
-        {"interpolation", "Interpolation",
-         EnumOptions{{"Default", "None", "Linear", "Cubic", "Sinc"}}, m_interpolation}
+        {"stereo_separation", "Stereo separation", IntRange{0, 200},                                            m_stereoSeparation},
+        {"interpolation",     "Interpolation",     EnumOptions{{"Default", "None", "Linear", "Cubic", "Sinc"}}, m_interpolation   }
     };
 }
 
@@ -139,10 +144,11 @@ void OpenMptPlugin::applySetting(const std::string &key, const int value) {
             m_module->set_render_param(openmpt::module::RENDER_STEREOSEPARATION_PERCENT, m_stereoSeparation);
         }
     } else if (key == "interpolation") {
-        m_interpolation = (value >= 0 && value <= 4) ? value : 0;
+        m_interpolation = value >= 0 && value <= 4 ? value : 0;
         if (m_module) {
-            m_module->set_render_param(openmpt::module::RENDER_INTERPOLATIONFILTER_LENGTH,
-                                       interpolationLength(m_interpolation));
+            m_module->set_render_param(
+                openmpt::module::RENDER_INTERPOLATIONFILTER_LENGTH, interpolationLength(m_interpolation)
+            );
         }
     }
 }

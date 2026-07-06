@@ -21,11 +21,7 @@
 #define OSP2_PLAYER_STATE_H
 
 
-enum class PlayerState {
-    STOPPED,
-    PLAYING,
-    PAUSED
-};
+enum class PlayerState { STOPPED, PLAYING, PAUSED };
 
 
 #endif //OSP2_PLAYER_STATE_H

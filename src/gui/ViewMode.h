@@ -23,9 +23,6 @@
 // Which regions the Gui draws. WORKSPACE shows the full UI (panes + player bar);
 // VISUALIZATION collapses to the top bar only, leaving the area below for the
 // future visualization system.
-enum class ViewMode {
-    WORKSPACE,
-    VISUALIZATION
-};
+enum class ViewMode { WORKSPACE, VISUALIZATION };
 
 #endif //OSP2_VIEW_MODE_H

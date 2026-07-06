@@ -35,7 +35,9 @@ public:
     [[nodiscard]] std::string getDisplayName() const override;
     [[nodiscard]] std::filesystem::path getRootPath() const override;
     [[nodiscard]] std::optional<std::vector<FileEntry>> listDirectory(const std::filesystem::path &path) override;
-    [[nodiscard]] std::filesystem::path fetchFile(const std::filesystem::path &path) override { return path; }
+    [[nodiscard]] std::filesystem::path fetchFile(const std::filesystem::path &path) override {
+        return path;
+    }
 };
 
 

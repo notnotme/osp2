@@ -94,7 +94,7 @@ public:
     // int16 samples to normalized float. Returns the number of frames copied, or 0 if
     // nothing has been published yet. Never takes a lock; retries on a torn read, so it
     // can spin briefly under contention but never blocks indefinitely.
-    [[nodiscard]] std::size_t read(float *out, std::size_t maxFrames) const noexcept {
+    [[nodiscard]] std::size_t read(float *out, const std::size_t maxFrames) const noexcept {
         while (true) {
             const std::uint32_t seq_before = m_seq.load(std::memory_order_acquire);
             if (seq_before & 1u) {

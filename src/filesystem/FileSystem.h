@@ -55,15 +55,15 @@ private:
 
     // Main thread only, mutated only while the worker is idle; the worker uses the source captured at launch.
     DataSource *m_activeSource;
-    DataSource *m_sourceBeforeScan;   // restored by update() when a scan fails (nullopt)
+    DataSource *m_sourceBeforeScan; // restored by update() when a scan fails (nullopt)
 
     enum class WorkKind { None, Scan, Fetch };
-    WorkKind m_workKind = WorkKind::None;   // main thread only: what the current/last worker is doing
+    WorkKind m_workKind = WorkKind::None; // main thread only: what the current/last worker is doing
 
     // Set by navigateToParent() when it reaches the virtual root, applied by update() next frame.
     // Deferred (not swapped in place) because navigation callbacks fire mid-draw while the Gui is
     // iterating m_content: clearing it synchronously would shrink the vector under the list clipper.
-    bool m_pendingVirtualRoot = false;   // main thread only
+    bool m_pendingVirtualRoot = false; // main thread only
 
     // Worker synchronization.
     std::atomic_bool m_working;
@@ -71,8 +71,8 @@ private:
     mutable std::mutex m_mutex;
     std::filesystem::path m_pendingPath;      // m_mutex
     std::vector<FileEntry> m_pendingContent;  // m_mutex
-    bool m_scanSucceeded;                      // m_mutex
-    std::optional<FetchResult> m_fetchResult;  // m_mutex
+    bool m_scanSucceeded;                     // m_mutex
+    std::optional<FetchResult> m_fetchResult; // m_mutex
 
 public:
     FileSystem(const FileSystem &) = delete;
@@ -81,8 +81,11 @@ public:
     ~FileSystem() = default;
 
 public:
-    void create(std::vector<std::unique_ptr<DataSource>> sources, const std::filesystem::path &startPath,
-                std::function<bool(const std::filesystem::path &)> isPlayable);
+    void create(
+        std::vector<std::unique_ptr<DataSource>> sources,
+        const std::filesystem::path &startPath,
+        std::function<bool(const std::filesystem::path &)> isPlayable
+    );
     void destroy();
 
     void navigateToEntry(const FileEntry &entry);
@@ -93,17 +96,17 @@ public:
     void update();
 
 public:
-    [[nodiscard]] const std::filesystem::path &getPath() const;   // empty at the virtual root
+    [[nodiscard]] const std::filesystem::path &getPath() const; // empty at the virtual root
     [[nodiscard]] const std::vector<FileEntry> &getContent() const;
     [[nodiscard]] bool isWorking() const;
-    [[nodiscard]] bool isFetching() const;   // true while a file download (not a scan) is in flight
+    [[nodiscard]] bool isFetching() const; // true while a file download (not a scan) is in flight
 
 private:
     void startScan(const std::filesystem::path &path);
     void startFetch(const std::filesystem::path &path);
     void showVirtualRoot();
     void scan(DataSource *source, std::filesystem::path path);
-    void fetch(DataSource *source, std::filesystem::path path);
+    void fetch(DataSource *source, const std::filesystem::path &path);
 };
 
 

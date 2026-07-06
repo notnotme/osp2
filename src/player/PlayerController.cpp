@@ -165,7 +165,7 @@ PlaybackStatus PlayerController::getStatus() const {
     // A track that ended with no next to auto-advance to stays STOPPED with its plugin still loaded
     // (teardown is main-thread only). Honor PlaybackStatus's "0 when stopped" contract so the timer
     // resets to 0:00 rather than freezing on the finished track's final position/duration.
-    const bool stopped = (m_state == PlayerState::STOPPED);
+    const bool stopped = m_state == PlayerState::STOPPED;
     return {
         m_state,
         m_activePlugin->getTitle(),
@@ -233,8 +233,9 @@ void PlayerController::decode(Uint8 *stream, const int len) {
     m_audioTap.publish(buffer, static_cast<std::size_t>(frames_written));
 
     if (frames_written < frames_wanted) {
-        SDL_memset(buffer + frames_written * CHANNELS, 0,
-                   (frames_wanted - frames_written) * sizeof(std::int16_t) * CHANNELS);
+        SDL_memset(
+            buffer + frames_written * CHANNELS, 0, (frames_wanted - frames_written) * sizeof(std::int16_t) * CHANNELS
+        );
         // Track teardown stays on the main thread; only flip the state here.
         m_state = PlayerState::STOPPED;
         m_trackEnded.store(true);

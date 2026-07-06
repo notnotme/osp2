@@ -77,11 +77,31 @@ public:
     virtual ~Gui() = default;
 
 private:
-    void drawTopBar(const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings, const std::function<void(Theme)> &onThemeChange, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit, const std::vector<std::string> &visualizerNames, std::size_t activeVisualizer, const std::function<void(std::size_t)> &onSelectVisualizer);
-    void drawAboutPopup();
-    void drawPluginPopups(const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit);
+    void drawTopBar(
+        const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings,
+        const std::function<void(Theme)> &onThemeChange,
+        const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange,
+        const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit,
+        const std::vector<std::string> &visualizerNames,
+        std::size_t activeVisualizer,
+        const std::function<void(std::size_t)> &onSelectVisualizer
+    );
+    void drawAboutPopup() const;
+    void drawPluginPopups(
+        const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings,
+        const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange,
+        const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit
+    );
     void drawCurrentPath(const std::string &path);
-    void drawFileBrowser(const std::vector<FileEntry> &files, const std::function<void(const FileEntry &)> &onFileClick, const std::function<void(const FileEntry &)> &onDirectoryClick, bool isWorking, const std::string &workingLabel, const std::function<void()> &onCancelWork, const std::string &playingFileName);
+    void drawFileBrowser(
+        const std::vector<FileEntry> &files,
+        const std::function<void(const FileEntry &)> &onFileClick,
+        const std::function<void(const FileEntry &)> &onDirectoryClick,
+        bool isWorking,
+        const std::string &workingLabel,
+        const std::function<void()> &onCancelWork,
+        const std::string &playingFileName
+    );
     void drawTabsSection(const TrackMetadata &metadata);
     void drawFileMetadata(const TrackMetadata &metadata);
     void drawModuleMetadata(const ModuleMetadata &metadata);
@@ -89,7 +109,7 @@ private:
     void drawSidMetadata(const SidMetadata &metadata);
     void drawSc68Metadata(const Sc68Metadata &metadata);
     void drawTabPlaylist();
-    void drawPlayerBar(const PlaybackStatus &status, const std::function<void(ButtonId)> &onButtonClick);
+    void drawPlayerBar(const PlaybackStatus &status, const std::function<void(ButtonId)> &onButtonClick) const;
 
 public:
     void initialize();

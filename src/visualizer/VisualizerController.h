@@ -49,7 +49,7 @@ public:
     [[nodiscard]] std::vector<std::string> getNames() const;
     [[nodiscard]] std::size_t getActiveIndex() const;
     void select(std::size_t index);
-    void render(const VisualFrame &frame);
+    void render(const VisualFrame &frame) const;
 };
 
 

@@ -37,7 +37,10 @@
 
 namespace {
     // std::visit helper: builds an overload set from lambdas (C++20 aggregate CTAD, no guide needed).
-    template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
+    template <class... Ts>
+    struct overloaded : Ts... {
+        using Ts::operator()...;
+    };
 
     // Shared building blocks for the per-plugin metadata tables (drawModuleMetadata,
     // drawGmeMetadata, and future SID/sc68). Text rows are skipped when empty; count rows
@@ -91,7 +94,7 @@ namespace {
 
         char buffer[16];
         std::snprintf(buffer, sizeof(buffer), "%d:%02d", minutes, remaining_seconds);
-        return std::string(buffer);
+        return {buffer};
     }
 
     // Formats a byte count as "N B", "N.N KB", or "N.N MB".
@@ -104,13 +107,16 @@ namespace {
         } else {
             std::snprintf(buffer, sizeof(buffer), "%.1f MB", static_cast<double>(bytes) / (1024.0 * 1024.0));
         }
-        return std::string(buffer);
+        return {buffer};
     }
-}
+} // namespace
 
 
 Gui::Gui()
-    : m_texture(0), m_theme(Theme::DARK), m_viewMode(ViewMode::WORKSPACE), m_aboutRequested(false) {}
+    : m_texture(0),
+      m_theme(Theme::DARK),
+      m_viewMode(ViewMode::WORKSPACE),
+      m_aboutRequested(false) {}
 
 void Gui::initialize() {
     const auto bin_path = assetPath("sprites/sprites.bin");
@@ -182,19 +188,27 @@ void Gui::finalize() {
 void Gui::applyTheme(const Theme theme) {
     m_theme = theme;
     switch (theme) {
-        case Theme::DARK:
-            ImGui::StyleColorsDark();
-            break;
-        case Theme::LIGHT:
-            ImGui::StyleColorsLight();
-            break;
-        case Theme::CLASSIC:
-            ImGui::StyleColorsClassic();
-            break;
+    case Theme::DARK:
+        ImGui::StyleColorsDark();
+        break;
+    case Theme::LIGHT:
+        ImGui::StyleColorsLight();
+        break;
+    case Theme::CLASSIC:
+        ImGui::StyleColorsClassic();
+        break;
     }
 }
 
-void Gui::drawTopBar(const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings, const std::function<void(Theme)> &onThemeChange, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit, const std::vector<std::string> &visualizerNames, const std::size_t activeVisualizer, const std::function<void(std::size_t)> &onSelectVisualizer) {
+void Gui::drawTopBar(
+    const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings,
+    const std::function<void(Theme)> &onThemeChange,
+    const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange,
+    const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit,
+    const std::vector<std::string> &visualizerNames,
+    const std::size_t activeVisualizer,
+    const std::function<void(std::size_t)> &onSelectVisualizer
+) {
     if (ImGui::BeginMainMenuBar()) {
         ImGui::TextUnformatted("OSP2");
         ImGui::Separator();
@@ -282,16 +296,14 @@ void Gui::drawTopBar(const std::vector<std::pair<std::string, std::vector<Plugin
     }
 }
 
-void Gui::drawAboutPopup() {
+void Gui::drawAboutPopup() const {
     const auto center = ImGui::GetMainViewport()->GetCenter();
     ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
 
     constexpr auto flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
     if (ImGui::BeginPopupModal("About", nullptr, flags)) {
         const auto &logo = m_sprites.at("k7");
-        ImGui::Image(m_texture, ImVec2(logo.w, logo.h),
-            ImVec2(logo.s, logo.t),
-            ImVec2(logo.p, logo.q));
+        ImGui::Image(m_texture, ImVec2(logo.w, logo.h), ImVec2(logo.s, logo.t), ImVec2(logo.p, logo.q));
 
         ImGui::Spacing();
         ImGui::TextUnformatted("OSP2 — chiptune player");
@@ -313,7 +325,11 @@ void Gui::drawAboutPopup() {
 // applies to the decoder live (onPluginSettingChange) for immediate audio preview but does not
 // persist. Save writes every value to the INI (onPluginSettingCommit per descriptor) and closes;
 // Close closes without persisting, leaving the live-applied values in the decoder for the session.
-void Gui::drawPluginPopups(const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange, const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit) {
+void Gui::drawPluginPopups(
+    const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings,
+    const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange,
+    const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit
+) {
     const auto center = ImGui::GetMainViewport()->GetCenter();
     constexpr auto flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
 
@@ -345,21 +361,26 @@ void Gui::drawPluginPopups(const std::vector<std::pair<std::string, std::vector<
             // Reference into the working copy: a stable address across frames, so ImGui sees a
             // persistent backing value and the widget never flashes.
             int &v = m_settingsEdit[setting.key];
-            std::visit([&](const auto &shape) {
-                using T = std::decay_t<decltype(shape)>;
-                if constexpr (std::is_same_v<T, IntRange>) {
-                    if (ImGui::SliderInt(setting.label.c_str(), &v, shape.min, shape.max)) {
-                        onPluginSettingChange(pluginName, setting.key, v);
+            std::visit(
+                [&](const auto &shape) {
+                    using T = std::decay_t<decltype(shape)>;
+                    if constexpr (std::is_same_v<T, IntRange>) {
+                        if (ImGui::SliderInt(setting.label.c_str(), &v, shape.min, shape.max)) {
+                            onPluginSettingChange(pluginName, setting.key, v);
+                        }
+                    } else if constexpr (std::is_same_v<T, EnumOptions>) {
+                        std::vector<const char *> items;
+                        items.reserve(shape.labels.size());
+                        for (const auto &l : shape.labels) {
+                            items.push_back(l.c_str());
+                        }
+                        if (ImGui::Combo(setting.label.c_str(), &v, items.data(), static_cast<int>(items.size()))) {
+                            onPluginSettingChange(pluginName, setting.key, v);
+                        }
                     }
-                } else if constexpr (std::is_same_v<T, EnumOptions>) {
-                    std::vector<const char *> items;
-                    items.reserve(shape.labels.size());
-                    for (const auto &l : shape.labels) items.push_back(l.c_str());
-                    if (ImGui::Combo(setting.label.c_str(), &v, items.data(), static_cast<int>(items.size()))) {
-                        onPluginSettingChange(pluginName, setting.key, v);
-                    }
-                }
-            }, setting.shape);
+                },
+                setting.shape
+            );
             ImGui::PopID();
         }
         ImGui::PopID();
@@ -369,7 +390,7 @@ void Gui::drawPluginPopups(const std::vector<std::pair<std::string, std::vector<
             for (const auto &setting : descriptors) {
                 onPluginSettingCommit(pluginName, setting.key, m_settingsEdit[setting.key]);
             }
-            ImGui::CloseCurrentPopup();   // the not-open branch clears m_openSettingsPlugin next frame
+            ImGui::CloseCurrentPopup(); // the not-open branch clears m_openSettingsPlugin next frame
         }
         ImGui::SameLine();
         if (ImGui::Button("Close")) {
@@ -386,15 +407,23 @@ void Gui::drawCurrentPath(const std::string &path) {
     ImGui::Text("%s", path.c_str());
 }
 
-void Gui::drawFileBrowser(const std::vector<FileEntry> &files, const std::function<void(const FileEntry &)> &onFileClick, const std::function<void(const FileEntry &)> &onDirectoryClick, const bool isWorking, const std::string &workingLabel, const std::function<void()> &onCancelWork, const std::string &playingFileName) {
+void Gui::drawFileBrowser(
+    const std::vector<FileEntry> &files,
+    const std::function<void(const FileEntry &)> &onFileClick,
+    const std::function<void(const FileEntry &)> &onDirectoryClick,
+    const bool isWorking,
+    const std::string &workingLabel,
+    const std::function<void()> &onCancelWork,
+    const std::string &playingFileName
+) {
     // Rising edge of the loading overlay: focus is moved to the Cancel button once on this frame
     // (below) so gamepad/keyboard on the Switch can reach it; m_wasWorking is updated at function end.
     const bool overlayJustAppeared = isWorking && !m_wasWorking;
 
     constexpr auto folder_color = ImVec4(0.9f, 0.7f, 0.2f, 1.0f);
     constexpr auto file_color = ImVec4(0.2f, 0.6f, 0.9f, 1.0f);
-    constexpr auto file_browser_flags = ImGuiTableFlags_SizingFixedFit
-        | ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg;
+    constexpr auto file_browser_flags =
+        ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg;
 
     const auto file_list_count = static_cast<int32_t>(files.size());
 
@@ -528,21 +557,25 @@ void Gui::drawFileMetadata(const TrackMetadata &metadata) {
     if (ImGui::BeginTabItem("Metadata")) {
         // Dispatch on the variant. Deliberately NO generic `auto` fallback: a new plugin's
         // metadata alternative must fail to compile here until its draw function is added.
-        std::visit(overloaded{
-            [](std::monostate) {
-                constexpr auto text = "No track loaded";
-                const auto available = ImGui::GetContentRegionAvail();
-                const auto text_size = ImGui::CalcTextSize(text);
-                ImGui::SetCursorPos(ImVec2(
-                    ImGui::GetCursorPosX() + (available.x - text_size.x) / 2.0f,
-                    ImGui::GetCursorPosY() + (available.y - text_size.y) / 2.0f));
-                ImGui::TextDisabled("%s", text);
+        std::visit(
+            overloaded{
+                [](std::monostate) {
+                    constexpr auto text = "No track loaded";
+                    const auto available = ImGui::GetContentRegionAvail();
+                    const auto text_size = ImGui::CalcTextSize(text);
+                    ImGui::SetCursorPos(ImVec2(
+                        ImGui::GetCursorPosX() + (available.x - text_size.x) / 2.0f,
+                        ImGui::GetCursorPosY() + (available.y - text_size.y) / 2.0f
+                    ));
+                    ImGui::TextDisabled("%s", text);
+                },
+                [this](const ModuleMetadata &m) { drawModuleMetadata(m); },
+                [this](const GmeMetadata &m) { drawGmeMetadata(m); },
+                [this](const SidMetadata &m) { drawSidMetadata(m); },
+                [this](const Sc68Metadata &m) { drawSc68Metadata(m); },
             },
-            [this](const ModuleMetadata &m) { drawModuleMetadata(m); },
-            [this](const GmeMetadata &m) { drawGmeMetadata(m); },
-            [this](const SidMetadata &m) { drawSidMetadata(m); },
-            [this](const Sc68Metadata &m) { drawSc68Metadata(m); },
-        }, metadata);
+            metadata
+        );
         ImGui::EndTabItem();
     }
 }
@@ -603,7 +636,7 @@ void Gui::drawTabPlaylist() {
     }
 }
 
-void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(ButtonId)> &onButtonClick) {
+void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(ButtonId)> &onButtonClick) const {
     const auto item_spacing_x = ImGui::GetStyle().ItemSpacing.x;
     constexpr auto row_spacing = 4.0f;
     constexpr auto button_frame_padding = 4.0f;
@@ -613,10 +646,9 @@ void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(B
     // Vertically center the three rows (track line, progress, transport) in the bar so the
     // transport buttons keep a clear margin above the bar's bottom edge. The progress row is as
     // tall as the timer labels; its playhead knob is smaller, so text_height sizes the row.
+    constexpr auto button_height = button_size.y + button_frame_padding * 2.0f;
     const auto text_height = ImGui::GetTextLineHeight();
-    const auto button_height = button_size.y + button_frame_padding * 2.0f;
-    const auto content_height = text_height + row_spacing
-        + text_height + row_spacing + button_height;
+    const auto content_height = text_height + row_spacing + text_height + row_spacing + button_height;
     const auto slack = ImGui::GetContentRegionAvail().y - content_height;
     if (slack > 0.0f) {
         ImGui::SetCursorPosY(ImGui::GetCursorPosY() + slack / 2.0f);
@@ -646,24 +678,32 @@ void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(B
     ImGui::TextUnformatted(position.c_str());
     ImGui::SameLine();
 
-    constexpr auto line_half_height = 1.5f;   // 3 px-thick track line
-    constexpr auto knob_radius = 6.0f;
+    constexpr auto line_half_height = 1.5f; // 3 px-thick track line
     const auto track_width = ImGui::GetContentRegionAvail().x - duration_width - item_spacing_x;
     const auto track_origin = ImGui::GetCursorScreenPos();
     const auto track_y = track_origin.y + text_height * 0.5f;
     const auto track_x0 = track_origin.x;
     const auto track_x1 = track_origin.x + track_width;
     auto *draw_list = ImGui::GetWindowDrawList();
-    draw_list->AddRectFilled(ImVec2(track_x0, track_y - line_half_height), ImVec2(track_x1, track_y + line_half_height),
-                             ImGui::GetColorU32(ImGuiCol_FrameBg), line_half_height);
+    draw_list->AddRectFilled(
+        ImVec2(track_x0, track_y - line_half_height),
+        ImVec2(track_x1, track_y + line_half_height),
+        ImGui::GetColorU32(ImGuiCol_FrameBg),
+        line_half_height
+    );
     // With a track loaded, fill the line up to a circular playhead in the accent colour; when stopped
     // the row is just the empty track line (no knob). Same "track loaded" test as the title row above.
     // The knob's travel is inset by its radius so it never overflows the line ends or the timer labels.
     if (status.state != PlayerState::STOPPED && !status.fileName.empty()) {
+        constexpr auto knob_radius = 6.0f;
         const auto knob_x = track_x0 + knob_radius + (track_width - knob_radius * 2.0f) * fraction;
         const auto accent = ImGui::GetColorU32(ImGuiCol_PlotHistogram);
-        draw_list->AddRectFilled(ImVec2(track_x0, track_y - line_half_height), ImVec2(knob_x, track_y + line_half_height),
-                                 accent, line_half_height);
+        draw_list->AddRectFilled(
+            ImVec2(track_x0, track_y - line_half_height),
+            ImVec2(knob_x, track_y + line_half_height),
+            accent,
+            line_half_height
+        );
         draw_list->AddCircleFilled(ImVec2(knob_x, track_y), knob_radius, accent);
     }
 
@@ -676,8 +716,8 @@ void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(B
     // Transport: previous, play/pause, stop, next, centered as a group.
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(button_frame_padding, button_frame_padding));
 
+    constexpr auto total_buttons = button_size.x * 4.0f;
     const auto &transport_style = ImGui::GetStyle();
-    const auto total_buttons = button_size.x * 4.0f;
     const auto blank_space = transport_style.FramePadding.x * 8.0f + transport_style.ItemSpacing.x * 3.0f;
     const auto start_x = (ImGui::GetContentRegionAvail().x - (total_buttons + blank_space)) / 2.0f;
     if (start_x > 0.0f) {
@@ -686,9 +726,7 @@ void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(B
 
     const auto image_button = [&](const char *id, const char *sprite_key, const ButtonId button) {
         const auto &sprite = m_sprites.at(sprite_key);
-        if (ImGui::ImageButton(id, m_texture, button_size,
-            ImVec2(sprite.s, sprite.t),
-            ImVec2(sprite.p, sprite.q))) {
+        if (ImGui::ImageButton(id, m_texture, button_size, ImVec2(sprite.s, sprite.t), ImVec2(sprite.p, sprite.q))) {
             onButtonClick(button);
         }
     };
@@ -706,7 +744,15 @@ void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(B
 }
 
 void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
-    drawTopBar(state.pluginSettings, actions.onThemeChange, actions.onPluginSettingChange, actions.onPluginSettingCommit, state.visualizerNames, state.activeVisualizer, actions.onSelectVisualizer);
+    drawTopBar(
+        state.pluginSettings,
+        actions.onThemeChange,
+        actions.onPluginSettingChange,
+        actions.onPluginSettingCommit,
+        state.visualizerNames,
+        state.activeVisualizer,
+        actions.onSelectVisualizer
+    );
 
     // VISUALIZATION mode draws only the top bar; the work area below is handed to the visualizer via
     // onRenderVisualization with the reserved rect (WorkPos/WorkSize already exclude the menu bar).
@@ -715,14 +761,15 @@ void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
     if (m_viewMode == ViewMode::VISUALIZATION) {
         const ImGuiViewport *viewport = ImGui::GetMainViewport();
         if (actions.onRenderVisualization) {
-            actions.onRenderVisualization(viewport->WorkPos.x, viewport->WorkPos.y,
-                                          viewport->WorkSize.x, viewport->WorkSize.y);
+            actions.onRenderVisualization(
+                viewport->WorkPos.x, viewport->WorkPos.y, viewport->WorkSize.x, viewport->WorkSize.y
+            );
         }
         return;
     }
 
-    constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove
-        | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus;
+    constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove |
+        ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoBringToFrontOnFocus;
 
     const ImGuiViewport *viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(viewport->WorkPos);
@@ -737,14 +784,22 @@ void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
     constexpr auto player_bar_height = 140.0f;
     const auto panes_height = available.y - style.ItemSpacing.y - player_bar_height;
     const auto left_width = (available.x - style.ItemSpacing.x) * 0.45f;
-    const auto right_width = (available.x - style.ItemSpacing.x) - left_width;
+    const auto right_width = available.x - style.ItemSpacing.x - left_width;
 
     if (ImGui::BeginChild("left_pane", ImVec2(left_width, panes_height), ImGuiChildFlags_Borders)) {
         drawCurrentPath(state.path);
         // Nothing is "playing" when stopped, so pass an empty name (no row highlighted) in that state.
         const std::string playingFileName =
             state.status.state == PlayerState::STOPPED ? std::string{} : state.status.fileName;
-        drawFileBrowser(state.files, actions.onFileClick, actions.onDirectoryClick, state.isWorking, state.workingLabel, actions.onCancelWork, playingFileName);
+        drawFileBrowser(
+            state.files,
+            actions.onFileClick,
+            actions.onDirectoryClick,
+            state.isWorking,
+            state.workingLabel,
+            actions.onCancelWork,
+            playingFileName
+        );
     }
     ImGui::EndChild();
 
@@ -756,7 +811,9 @@ void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
     ImGui::EndChild();
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(12.0f, 6.0f));
-    if (ImGui::BeginChild("player_bar", ImVec2(0.0f, player_bar_height), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar)) {
+    if (ImGui::BeginChild(
+            "player_bar", ImVec2(0.0f, player_bar_height), ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar
+        )) {
         drawPlayerBar(state.status, actions.onButtonClick);
     }
     ImGui::EndChild();

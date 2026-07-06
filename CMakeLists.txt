@@ -58,6 +58,49 @@ if (NINTENDO_SWITCH)
     target_sources(OSP2 PRIVATE src/player/plugins/switch_compat.c)
 endif ()
 
+# Formatting / linting (developer tooling; decoupled from the normal build)
+# ========================================
+# Operate on a glob of src/ — never external/ or cmake-build-* — rather than the
+# executable's source list, because src/player/plugins/switch_compat.c is added
+# conditionally (Switch only) yet should still be formatted/linted everywhere.
+file(GLOB_RECURSE OSP2_SOURCE_FILES CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.c
+)
+
+find_program(CLANG_FORMAT_EXE NAMES clang-format-18 clang-format)
+if (CLANG_FORMAT_EXE)
+    add_custom_target(format
+        COMMAND ${CLANG_FORMAT_EXE} -i --style=file ${OSP2_SOURCE_FILES}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "clang-format: rewriting src/ in place"
+        VERBATIM
+    )
+    add_custom_target(format-check
+        COMMAND ${CLANG_FORMAT_EXE} --dry-run --Werror --style=file ${OSP2_SOURCE_FILES}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "clang-format: checking src/ (no changes written)"
+        VERBATIM
+    )
+endif ()
+
+# `tidy` needs a compile database; export one so the target works from any build dir.
+# Lint the .cpp translation units only (they are all in the desktop compile
+# database); headers are covered transitively via .clang-tidy's HeaderFilterRegex,
+# and the Switch-only switch_compat.c is absent from the desktop build by design.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+file(GLOB_RECURSE OSP2_TIDY_FILES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
+find_program(CLANG_TIDY_EXE NAMES clang-tidy-18 clang-tidy)
+if (CLANG_TIDY_EXE)
+    add_custom_target(tidy
+        COMMAND ${CLANG_TIDY_EXE} -p ${CMAKE_BINARY_DIR} ${OSP2_TIDY_FILES}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "clang-tidy: linting src/ (uses .clang-tidy)"
+        VERBATIM
+    )
+endif ()
+
 # Dependencies
 # ========================================
 find_package(PkgConfig REQUIRED)

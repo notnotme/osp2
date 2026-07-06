@@ -39,11 +39,11 @@ void BarsVisualizer::render(const VisualFrame &frame) {
     // GAIN is an empirical visual boost so quiet modules aren't all stubs; kept modest so hotter,
     // near-full-scale content (e.g. GME chiptunes) doesn't slam every bar to the ceiling. When
     // frameCount == 0 (nothing playing) every target stays 0, driving the decay to rest.
-    constexpr float GAIN = 1.15f;
     std::array<float, BAR_COUNT> targets{};
     if (frame.frameCount > 0 && frame.samples != nullptr) {
         const int channels = std::max(frame.channels, 1);
         for (int b = 0; b < BAR_COUNT; ++b) {
+            constexpr float GAIN = 1.15f;
             const std::size_t begin = frame.frameCount * static_cast<std::size_t>(b) / BAR_COUNT;
             const std::size_t end = frame.frameCount * static_cast<std::size_t>(b + 1) / BAR_COUNT;
             float peak = 0.0f;
@@ -63,10 +63,10 @@ void BarsVisualizer::render(const VisualFrame &frame) {
     // ImGui::GetTime()) so the smoothing only advances while this plugin is actually rendered — the
     // documented "freeze when hidden" contract. Fast attack = snappy rise on transients; gentle decay
     // = smooth fall to rest on stop/pause.
-    constexpr float ATTACK_SPEED = 40.0f;   // 1/s toward a rising target
-    constexpr float DECAY_SPEED = 5.0f;     // 1/s toward a falling target
     const float dt = ImGui::GetIO().DeltaTime;
     for (int b = 0; b < BAR_COUNT; ++b) {
+        constexpr float ATTACK_SPEED = 40.0f;
+        constexpr float DECAY_SPEED = 5.0f;
         const float speed = targets[b] > m_levels[b] ? ATTACK_SPEED : DECAY_SPEED;
         const float rate = std::clamp(dt * speed, 0.0f, 1.0f);
         m_levels[b] += (targets[b] - m_levels[b]) * rate;
@@ -85,7 +85,7 @@ void BarsVisualizer::render(const VisualFrame &frame) {
     constexpr float GAP = 2.0f;
     const float barW = (frame.w - GAP * (BAR_COUNT - 1)) / BAR_COUNT;
     if (barW <= 0.0f) {
-        return;   // reserved rect too narrow for 64 bars; nothing sensible to draw
+        return; // reserved rect too narrow for 64 bars; nothing sensible to draw
     }
     ImDrawList *draw = ImGui::GetBackgroundDrawList();
     const ImU32 color = ImGui::GetColorU32(ImGuiCol_PlotHistogram);

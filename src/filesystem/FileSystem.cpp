@@ -53,7 +53,7 @@ namespace {
         }
         return caseInsensitiveLess(a.name, b.name);
     }
-}
+} // namespace
 
 
 FileSystem::FileSystem()
@@ -62,8 +62,11 @@ FileSystem::FileSystem()
       m_working(false),
       m_scanSucceeded(false) {}
 
-void FileSystem::create(std::vector<std::unique_ptr<DataSource>> sources, const std::filesystem::path &startPath,
-                        std::function<bool(const std::filesystem::path &)> isPlayable) {
+void FileSystem::create(
+    std::vector<std::unique_ptr<DataSource>> sources,
+    const std::filesystem::path &startPath,
+    std::function<bool(const std::filesystem::path &)> isPlayable
+) {
     m_sources = std::move(sources);
     m_isPlayable = std::move(isPlayable);
 
@@ -99,7 +102,7 @@ void FileSystem::navigateToEntry(const FileEntry &entry) {
         // At the virtual root: entry.name is a source display name, not a path component.
         for (const auto &source : m_sources) {
             if (source->getDisplayName() == entry.name) {
-                m_sourceBeforeScan = m_activeSource;   // nullptr: restore the virtual root if the scan fails
+                m_sourceBeforeScan = m_activeSource; // nullptr: restore the virtual root if the scan fails
                 m_activeSource = source.get();
                 startScan(source->getRootPath());
                 return;
@@ -118,7 +121,7 @@ void FileSystem::navigateToParent() {
     }
 
     if (m_activeSource == nullptr) {
-        return;   // virtual root: nowhere higher to go
+        return; // virtual root: nowhere higher to go
     }
 
     // parent_path() of a source root (e.g. "/") returns itself, so detect the root by value.
@@ -273,11 +276,11 @@ void FileSystem::scan(DataSource *source, std::filesystem::path path) {
     m_working.store(false);
 }
 
-void FileSystem::fetch(DataSource *source, std::filesystem::path path) {
+void FileSystem::fetch(DataSource *source, const std::filesystem::path &path) {
     const auto localPath = source->fetchFile(path);
     {
         std::scoped_lock lock(m_mutex);
         m_fetchResult = FetchResult{localPath, !localPath.empty()};
     }
-    m_working.store(false);   // store last, mirrors scan()
+    m_working.store(false); // store last, mirrors scan()
 }

@@ -36,7 +36,10 @@
 
 
 // mix() writes interleaved-stereo 16-bit samples into a short buffer; we hand it our int16 scratch.
-static_assert(sizeof(short) == sizeof(std::int16_t), "SidPlugin mixes libsidplayfp's short output directly into the int16 scratch buffer");
+static_assert(
+    sizeof(short) == sizeof(std::int16_t),
+    "SidPlugin mixes libsidplayfp's short output directly into the int16 scratch buffer"
+);
 
 namespace {
     // Interleaved stereo — libsidplayfp is initialized with initMixer(true).
@@ -53,19 +56,27 @@ namespace {
 
     std::string sidModelString(const SidTuneInfo::model_t model) {
         switch (model) {
-            case SidTuneInfo::SIDMODEL_6581: return "MOS 6581";
-            case SidTuneInfo::SIDMODEL_8580: return "MOS 8580";
-            case SidTuneInfo::SIDMODEL_ANY: return "Any";
-            default: return {};   // SIDMODEL_UNKNOWN → empty, so the metadata row is skipped
+        case SidTuneInfo::SIDMODEL_6581:
+            return "MOS 6581";
+        case SidTuneInfo::SIDMODEL_8580:
+            return "MOS 8580";
+        case SidTuneInfo::SIDMODEL_ANY:
+            return "Any";
+        default:
+            return {}; // SIDMODEL_UNKNOWN → empty, so the metadata row is skipped
         }
     }
 
     std::string clockString(const SidTuneInfo::clock_t clock) {
         switch (clock) {
-            case SidTuneInfo::CLOCK_PAL: return "PAL";
-            case SidTuneInfo::CLOCK_NTSC: return "NTSC";
-            case SidTuneInfo::CLOCK_ANY: return "PAL/NTSC";
-            default: return {};   // CLOCK_UNKNOWN → empty
+        case SidTuneInfo::CLOCK_PAL:
+            return "PAL";
+        case SidTuneInfo::CLOCK_NTSC:
+            return "NTSC";
+        case SidTuneInfo::CLOCK_ANY:
+            return "PAL/NTSC";
+        default:
+            return {}; // CLOCK_UNKNOWN → empty
         }
     }
 
@@ -74,17 +85,21 @@ namespace {
     std::vector<std::uint8_t> loadRom(const std::filesystem::path &path, const std::size_t expectedSize) {
         std::ifstream file(path, std::ios::binary);
         if (!file.is_open()) {
-            return {};   // absent ROM is expected (they are optional) — no log noise
+            return {}; // absent ROM is expected (they are optional) — no log noise
         }
-        std::vector<std::uint8_t> data{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+        std::vector<std::uint8_t> data{std::istreambuf_iterator(file), std::istreambuf_iterator<char>()};
         if (data.size() != expectedSize) {
-            SDL_Log("SidPlugin: ignoring ROM %s (expected %zu bytes, got %zu)",
-                    path.string().c_str(), expectedSize, data.size());
+            SDL_Log(
+                "SidPlugin: ignoring ROM %s (expected %zu bytes, got %zu)",
+                path.string().c_str(),
+                expectedSize,
+                data.size()
+            );
             return {};
         }
         return data;
     }
-}
+} // namespace
 
 SidPlugin::SidPlugin()
     : m_sampleRate(0),
@@ -115,7 +130,8 @@ void SidPlugin::loadRoms() {
     m_engine->setRoms(
         kernal.empty() ? nullptr : kernal.data(),
         basic.empty() ? nullptr : basic.data(),
-        chargen.empty() ? nullptr : chargen.data());
+        chargen.empty() ? nullptr : chargen.data()
+    );
     if (!kernal.empty()) {
         SDL_Log("SidPlugin: loaded C64 KERNAL ROM — RSID tunes enabled");
     }
@@ -132,15 +148,15 @@ bool SidPlugin::configure() {
     // A default-constructed SidConfig carries sane defaults; we override only what we drive.
     SidConfig cfg;
     cfg.frequency = static_cast<uint_least32_t>(m_sampleRate);
-    cfg.samplingMethod = SidConfig::INTERPOLATE;   // cheaper than resampling — kinder to the Switch
+    cfg.samplingMethod = SidConfig::INTERPOLATE; // cheaper than resampling — kinder to the Switch
     cfg.sidEmulation = m_builder.get();
     if (m_model != 0) {
         cfg.forceSidModel = true;
-        cfg.defaultSidModel = (m_model == 2) ? SidConfig::MOS8580 : SidConfig::MOS6581;
+        cfg.defaultSidModel = m_model == 2 ? SidConfig::MOS8580 : SidConfig::MOS6581;
     }
     if (m_clock != 0) {
         cfg.forceC64Model = true;
-        cfg.defaultC64Model = (m_clock == 2) ? SidConfig::NTSC : SidConfig::PAL;
+        cfg.defaultC64Model = m_clock == 2 ? SidConfig::NTSC : SidConfig::PAL;
     }
     if (!m_engine->config(cfg)) {
         SDL_Log("SidPlugin: engine config failed: %s", m_engine->error());
@@ -159,15 +175,16 @@ bool SidPlugin::open(const std::filesystem::path &path) {
             SDL_Log("SidPlugin: cannot open %s", path.c_str());
             return false;
         }
-        const std::vector<char> data{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+        const std::vector<char> data{std::istreambuf_iterator(file), std::istreambuf_iterator<char>()};
 
         auto tune = std::make_unique<SidTune>(
-            reinterpret_cast<const uint_least8_t *>(data.data()), static_cast<uint_least32_t>(data.size()));
+            reinterpret_cast<const uint_least8_t *>(data.data()), static_cast<uint_least32_t>(data.size())
+        );
         if (!tune->getStatus()) {
             SDL_Log("SidPlugin: cannot parse %s: %s", path.c_str(), tune->statusString());
             return false;
         }
-        tune->selectSong(0);   // 0 = the tune's own default starting song
+        tune->selectSong(0); // 0 = the tune's own default starting song
         m_tune = std::move(tune);
 
         // Order per libsidplayfp: config the engine, load the tune, then initialize the mixer.
@@ -193,9 +210,15 @@ bool SidPlugin::open(const std::filesystem::path &path) {
         SidMetadata metadata;
         if (const SidTuneInfo *info = m_tune->getInfo(); info != nullptr) {
             const unsigned int strings = info->numberOfInfoStrings();
-            if (strings > 0) { metadata.title = toString(info->infoString(0)); }
-            if (strings > 1) { metadata.author = toString(info->infoString(1)); }
-            if (strings > 2) { metadata.released = toString(info->infoString(2)); }
+            if (strings > 0) {
+                metadata.title = toString(info->infoString(0));
+            }
+            if (strings > 1) {
+                metadata.author = toString(info->infoString(1));
+            }
+            if (strings > 2) {
+                metadata.released = toString(info->infoString(2));
+            }
             metadata.sidModel = sidModelString(info->sidModel(0));
             metadata.clock = clockString(info->clockSpeed());
         }
@@ -214,7 +237,7 @@ bool SidPlugin::open(const std::filesystem::path &path) {
 
 void SidPlugin::close() {
     if (m_engine) {
-        m_engine->load(nullptr);   // 0 unloads the current tune from the engine
+        m_engine->load(nullptr); // 0 unloads the current tune from the engine
     }
     m_tune.reset();
     m_mixBuffer.clear();
@@ -233,11 +256,13 @@ int SidPlugin::decode(std::int16_t *buffer, const int frames) {
     while (written < frames) {
         // Drain whatever the last play()/mix() produced before emulating another chunk.
         if (m_mixPos < m_mixFrames) {
-            const std::size_t take = std::min<std::size_t>(
-                m_mixFrames - m_mixPos, static_cast<std::size_t>(frames - written));
-            std::memcpy(buffer + static_cast<std::size_t>(written) * CHANNELS,
-                        m_mixBuffer.data() + m_mixPos * CHANNELS,
-                        take * CHANNELS * sizeof(std::int16_t));
+            const std::size_t take =
+                std::min<std::size_t>(m_mixFrames - m_mixPos, static_cast<std::size_t>(frames - written));
+            std::memcpy(
+                buffer + static_cast<std::size_t>(written) * CHANNELS,
+                m_mixBuffer.data() + m_mixPos * CHANNELS,
+                take * CHANNELS * sizeof(std::int16_t)
+            );
             m_mixPos += take;
             written += static_cast<int>(take);
             continue;
@@ -246,14 +271,13 @@ int SidPlugin::decode(std::int16_t *buffer, const int frames) {
         // Run the emulation for a fixed slice, then mix the raw SID output to interleaved stereo.
         const int samples = m_engine->play(PLAY_CYCLES);
         if (samples <= 0) {
-            break;   // negative = engine error; zero would spin forever
+            break; // negative = engine error; zero would spin forever
         }
         const std::size_t needed = static_cast<std::size_t>(samples) * CHANNELS;
         if (m_mixBuffer.size() < needed) {
-            m_mixBuffer.resize(needed);   // safety net; open() pre-sizes so this should never fire
+            m_mixBuffer.resize(needed); // safety net; open() pre-sizes so this should never fire
         }
-        const unsigned int mixed = m_engine->mix(
-            reinterpret_cast<short *>(m_mixBuffer.data()), static_cast<unsigned int>(samples));
+        const unsigned int mixed = m_engine->mix(m_mixBuffer.data(), static_cast<unsigned int>(samples));
         m_mixFrames = mixed / CHANNELS;
         m_mixPos = 0;
     }
@@ -289,7 +313,7 @@ TrackMetadata SidPlugin::getMetadata() const {
 std::vector<PluginSetting> SidPlugin::getSettings() const {
     return {
         {"sid_model", "SID model", EnumOptions{{"Auto", "MOS 6581", "MOS 8580"}}, m_model},
-        {"clock", "Clock", EnumOptions{{"Auto", "PAL", "NTSC"}}, m_clock}
+        {"clock",     "Clock",     EnumOptions{{"Auto", "PAL", "NTSC"}},          m_clock}
     };
 }
 

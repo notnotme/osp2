@@ -29,9 +29,9 @@
 // samples may be nullptr when frameCount == 0; frameCount == 0 means nothing is playing, so a
 // visual should decay to rest rather than react.
 struct VisualFrame {
-    float x, y, w, h;          // reserved rect in screen coordinates
-    const float *samples;      // interleaved stereo, frameCount frames (may be nullptr if frameCount==0)
-    std::size_t frameCount;    // 0 when nothing is playing → visual should decay to rest
+    float x, y, w, h;       // reserved rect in screen coordinates
+    const float *samples;   // interleaved stereo, frameCount frames (may be nullptr if frameCount==0)
+    std::size_t frameCount; // 0 when nothing is playing → visual should decay to rest
     int channels;
     int sampleRate;
 };

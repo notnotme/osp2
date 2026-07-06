@@ -35,15 +35,16 @@
 struct UiState {
     PlaybackStatus status;
     std::string path;
-    const std::vector<FileEntry> &files;      // non-owning view, valid for the frame
+    const std::vector<FileEntry> &files; // non-owning view, valid for the frame
     bool isWorking;
-    std::string workingLabel;                 // overlay text while isWorking ("Scanning..." / "Downloading...")
-    const TrackMetadata &metadata;            // non-owning view, valid for the frame
-    const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings;  // non-owning view, valid for the frame
+    std::string workingLabel;      // overlay text while isWorking ("Scanning..." / "Downloading...")
+    const TrackMetadata &metadata; // non-owning view, valid for the frame
+    const std::vector<std::pair<std::string, std::vector<PluginSetting>>>
+        &pluginSettings; // non-owning view, valid for the frame
     // Default-initialized so Application's aggregate `return {…}` in makeUiState() stays valid untouched;
     // main.cpp (the visualizer bridge) fills these before drawUserInterface (see visualization.md).
-    std::vector<std::string> visualizerNames{};   // for the Settings→Visualizer picker
-    std::size_t activeVisualizer = 0;             // currently-selected visualizer index
+    std::vector<std::string> visualizerNames{}; // for the Settings→Visualizer picker
+    std::size_t activeVisualizer = 0;           // currently-selected visualizer index
 };
 
 

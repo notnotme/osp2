@@ -66,7 +66,7 @@ namespace {
         }
         return {};
     }
-}
+} // namespace
 
 Sc68Plugin::Sc68Plugin()
     : m_sampleRate(0) {}
@@ -109,7 +109,7 @@ void Sc68Plugin::destroy() {
         m_sc68 = nullptr;
     }
     if (m_initialized) {
-        sc68_shutdown();   // pair only with a successful sc68_init()
+        sc68_shutdown(); // pair only with a successful sc68_init()
         m_initialized = false;
     }
 }
@@ -134,7 +134,7 @@ bool Sc68Plugin::open(const std::filesystem::path &path) {
             SDL_Log("Sc68Plugin: cannot open %s", path.c_str());
             return false;
         }
-        data.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+        data.assign(std::istreambuf_iterator(file), std::istreambuf_iterator<char>());
     } catch (const std::exception &e) {
         SDL_Log("Sc68Plugin: failed to read %s: %s", path.c_str(), e.what());
         return false;
@@ -159,7 +159,7 @@ bool Sc68Plugin::open(const std::filesystem::path &path) {
 
     Sc68Metadata metadata;
     sc68_music_info_t info = {};
-    if (sc68_music_info(m_sc68, &info, SC68_DEF_TRACK, 0) == SC68_OK) {
+    if (sc68_music_info(m_sc68, &info, SC68_DEF_TRACK, nullptr) == SC68_OK) {
         // Fields point into the loaded disk (valid only until sc68_close), so copy every string.
         metadata.title = toString(info.title);
         if (metadata.title.empty()) {
@@ -208,8 +208,8 @@ int Sc68Plugin::decode(std::int16_t *buffer, const int frames) {
     int written = 0;
     int emptyPasses = 0;
     while (written < frames) {
-        int n = frames - written;   // frames still needed; sc68 writes ≤ 4*n bytes from the cursor
-        const int code = sc68_process(m_sc68, static_cast<void *>(buffer + static_cast<std::size_t>(written) * CHANNELS), &n);
+        int n = frames - written; // frames still needed; sc68 writes ≤ 4*n bytes from the cursor
+        const int code = sc68_process(m_sc68, buffer + static_cast<std::size_t>(written) * CHANNELS, &n);
         // SC68_ERROR is ~0 (every bit set), so a fatal result must be tested with equality — a bitwise
         // `code & SC68_ERROR` would also match the normal SC68_END/SC68_CHANGE/SC68_IDLE status bits.
         if (code == SC68_ERROR) {
@@ -220,16 +220,16 @@ int Sc68Plugin::decode(std::int16_t *buffer, const int frames) {
             written += n;
             emptyPasses = 0;
         } else if (++emptyPasses >= MAX_EMPTY_PASSES) {
-            break;   // stall guard: a deferred event yields one empty pass, never an unbounded spin
+            break; // stall guard: a deferred event yields one empty pass, never an unbounded spin
         }
         if (code & SC68_END) {
-            m_ended = true;   // signal end; any frames produced this pass are already counted
+            m_ended = true; // signal end; any frames produced this pass are already counted
             break;
         }
     }
 
     m_playedFrames += static_cast<std::uint64_t>(written);
-    return written;   // written < frames signals end-of-track to PlayerController
+    return written; // written < frames signals end-of-track to PlayerController
 }
 
 std::string Sc68Plugin::getName() const {
