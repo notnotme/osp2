@@ -21,8 +21,10 @@
 
 #include <SDL.h>
 
+#include <filesystem>
 #include <fstream>
 #include <string>
+#include <system_error>
 
 
 namespace {
@@ -55,6 +57,15 @@ void Settings::load(const std::filesystem::path &path) {
 }
 
 void Settings::save() const {
+    // Ensure the target directory exists before writing: the config path may live in a nested,
+    // not-yet-created directory (e.g. the Switch's "/switch/OSP2/", which is otherwise only made
+    // lazily when a remote source first downloads to its cache). Best-effort — a failure here just
+    // surfaces as the open failing below.
+    if (m_path.has_parent_path()) {
+        std::error_code ec;
+        std::filesystem::create_directories(m_path.parent_path(), ec);
+    }
+
     std::ofstream file(m_path, std::ios::trunc);
     if (!file) {
         SDL_Log("Settings: cannot open '%s' for writing", m_path.string().c_str());

@@ -32,11 +32,7 @@
 #include <iterator>
 #include <cstring>
 
-#if defined(__SWITCH__)
-    #define BASE_PATH "romfs:/"
-#else
-    #define BASE_PATH "romfs/"
-#endif
+#include "../../Paths.h"
 
 
 // mix() writes interleaved-stereo 16-bit samples into a short buffer; we hand it our int16 scratch.

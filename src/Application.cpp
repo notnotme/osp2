@@ -19,13 +19,8 @@
 
 #include "Application.h"
 
+#include "Paths.h"
 #include "player/PlayerState.h"
-
-#if defined(__SWITCH__)
-    #define BASE_PATH "romfs:/"
-#else
-    #define BASE_PATH "romfs/"
-#endif
 
 
 Application::Application(PlayerController &player, FileSystem &fileSystem, Settings &settings)
