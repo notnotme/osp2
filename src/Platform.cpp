@@ -96,6 +96,19 @@ void Platform::run() {
         }
     };
 
+    bool is_running = true;
+
+    // QUIT is a Platform concern (it owns the run-loop flag); intercept it here and delegate every
+    // other button to the Application handler. Keeps Application quit-agnostic.
+    const auto appOnButtonClick = actions.onButtonClick;
+    actions.onButtonClick = [&is_running, appOnButtonClick](const ButtonId id) {
+        if (id == QUIT) {
+            is_running = false;
+            return;
+        }
+        appOnButtonClick(id);
+    };
+
 #if defined(__SWITCH__)
     // The Switch has no mouse: drive the ImGui cursor from the gamepad. A local so it (and the
     // controller it owns) is destroyed when run() returns — before destroy() calls SDL_Quit, which
@@ -103,7 +116,6 @@ void Platform::run() {
     CursorEmulator cursorEmulator(kWindowWidth, kWindowHeight);
 #endif
 
-    bool is_running = true;
     while (is_running) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
