@@ -104,6 +104,7 @@ void FileSystem::navigateToEntry(const FileEntry &entry) {
             if (source->getDisplayName() == entry.name) {
                 m_sourceBeforeScan = m_activeSource; // nullptr: restore the virtual root if the scan fails
                 m_activeSource = source.get();
+                m_pendingNavDirection = NavKind::Descend;
                 startScan(source->getRootPath());
                 return;
             }
@@ -112,6 +113,7 @@ void FileSystem::navigateToEntry(const FileEntry &entry) {
     }
 
     m_sourceBeforeScan = m_activeSource;
+    m_pendingNavDirection = NavKind::Descend;
     startScan(m_path / entry.name);
 }
 
@@ -129,11 +131,13 @@ void FileSystem::navigateToParent() {
         // Defer to update(): this runs inside a Gui callback while the browser is drawing, and
         // showVirtualRoot() would clear m_content out from under the list clipper. See the flag's
         // declaration and docs/filesystem.md.
+        m_pendingNavDirection = NavKind::Ascend;
         m_pendingVirtualRoot = true;
         return;
     }
 
     m_sourceBeforeScan = m_activeSource;
+    m_pendingNavDirection = NavKind::Ascend;
     startScan(m_path.parent_path());
 }
 
@@ -161,6 +165,12 @@ std::optional<FetchResult> FileSystem::consumeFetchResult() {
     return result;
 }
 
+NavKind FileSystem::consumeNavigation() {
+    const auto signal = m_navSignal;
+    m_navSignal = NavKind::None;
+    return signal;
+}
+
 void FileSystem::update() {
     // Apply a deferred virtual-root transition first (requested mid-draw by navigateToParent).
     if (m_pendingVirtualRoot) {
@@ -176,6 +186,8 @@ void FileSystem::update() {
         }
         m_activeSource = nullptr;
         showVirtualRoot();
+        m_navSignal = m_pendingNavDirection;
+        m_pendingNavDirection = NavKind::None;
         return;
     }
 
@@ -188,15 +200,26 @@ void FileSystem::update() {
     // A fetch leaves its result in m_fetchResult (consumed via consumeFetchResult()); only a scan
     // swaps the listing here.
     if (m_workKind == WorkKind::Scan) {
-        std::scoped_lock lock(m_mutex);
-        if (m_scanSucceeded) {
-            m_path = std::move(m_pendingPath);
-            m_content = std::move(m_pendingContent);
-        } else {
-            // nullopt from the source: keep the current listing and undo the source activation.
-            m_activeSource = m_sourceBeforeScan;
-            SDL_Log("FileSystem: scan failed, staying put");
+        bool swapped = false;
+        {
+            std::scoped_lock lock(m_mutex);
+            swapped = m_scanSucceeded;
+            if (m_scanSucceeded) {
+                m_path = std::move(m_pendingPath);
+                m_content = std::move(m_pendingContent);
+            } else {
+                // nullopt from the source: keep the current listing and undo the source activation.
+                m_activeSource = m_sourceBeforeScan;
+                SDL_Log("FileSystem: scan failed, staying put");
+            }
         }
+        // Emit the pending direction only when the listing actually swapped; a failed scan discards it
+        // with no signal. m_navSignal/m_pendingNavDirection are main-thread-only, so keep them out of
+        // the lock.
+        if (swapped) {
+            m_navSignal = m_pendingNavDirection;
+        }
+        m_pendingNavDirection = NavKind::None;
     }
     m_workKind = WorkKind::None;
 }

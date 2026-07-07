@@ -159,6 +159,7 @@ void Application::refreshPluginSettings() {
 
 void Application::update() {
     m_fileSystem.update();
+    m_pendingNav = m_fileSystem.consumeNavigation();
 
     // Resolve a pending request first: a successful play() clears the track-ended flag,
     // so an explicit click made just as the current track ends wins over auto-advance
@@ -201,7 +202,8 @@ UiState Application::makeUiState() const {
         working,
         std::move(workingLabel),
         m_trackMetadata,
-        m_pluginSettings
+        m_pluginSettings,
+        m_pendingNav
     };
 }
 

@@ -472,6 +472,24 @@ void Gui::drawFileBrowser(
     // the overlay below dims it and shows the spinner.
     ImGui::BeginDisabled(isWorking);
     if (ImGui::BeginTable("file_browser", 3, file_browser_flags, browser_size)) {
+        // Scroll restore on navigation: a new directory opens at the top; returning to a parent restores
+        // the offset we left it at. GetScrollY() here still reflects the previous directory's scroll
+        // (content was swapped this frame but not yet laid out), so on descend we save it before zeroing.
+        // Consumed from the latch (not the raw signal) and cleared only here, once the table is actually
+        // laid out — so a signal that arrived while the browser was hidden isn't dropped (see m_pendingNav).
+        if (m_pendingNav == NavKind::Descend) {
+            m_browserScrollStack.push_back(ImGui::GetScrollY());
+            ImGui::SetScrollY(0.0f);
+        } else if (m_pendingNav == NavKind::Ascend) {
+            float restored = 0.0f;
+            if (!m_browserScrollStack.empty()) {
+                restored = m_browserScrollStack.back();
+                m_browserScrollStack.pop_back();
+            }
+            ImGui::SetScrollY(restored);
+        }
+        m_pendingNav = NavKind::None;
+
         ImGui::TableSetupScrollFreeze(0, 2);
         ImGui::TableSetupColumn("Name", ImGuiTableColumnFlags_WidthStretch);
         ImGui::TableSetupColumn("Type", ImGuiTableColumnFlags_WidthFixed);
@@ -790,6 +808,15 @@ void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
         actions.onSelectVisualizer,
         actions.onButtonClick
     );
+
+    // Latch the one-frame navigation signal before the VISUALIZATION early-return below: a scan can
+    // finish (and the listing swap) while the browser is hidden, and drawFileBrowser must still get the
+    // descend/ascend so its scroll stack stays balanced. It applies and clears m_pendingNav the next
+    // frame the file_browser table is laid out. Navigation can only be triggered from the (visible)
+    // browser, so at most one signal is ever pending — no coalescing loss. See docs/ui.md.
+    if (state.navKind != NavKind::None) {
+        m_pendingNav = state.navKind;
+    }
 
     // VISUALIZATION mode draws only the top bar; the work area below is handed to the visualizer via
     // onRenderVisualization with the reserved rect (WorkPos/WorkSize already exclude the menu bar).

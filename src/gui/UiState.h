@@ -26,6 +26,7 @@
 #include <vector>
 
 #include "../filesystem/FileEntry.h"
+#include "../filesystem/NavKind.h"
 #include "../player/Metadata.h"
 #include "../player/PlaybackStatus.h"
 #include "../player/PluginSetting.h"
@@ -40,7 +41,8 @@ struct UiState {
     std::string workingLabel;      // overlay text while isWorking ("Scanning..." / "Downloading...")
     const TrackMetadata &metadata; // non-owning view, valid for the frame
     const std::vector<std::pair<std::string, std::vector<PluginSetting>>>
-        &pluginSettings; // non-owning view, valid for the frame
+        &pluginSettings;             // non-owning view, valid for the frame
+    NavKind navKind = NavKind::None; // one-frame descend/ascend signal driving the browser scroll restore
     // Default-initialized so Application's aggregate `return {…}` in makeUiState() stays valid untouched;
     // main.cpp (the visualizer bridge) fills these before drawUserInterface (see visualization.md).
     std::vector<std::string> visualizerNames{}; // for the Settings→Visualizer picker

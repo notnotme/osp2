@@ -48,7 +48,7 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
   - [x] 13b — CMake format/format-check targets + .clang-tidy
 - [x] [TODO_14 — Persist selected visualizer](TODO_14.md) — requires TODO_6 + TODO_8; single chunk
 - [x] [TODO_15 — Quit-app button](TODO_15.md) — single chunk
-- [ ] [TODO_16 — File-browser scroll position (top on descend, restore on back)](TODO_16.md) — single chunk
+- [x] [TODO_16 — File-browser scroll position (top on descend, restore on back)](TODO_16.md) — single chunk
 - [ ] [TODO_17 — Playback loading overlay + error notifications](TODO_17.md)
   - [ ] 17a — Async decode + loading overlay
   - [ ] 17b — Playback error notifications (popup)

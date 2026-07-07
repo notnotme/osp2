@@ -11,6 +11,8 @@ classDiagram
         -ViewMode m_viewMode
         -bool m_aboutRequested
         -bool m_quitRequested
+        -vector~float~ m_browserScrollStack
+        -NavKind m_pendingNav
         +initialize()
         +finalize()
         +applyTheme(theme)
@@ -39,6 +41,7 @@ classDiagram
         +string workingLabel
         +const TrackMetadata& metadata
         +vector~pair~string, vector~PluginSetting~~~ pluginSettings
+        +NavKind navKind
         +vector~string~ visualizerNames
         +size_t activeVisualizer
     }
@@ -88,6 +91,13 @@ classDiagram
         VISUALIZATION
     }
 
+    class NavKind {
+        <<enumeration>>
+        None
+        Descend
+        Ascend
+    }
+
     Gui *-- Sprite : atlas entries from sprites.bin
     Gui ..> Theme : applyTheme (built-in ImGui palettes)
     Gui ..> ViewMode : top-bar toggle
@@ -102,6 +112,7 @@ classDiagram
     UiState ..> PluginSetting : plugin config descriptors
     UiActions ..> PluginSetting : onPluginSettingChange
     UiActions ..> ViewMode : onRenderVisualization (VISUALIZATION mode)
+    UiState ..> NavKind : one-frame scroll-restore signal
 ```
 
 ## Notes
@@ -114,6 +125,7 @@ classDiagram
 - **`onRenderVisualization`** (`UiActions`) is the presentation-only hook for VISUALIZATION mode — the same principle as `onButtonClick`: `Gui` reports the reserved rect and knows nothing about the visualizer domain. It is wired in `main.cpp` (not `Application`, since the visualizer is a platform-layer concern): the callback reads the audio tap (`PlayerController::readLatestAudio`), builds a `VisualFrame`, and calls `VisualizerController::render`. See [visualization.md](visualization.md) for the visualizer domain and the ImGui/GL render bridge.
 - **`onSelectVisualizer`** (`UiActions`) + **`UiState::visualizerNames` / `UiState::activeVisualizer`** drive the **Settings→Visualizer** picker (see `drawTopBar` above). Like `onRenderVisualization`, this stays wired in `main.cpp` (the visualizer bridge), not `Application`: `main.cpp` fills `visualizerNames` (from `VisualizerController::getNames()`) and `activeVisualizer` (from `getActiveIndex()`) onto the per-frame `UiState` before `drawUserInterface`, and `onSelectVisualizer(index)` calls `VisualizerController::select`. Because these two `UiState` fields carry default member initializers, `Application::makeUiState()`'s aggregate `return {…}` is unaffected — `main.cpp` sets them on the returned value. `Gui` only lists the names and reports the picked index. No persistence of the choice yet (a future settings item, alongside theme). See [visualization.md](visualization.md).
 - `drawFileBrowser` is a three-column table (Name / Type / Size): `Type` shows `Folder`, `Source`, or the uppercase extension; `Size` is formatted B/KB/MB (one decimal) for files, blank for folders. It reports two intents: file rows call `onFileClick`; directory rows, the virtual-root source entries, and the Gui-pinned `..` row call `onDirectoryClick` (the `..` row passes a synthetic `FileEntry{"..", 0, "Folder", true}` — `..` is never a `FileSystem` entry). `Application::handleDirectoryClick` routes `..` to `navigateToParent()` and everything else to `navigateToEntry()` (see [filesystem.md](filesystem.md)).
+- **Scroll restore across navigation.** The table id is the constant `"file_browser"`, so ImGui keeps a single scroll offset for it — without help, that offset would bleed between directories. The driver is `UiState::navKind`, a one-frame `NavKind` signal originating in `FileSystem` and emitted only when a listing actually swaps in — never on a failed scan (see [filesystem.md](filesystem.md)). Because that swap can land on a frame the browser isn't drawn (VISUALIZATION mode early-returns before the panes, or a culled pane), `drawUserInterface` **latches** the signal into `m_pendingNav` every frame — *before* the VISUALIZATION early-return — rather than acting on it inline; `drawFileBrowser` then applies and clears `m_pendingNav` only once the table is actually laid out, so a signal is never lost. Navigation can only be triggered from the (visible) browser, so at most one signal is ever pending. Acting on the latch, `drawFileBrowser` keeps a `std::vector<float> m_browserScrollStack`: on **`Descend`** it pushes the current `GetScrollY()` and resets scroll to `0` (a new directory opens at the top); on **`Ascend`** it pops the stack and restores that offset (the parent comes back exactly where you left it). All `Get/SetScrollY` calls sit **inside** the `BeginTable`/`EndTable` scope (so they target the table's scrolling child) and run before any row `Selectable` callback fires. Descending into a source and climbing back to the virtual root are a matched push/pop pair at depth 0, so the stack stays balanced with real navigation (empty-stack pop falls back to `0`).
 - While `state.isWorking`, the browser is wrapped in `BeginDisabled` (blocks mouse + keyboard/gamepad nav) and a dimmed overlay draws a centered ASCII spinner (`| / - \`, stepped ~8×/s from `ImGui::GetTime()`) beside `state.workingLabel` — `"Scanning..."` for a directory scan, `"Downloading..."` for a file fetch (`Application` picks the label from `FileSystem::isFetching()`; see [filesystem.md](filesystem.md)). The spinner sits in a fixed-width slot so the label never jitters as the frame char changes width.
 - The **currently-playing track's row is highlighted** (rendered as a selected `Selectable`): `drawFileBrowser` receives `playingFileName` (from `UiState::status.fileName`, empty when the player is `STOPPED`) and matches it against each file entry by name — the same filename basis `playAdjacentTrack` uses, so it lights the right row for both local and cached remote tracks.
 - Menu/label icons follow an **icon + single space + text** convention (Material Symbols glyph, e.g. settings on the Settings menu, info on About, a note in the player bar).

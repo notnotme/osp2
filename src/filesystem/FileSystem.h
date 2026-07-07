@@ -31,6 +31,7 @@
 
 #include "DataSource.h"
 #include "FileEntry.h"
+#include "NavKind.h"
 
 
 // Outcome of resolving an entry to a locally-openable file; consumed once by Application.
@@ -65,6 +66,13 @@ private:
     // iterating m_content: clearing it synchronously would shrink the vector under the list clipper.
     bool m_pendingVirtualRoot = false; // main thread only
 
+    // Browser scroll-restore signalling (main thread only). The scan that carries a navigation is
+    // asynchronous: the direction is known at the navigate call but the listing only swaps in later,
+    // in update(). m_pendingNavDirection records the in-flight scan's direction; update() promotes it
+    // to m_navSignal exactly when the listing swaps (a failed scan discards it, emitting nothing).
+    NavKind m_pendingNavDirection = NavKind::None; // direction of the in-flight scan, consumed by update()
+    NavKind m_navSignal = NavKind::None;           // emitted to the app layer; read+cleared by consumeNavigation()
+
     // Worker synchronization.
     std::atomic_bool m_working;
     std::thread m_worker;
@@ -93,6 +101,7 @@ public:
     void requestFile(const FileEntry &entry);
     void cancel();
     [[nodiscard]] std::optional<FetchResult> consumeFetchResult();
+    [[nodiscard]] NavKind consumeNavigation();
     void update();
 
 public:
