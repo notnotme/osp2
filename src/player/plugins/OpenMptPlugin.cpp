@@ -48,7 +48,8 @@ namespace {
 OpenMptPlugin::OpenMptPlugin()
     : m_sampleRate(0),
       m_stereoSeparation(100),
-      m_interpolation(0) {}
+      m_interpolation(0),
+      m_loop(0) {}
 
 OpenMptPlugin::~OpenMptPlugin() = default;
 
@@ -70,7 +71,7 @@ bool OpenMptPlugin::open(const std::filesystem::path &path) {
         }
 
         m_module = std::make_unique<openmpt::module>(file);
-        m_module->set_repeat_count(0);
+        m_module->set_repeat_count(m_loop ? -1 : 0);
         m_module->set_render_param(openmpt::module::RENDER_STEREOSEPARATION_PERCENT, m_stereoSeparation);
         m_module->set_render_param(
             openmpt::module::RENDER_INTERPOLATIONFILTER_LENGTH, interpolationLength(m_interpolation)
@@ -130,7 +131,10 @@ TrackMetadata OpenMptPlugin::getMetadata() const {
 std::vector<PluginSetting> OpenMptPlugin::getSettings() const {
     return {
         {"stereo_separation", "Stereo separation", IntRange{0, 200},                                            m_stereoSeparation},
-        {"interpolation",     "Interpolation",     EnumOptions{{"Default", "None", "Linear", "Cubic", "Sinc"}}, m_interpolation   }
+        {"interpolation",
+         "Interpolation",                          EnumOptions{{"Default", "None", "Linear", "Cubic", "Sinc"}},
+         m_interpolation                                                                                                          },
+        {"loop",              "Loop",              EnumOptions{{"Off", "On"}},                                  m_loop            }
     };
 }
 
@@ -149,6 +153,11 @@ void OpenMptPlugin::applySetting(const std::string &key, const int value) {
             m_module->set_render_param(
                 openmpt::module::RENDER_INTERPOLATIONFILTER_LENGTH, interpolationLength(m_interpolation)
             );
+        }
+    } else if (key == "loop") {
+        m_loop = value == 1 ? 1 : 0;
+        if (m_module) {
+            m_module->set_repeat_count(m_loop ? -1 : 0);
         }
     }
 }

@@ -312,8 +312,8 @@ TrackMetadata SidPlugin::getMetadata() const {
 
 std::vector<PluginSetting> SidPlugin::getSettings() const {
     return {
-        {"sid_model", "SID model", EnumOptions{{"Auto", "MOS 6581", "MOS 8580"}}, m_model},
-        {"clock",     "Clock",     EnumOptions{{"Auto", "PAL", "NTSC"}},          m_clock}
+        {"sid_model", "SID model", EnumOptions{{"Auto", "MOS 6581", "MOS 8580"}}, m_model, true},
+        {"clock",     "Clock",     EnumOptions{{"Auto", "PAL", "NTSC"}},          m_clock, true}
     };
 }
 

@@ -39,6 +39,7 @@ struct PluginSetting {
     std::string label;                         // UI label, e.g. "Stereo separation"
     std::variant<IntRange, EnumOptions> shape; // drives the widget in 6c
     int value;                                 // current value
+    bool appliesOnNextTrack = false;           // true -> the settings popup shows an "applies on next track" hint
 };
 
 

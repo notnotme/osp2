@@ -51,6 +51,9 @@ private:
     // aSIDifier mode (0=off, 1=on, 2=force), applied on the next open() and clamped on store.
     // Maps directly onto SC68_ASID_OFF/ON/FORCE (see getSettings()).
     int m_asid = 0;
+    // Deferred loop flag (0/1): passed to sc68_play() in open(), so it takes effect on the next
+    // open() (like m_asid). 1 -> SC68_INF_LOOP (infinite), 0 -> SC68_DEF_LOOP (default).
+    int m_loop = 0;
 
 public:
     Sc68Plugin(const Sc68Plugin &) = delete;
