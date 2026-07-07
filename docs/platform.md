@@ -78,3 +78,13 @@ classDiagram
   tunables (the GL context version, the merged font point size) are `constexpr` locals in the method
   that uses them. Read-only asset paths come from `assetPath()`, writable paths from `configPath()` /
   `cachePath()` — all in `src/Paths.h`.
+- **Font stack (`loadFonts()`).** Three fonts are merged into ImGui's default atlas at one point
+  size: **Roboto-Regular** (the base — Latin ranges), **Material Symbols Sharp Filled** (UI icon
+  glyphs, offset `+2` in y), and **NotoSansJP-Subset** (CJK), so decoder metadata transcoded to UTF-8
+  at the plugin boundary (see [audio.md](audio.md), TODO_20a) renders as glyphs instead of tofu.
+  ImGui 1.92 rasterizes glyphs on demand, so CJK coverage is whatever the shipped TTF holds — it is
+  pre-subset to ImGui's curated Japanese set (kana + ~2999 common kanji) by `scripts/gen_cjk_subset.py`
+  (from a Noto Sans JP variable TTF) to keep the Switch `romfs/` asset small (~0.85 MB); widen coverage
+  by regenerating the subset, not by changing the range argument. Roboto is added first, so it stays
+  authoritative over the Latin range all three cover — ImGui keeps the first source to supply a glyph.
+  **Switch note:** verify the on-demand atlas still builds and memory/startup stay acceptable on device.

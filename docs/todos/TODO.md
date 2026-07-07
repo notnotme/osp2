@@ -56,6 +56,6 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
   - [x] 18a — Plugin subtrack API + GME impl + controller pass-through
   - [x] 18b — Wire NEXT/PREVIOUS + auto-advance to subtracks
 - [x] [TODO_19 — Loop-song setting](TODO_19.md) — requires TODO_6; single chunk
-- [ ] [TODO_20 — Non-UTF-8 track metadata (charset transcoding + CJK font)](TODO_20.md) — requires TODO_9 + TODO_5; independent
+- [x] [TODO_20 — Non-UTF-8 track metadata (charset transcoding + CJK font)](TODO_20.md) — requires TODO_9 + TODO_5; independent
   - [x] 20a — Charset transcoding to UTF-8 at the plugin boundary
-  - [ ] 20b — CJK-capable font
+  - [x] 20b — CJK-capable font
