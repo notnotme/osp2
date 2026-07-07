@@ -45,6 +45,8 @@ GmePlugin::GmePlugin()
     : m_sampleRate(0),
       m_emu(nullptr, &gme_delete),
       m_duration(0.0),
+      m_trackCount(0),
+      m_currentTrack(0),
       m_stereoDepth(0),
       m_accuracy(0) {}
 
@@ -81,37 +83,11 @@ bool GmePlugin::open(const std::filesystem::path &path) {
         // Accuracy is best set before the track starts; stereo depth is applied after.
         gme_enable_accuracy(m_emu.get(), m_accuracy);
 
-        if (const gme_err_t error = gme_start_track(m_emu.get(), 0)) {
-            SDL_Log("GmePlugin: failed to start track in %s: %s", path.c_str(), error);
+        m_trackCount = gme_track_count(m_emu.get());
+        if (!startTrack(0)) {
             m_emu.reset();
             return false;
         }
-
-        gme_set_stereo_depth(m_emu.get(), m_stereoDepth / 100.0);
-
-        gme_info_t *info = nullptr;
-        if (const gme_err_t error = gme_track_info(m_emu.get(), &info, 0)) {
-            SDL_Log("GmePlugin: failed to read track info in %s: %s", path.c_str(), error);
-            m_emu.reset();
-            return false;
-        }
-
-        m_metadata = GmeMetadata{
-            toString(info->game),
-            toString(info->system),
-            toString(info->author),
-            toString(info->copyright),
-            toString(info->comment),
-            gme_track_count(m_emu.get())
-        };
-
-        m_title = toString(info->song);
-        if (m_title.empty()) {
-            m_title = toString(info->game);
-        }
-        m_duration = info->play_length > 0 ? info->play_length / 1000.0 : 0.0;
-
-        gme_free_info(info);
         return true;
     } catch (const std::exception &e) {
         SDL_Log("GmePlugin: failed to open %s: %s", path.c_str(), e.what());
@@ -125,6 +101,45 @@ void GmePlugin::close() {
     m_metadata = std::monostate{};
     m_title.clear();
     m_duration = 0.0;
+    m_trackCount = 0;
+    m_currentTrack = 0;
+}
+
+bool GmePlugin::startTrack(const int index) {
+    if (const gme_err_t error = gme_start_track(m_emu.get(), index)) {
+        SDL_Log("GmePlugin: failed to start track %d: %s", index, error);
+        return false;
+    }
+
+    // gme_start_track can reset per-track effects, so re-apply the cached stereo depth every time.
+    gme_set_stereo_depth(m_emu.get(), m_stereoDepth / 100.0);
+
+    gme_info_t *info = nullptr;
+    if (const gme_err_t error = gme_track_info(m_emu.get(), &info, index)) {
+        SDL_Log("GmePlugin: failed to read track %d info: %s", index, error);
+        return false;
+    }
+
+    // game/system/author/copyright/comment are file-level (identical across subtracks); song and
+    // play_length are per-track, so title and duration are refreshed for the selected subtrack.
+    m_metadata = GmeMetadata{
+        toString(info->game),
+        toString(info->system),
+        toString(info->author),
+        toString(info->copyright),
+        toString(info->comment),
+        gme_track_count(m_emu.get())
+    };
+
+    m_title = toString(info->song);
+    if (m_title.empty()) {
+        m_title = toString(info->game);
+    }
+    m_duration = info->play_length > 0 ? info->play_length / 1000.0 : 0.0;
+    m_currentTrack = index;
+
+    gme_free_info(info);
+    return true;
 }
 
 int GmePlugin::decode(std::int16_t *buffer, const int frames) {
@@ -183,5 +198,28 @@ void GmePlugin::applySetting(const std::string &key, const int value) {
         if (m_emu) {
             gme_enable_accuracy(m_emu.get(), m_accuracy);
         }
+    }
+}
+
+int GmePlugin::getSubtrackCount() const {
+    return m_trackCount;
+}
+
+int GmePlugin::getCurrentSubtrack() const {
+    return m_currentTrack;
+}
+
+void GmePlugin::selectSubtrack(const int index) {
+    // m_trackCount <= 0 only when no file is open (m_emu is then null too); guarding it here keeps
+    // the std::clamp bound [0, m_trackCount - 1] well-formed without relying on that cross-check.
+    if (!m_emu || m_trackCount <= 0) {
+        return;
+    }
+    // Called under PlayerController::m_mutex (same contract as applySetting), so touching the live
+    // emulator is safe. On failure keep the current track — the file is still valid, so unlike
+    // open() we must NOT reset m_emu.
+    const int clamped = std::clamp(index, 0, m_trackCount - 1);
+    if (!startTrack(clamped)) {
+        SDL_Log("GmePlugin: failed to select subtrack %d", clamped);
     }
 }

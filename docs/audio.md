@@ -57,6 +57,7 @@ classDiagram
         +cancelLoad()
         +readLatestAudio(out, maxFrames) size_t
         +applyPluginSetting(pluginName, key, value)
+        +selectSubtrack(index)
         +getPluginSettings() vector~pair~string, vector~PluginSetting~~~
         -audioCallback(userdata, stream, len)$
         -decode(stream, len)
@@ -89,6 +90,9 @@ classDiagram
         +getMetadata()* TrackMetadata
         +getSettings() vector~PluginSetting~
         +applySetting(key, value)
+        +getSubtrackCount() int
+        +getCurrentSubtrack() int
+        +selectSubtrack(index)
     }
 
     class OpenMptPlugin {
@@ -107,8 +111,11 @@ classDiagram
         -TrackMetadata m_metadata
         -string m_title
         -double m_duration
+        -int m_trackCount
+        -int m_currentTrack
         -int m_stereoDepth
         -int m_accuracy
+        -startTrack(index) bool
     }
 
     class SidPlugin {
@@ -164,6 +171,8 @@ classDiagram
         +string fileName
         +double positionSeconds
         +double durationSeconds
+        +int subtrackCount
+        +int currentSubtrack
     }
 
     class ModuleMetadata {
@@ -243,6 +252,8 @@ classDiagram
 - `destroy()` closes the audio device before destroying plugins.
 - **Plugin settings follow the same lock discipline as decode.** A plugin publishes tunables as `PluginSetting` descriptors (`src/player/PluginSetting.h`): a `key`/`label`, a current `int value`, and a `shape` variant — `IntRange` (→ slider) or `EnumOptions` (→ combo, `value` = index into `labels`). `getSettings()` returns plain **cached** members (no decoder access), while `applySetting(key, value)` may touch the *live* decoder, so it is called **only** through `PlayerController::applyPluginSetting(pluginName, key, value)`, which takes `m_mutex` (plugins are matched by `getName()`; no match = no-op). `getPluginSettings()` also locks and returns `(pluginName, descriptors)` per plugin for the UI. `OpenMptPlugin` exposes `stereo_separation` (`IntRange 0–200`, default 100 → `RENDER_STEREOSEPARATION_PERCENT`) and `interpolation` (`EnumOptions` Default/None/Linear/Cubic/Sinc → filter lengths 0/1/2/4/8 → `RENDER_INTERPOLATIONFILTER_LENGTH`); both are cached members, applied to the module in `open()` and immediately in `applySetting()`. **Values are clamped/normalized on store** (separation to 0–200, interpolation to a valid index) so a hand-edited INI can never feed `set_render_param` an out-of-range value — that call throws, and an unchecked value would otherwise make every subsequent `open()` fail. Persisted `[plugin.<name>]` values are pushed once at startup by `main.cpp` via `applyPluginSetting` (see [settings.md](settings.md)).
 - **Metadata is captured once, not read per frame.** Each library exposes a different metadata shape, so it travels as `TrackMetadata` (`src/player/Metadata.h`) — a `std::variant<std::monostate, ModuleMetadata, ...>`, one struct per plugin family, `monostate` = no track. Reading the decoder every frame would contend with `decode()`, so a plugin's `getMetadata()` returns a value **cached during `open()`** and cleared to `monostate` in `close()`; it must never touch the decoder object. `PlayerController::getMetadata()` still locks `m_mutex` (to read `m_activePlugin` safely) and returns the plugin's cached value, or a default (`monostate`) when nothing is active. `Application` refetches only on track change (see [application.md](application.md)), so the lock is taken rarely, not per frame.
+
+- **Subtracks follow the same lock discipline as settings.** Many chiptune formats pack several tunes into one file (GME especially — NSF/GBS/VGM/KSS/…). `PlayerPlugin` exposes three virtuals with single-track defaults so non-multi-track plugins need no change: `getSubtrackCount()` (default `1`) and `getCurrentSubtrack()` (default `0`) are **cached** reads (no decoder access, like `getMetadata`), while `selectSubtrack(int)` (default no-op) may touch the *live* decoder, so it is called **only** through `PlayerController::selectSubtrack(index)`, which takes `m_mutex` (same contract as `applyPluginSetting`) and also **clears `m_trackEnded`** — a manual subtrack change must not be clobbered by auto-advance (consistent with `play()`/`stop()`). `getStatus()` surfaces the two counts through `PlaybackStatus` (`subtrackCount`/`currentSubtrack`; `1`/`0` when no plugin is active), which rides in `UiState.status`. Navigation wiring (NEXT/PREVIOUS/auto-advance stepping subtracks) is a later chunk; the backend here only reports the counts and performs an explicit selection. **GmePlugin** overrides all three: `open()` sets `m_trackCount = gme_track_count(...)` then calls the private `startTrack(0)`; `selectSubtrack(index)` clamps to `[0, count)` and calls `startTrack(clamped)`, leaving the current track (and **not** resetting `m_emu`) on failure since the file is still valid. `startTrack(index)` is the shared per-track init: `gme_start_track(index)`, **re-apply** the cached stereo depth (a start_track can reset per-track effects), `gme_track_info(index)`, then rebuild `m_metadata`/`m_title`/`m_duration` (game/system/author/copyright/comment are file-level and identical across subtracks; song/play_length are per-track) and set `m_currentTrack`. So a live subtrack switch refreshes exactly the caches `getTitle()`/`getDuration()`/`getMetadata()` read, under the lock. `GmeMetadata::trackCount` stays populated as before (display-only); `m_trackCount` is the navigation source of truth.
 
 ## Adding a decoder plugin
 

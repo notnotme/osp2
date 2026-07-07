@@ -264,7 +264,7 @@ std::string PlayerController::getCurrentTitle() const {
 PlaybackStatus PlayerController::getStatus() const {
     std::scoped_lock lock(m_mutex);
     if (m_activePlugin == nullptr) {
-        return {m_state, "", m_currentPath.filename().string(), 0.0, 0.0};
+        return {m_state, "", m_currentPath.filename().string(), 0.0, 0.0, 1, 0};
     }
     // A track that ended with no next to auto-advance to stays STOPPED with its plugin still loaded
     // (teardown is main-thread only). Honor PlaybackStatus's "0 when stopped" contract so the timer
@@ -275,7 +275,9 @@ PlaybackStatus PlayerController::getStatus() const {
         m_activePlugin->getTitle(),
         m_currentPath.filename().string(),
         stopped ? 0.0 : m_activePlugin->getPosition(),
-        stopped ? 0.0 : m_activePlugin->getDuration()
+        stopped ? 0.0 : m_activePlugin->getDuration(),
+        m_activePlugin->getSubtrackCount(),
+        m_activePlugin->getCurrentSubtrack()
     };
 }
 
@@ -304,6 +306,19 @@ void PlayerController::applyPluginSetting(const std::string &pluginName, const s
             plugin->applySetting(key, value);
             return;
         }
+    }
+}
+
+void PlayerController::selectSubtrack(const int index) {
+    std::scoped_lock lock(m_mutex);
+    if (m_activePlugin != nullptr) {
+        m_activePlugin->selectSubtrack(index);
+        // Selecting a subtrack is a play action: resume PLAYING so a switch made after the previous
+        // subtrack ended (audio thread set STOPPED) actually starts, mirroring how play() begins.
+        m_state = PlayerState::PLAYING;
+        // A manual subtrack change must clear any pending end-of-track so it is not clobbered by
+        // auto-advance (consistent with how play()/stop() reset m_trackEnded).
+        m_trackEnded.store(false);
     }
 }
 

@@ -133,6 +133,10 @@ public:
     // Applies a setting to a named plugin under m_mutex (same contract as decode/open).
     // pluginName is matched against PlayerPlugin::getName(). No-op if no plugin matches.
     void applyPluginSetting(const std::string &pluginName, const std::string &key, int value);
+    // Selects a subtrack on the active plugin under m_mutex (same contract as applyPluginSetting:
+    // it touches the audio-thread-shared decoder). Clears the pending end-of-track flag so a manual
+    // subtrack change is not clobbered by auto-advance. No-op when no plugin is active.
+    void selectSubtrack(int index);
     // Plugin name (getName()) + its setting descriptors, for the settings UI. Under lock.
     [[nodiscard]] std::vector<std::pair<std::string, std::vector<PluginSetting>>> getPluginSettings() const;
 

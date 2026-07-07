@@ -31,6 +31,8 @@ struct PlaybackStatus {
     std::string fileName;   // basename of the open file
     double positionSeconds; // 0 when stopped
     double durationSeconds; // 0 when stopped/unknown
+    int subtrackCount;      // number of subtracks in the open file (1 for single-track formats)
+    int currentSubtrack;    // 0-based index of the playing subtrack
 };
 
 
