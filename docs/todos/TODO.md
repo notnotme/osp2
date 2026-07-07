@@ -59,7 +59,7 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
 - [x] [TODO_20 — Non-UTF-8 track metadata (charset transcoding + CJK font)](TODO_20.md) — requires TODO_9 + TODO_5; independent
   - [x] 20a — Charset transcoding to UTF-8 at the plugin boundary
   - [x] 20b — CJK-capable font
-- [ ] [TODO_21 — Accurate NES/NSF duration (drop the fake 2:30)](TODO_21.md) — requires TODO_9 + TODO_18; single chunk
+- [x] [TODO_21 — Accurate NES/NSF duration (drop the fake 2:30)](TODO_21.md) — requires TODO_9 + TODO_18; single chunk
 - [ ] [TODO_22 — No UI blink when next/prev crosses a file boundary](TODO_22.md) — requires TODO_17 + TODO_18; single chunk
 - [ ] [TODO_23 — Right-align file size in the browser](TODO_23.md) — single chunk; presentation-only
 - [ ] [TODO_24 — Better About box (version, author, credits, link)](TODO_24.md) — single chunk

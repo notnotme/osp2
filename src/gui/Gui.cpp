@@ -768,7 +768,9 @@ void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(B
     // knob are drawn on the window draw list (centred on the label line); the slot is reserved with a
     // plain Dummy so both timer labels keep one baseline — a framed widget would shove them around.
     const auto position = formatTime(status.positionSeconds);
-    const auto duration = formatTime(status.durationSeconds);
+    // An unknown duration (<= 0, e.g. a bare NSF whose real length libgme can't report) renders as
+    // open-ended "--:--" rather than a fake time, and the progress line stays unfilled (fraction 0).
+    const auto duration = status.durationSeconds > 0.0 ? formatTime(status.durationSeconds) : std::string("--:--");
     auto fraction = 0.0f;
     if (status.durationSeconds > 0.0) {
         fraction = std::clamp(static_cast<float>(status.positionSeconds / status.durationSeconds), 0.0f, 1.0f);
