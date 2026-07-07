@@ -106,6 +106,10 @@ public:
     [[nodiscard]] std::string getCurrentFileName() const;
     [[nodiscard]] std::filesystem::path getCurrentPath() const;
     [[nodiscard]] std::string getCurrentTitle() const;
+    // Lightweight subtrack navigation queries (getStatus() stays the full per-frame UI snapshot).
+    // A locked read of the active plugin; the safe defaults (1 / 0) apply when nothing is loaded.
+    [[nodiscard]] int getSubtrackCount() const;
+    [[nodiscard]] int getCurrentSubtrack() const;
     [[nodiscard]] PlaybackStatus getStatus() const;
     [[nodiscard]] TrackMetadata getMetadata() const;
     [[nodiscard]] bool isSupported(const std::filesystem::path &path) const;
@@ -133,6 +137,10 @@ public:
     // Applies a setting to a named plugin under m_mutex (same contract as decode/open).
     // pluginName is matched against PlayerPlugin::getName(). No-op if no plugin matches.
     void applyPluginSetting(const std::string &pluginName, const std::string &key, int value);
+    // Selects a subtrack on the active plugin under m_mutex (same contract as applyPluginSetting:
+    // it touches the audio-thread-shared decoder). Clears the pending end-of-track flag so a manual
+    // subtrack change is not clobbered by auto-advance. No-op when no plugin is active.
+    void selectSubtrack(int index);
     // Plugin name (getName()) + its setting descriptors, for the settings UI. Under lock.
     [[nodiscard]] std::vector<std::pair<std::string, std::vector<PluginSetting>>> getPluginSettings() const;
 

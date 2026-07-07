@@ -53,6 +53,6 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
   - [x] 17a — Async decode + loading overlay
   - [x] 17b — Playback error notifications (popup)
 - [ ] [TODO_18 — Subtrack navigation (NEXT/PREVIOUS step subtracks)](TODO_18.md) — requires TODO_9; GME multi-track
-  - [ ] 18a — Plugin subtrack API + GME impl + controller pass-through
-  - [ ] 18b — Wire NEXT/PREVIOUS + auto-advance to subtracks
+  - [x] 18a — Plugin subtrack API + GME impl + controller pass-through
+  - [x] 18b — Wire NEXT/PREVIOUS + auto-advance to subtracks
 - [ ] [TODO_19 — Loop-song setting](TODO_19.md) — requires TODO_6; single chunk

@@ -39,6 +39,10 @@ private:
     // Cached in open() so getTitle()/getDuration() never touch the shared emulator.
     std::string m_title;
     double m_duration;
+    // Cached subtrack navigation state so getSubtrackCount()/getCurrentSubtrack() never touch the
+    // shared emulator; refreshed by startTrack() (mirrors m_title/m_duration/m_metadata).
+    int m_trackCount;
+    int m_currentTrack;
     // Cached render settings, re-applied to each emulator on open(). m_stereoDepth is a 0..100
     // percent (mapped to gme's 0.0..1.0 depth); m_accuracy is 0/1 (see getSettings()).
     int m_stereoDepth;
@@ -64,6 +68,15 @@ public:
     [[nodiscard]] TrackMetadata getMetadata() const override;
     [[nodiscard]] std::vector<PluginSetting> getSettings() const override;
     void applySetting(const std::string &key, int value) override;
+    [[nodiscard]] int getSubtrackCount() const override;
+    [[nodiscard]] int getCurrentSubtrack() const override;
+    void selectSubtrack(int index) override;
+
+private:
+    // Starts subtrack `index` on the already-open emulator: re-applies stereo depth (start_track can
+    // reset effects), re-reads gme_track_info and rebuilds the cached title/duration/metadata, and
+    // sets m_currentTrack. Returns false (leaving the caches untouched) if libgme reports an error.
+    [[nodiscard]] bool startTrack(int index);
 };
 
 

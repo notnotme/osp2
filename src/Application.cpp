@@ -50,10 +50,10 @@ void Application::handleButtonClick(const ButtonId buttonId) {
         m_player.stop();
         break;
     case NEXT:
-        playAdjacentTrack(+1);
+        advance(+1);
         break;
     case PREVIOUS:
-        playAdjacentTrack(-1);
+        advance(-1);
         break;
     case QUIT:
         // Intercepted by Platform (it owns the run-loop flag); never reaches the app layer.
@@ -76,6 +76,27 @@ void Application::handleDirectoryClick(const FileEntry &entry) {
         m_fileSystem.navigateToParent();
     } else {
         m_fileSystem.navigateToEntry(entry);
+    }
+}
+
+// Subtrack-first navigation shared by the NEXT/PREVIOUS transport buttons and auto-advance.
+// direction: +1 for NEXT, -1 for PREVIOUS. Steps within the current file's subtracks while another
+// one exists in that direction; at a boundary it falls through to playAdjacentTrack (the next/previous
+// FILE). When nothing is loaded (count 1 / current 0) or a single-track file plays, target is out of
+// [0,count) in both directions, so it always falls through to file navigation — preserving today's
+// behavior. PREVIOUS from subtrack 0 lands on the PREVIOUS FILE at ITS subtrack 0, not that file's
+// last subtrack: the last-subtrack variant would need to defer a "select last" until the async load
+// completes; the simple per-file-first choice is intentional. Subtrack selection performs no fetch, so
+// it deliberately does not touch m_advanceDirection/m_pendingPlayName/m_lastRequestedName (those are
+// always freshly set by playAdjacentTrack before any fetch, so a stale value can never reach a
+// fetch-failure site).
+void Application::advance(const int direction) {
+    const int count = m_player.getSubtrackCount();
+    const int target = m_player.getCurrentSubtrack() + direction;
+    if (target >= 0 && target < count) {
+        m_player.selectSubtrack(target); // stay in this file, step the subtrack (instant, no fetch)
+    } else {
+        playAdjacentTrack(direction); // at a boundary: fall through to the next/previous file
     }
 }
 
@@ -219,13 +240,18 @@ void Application::update() {
     }
 
     if (m_player.consumeTrackEnded()) {
-        playAdjacentTrack(+1);
+        advance(+1); // step to the next subtrack if one remains, else the next file
     }
 
-    // Refetch metadata only when the playing path changes (manual play, auto-advance, stop),
-    // not per frame — getMetadata() locks the audio mutex. A cleared path resets to monostate.
-    if (const auto path = m_player.getCurrentPath(); path != m_metadataPath) {
+    // Refetch metadata only when the playing path OR the current subtrack changes (manual play,
+    // auto-advance, subtrack switch, stop), not per frame — getMetadata() locks the audio mutex. A
+    // subtrack switch keeps the same path but GME reports different song/comment per subtrack, so the
+    // index is part of the key. A cleared path resets to monostate.
+    const auto path = m_player.getCurrentPath();
+    const int subtrack = m_player.getCurrentSubtrack();
+    if (path != m_metadataPath || subtrack != m_metadataSubtrack) {
         m_metadataPath = path;
+        m_metadataSubtrack = subtrack;
         m_trackMetadata = m_player.getMetadata();
     }
 }

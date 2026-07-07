@@ -70,6 +70,18 @@ public:
     // Apply a setting to the live decoder. Called ONLY under PlayerController::m_mutex
     // (may touch the audio-thread-shared decoder object). No-op default for plugins with no config.
     virtual void applySetting(const std::string &key, int value) {}
+
+    // Subtrack support for formats that pack several tunes per file (e.g. GME's NSF/GBS/…).
+    // Single-track plugins use these defaults. getSubtrackCount()/getCurrentSubtrack() are
+    // cached values (no decoder access); selectSubtrack() is called ONLY under
+    // PlayerController::m_mutex, like applySetting (it touches the audio-thread-shared decoder).
+    [[nodiscard]] virtual int getSubtrackCount() const {
+        return 1;
+    }
+    [[nodiscard]] virtual int getCurrentSubtrack() const {
+        return 0;
+    }
+    virtual void selectSubtrack(int index) {}
 };
 
 
