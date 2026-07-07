@@ -72,3 +72,5 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
   - [ ] 28c — Add to playlist (right-click context menu)
   - [ ] 28d — Remove from playlist
   - [ ] 28e — Play + Shuffle + Repeat
+- [ ] [TODO_29 — NSF/GME durations from a sibling `.m3u`](TODO_29.md) — requires TODO_21; GmePlugin sibling-load + FTP sibling-fetch
+- [ ] [TODO_30 — SID durations from the HVSC Songlengths database](TODO_30.md) — requires TODO_9; introduces an external data file (bundle vs. download)
