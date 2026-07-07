@@ -27,6 +27,7 @@
 
 #include "filesystem/FileEntry.h"
 #include "filesystem/FileSystem.h"
+#include "filesystem/NavKind.h"
 #include "gui/ButtonId.h"
 #include "gui/Theme.h"
 #include "gui/UiActions.h"
@@ -63,6 +64,9 @@ private:
     // from current values. No full rebuild after edits — the Gui iterates this vector by reference
     // while drawing, so reassigning it mid-draw would dangle.
     std::vector<std::pair<std::string, std::vector<PluginSetting>>> m_pluginSettings;
+
+    // Per-frame browser nav signal relayed from FileSystem to the Gui via UiState (scroll restore).
+    NavKind m_pendingNav = NavKind::None;
 
 public:
     Application(const Application &) = delete;

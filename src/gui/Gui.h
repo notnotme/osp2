@@ -72,6 +72,14 @@ private:
     // Previous frame's file-browser working state; used to detect the rising edge when the loading
     // overlay first appears, so focus is moved to the Cancel button exactly once (see drawFileBrowser).
     bool m_wasWorking = false;
+    // Saved GetScrollY() per nav depth: pushed on descend (before zeroing), popped and restored on
+    // ascend, so returning to a parent directory lands at the offset it was left at.
+    std::vector<float> m_browserScrollStack;
+    // Latched navigation signal: drawUserInterface stores the one-frame UiState::navKind here every
+    // frame (before the VISUALIZATION early-return), and drawFileBrowser applies + clears it only once
+    // the file_browser table is actually laid out — so a scan that lands while the browser is hidden
+    // (VISUALIZATION mode, or a culled pane) still moves the scroll stack, keeping it balanced.
+    NavKind m_pendingNav = NavKind::None;
 
 public:
     Gui(const Gui &) = delete;

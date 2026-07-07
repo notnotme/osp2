@@ -59,6 +59,8 @@ classDiagram
         -path m_pendingPath
         -vector~FileEntry~ m_pendingContent
         -optional~FetchResult~ m_fetchResult
+        -NavKind m_pendingNavDirection
+        -NavKind m_navSignal
         +create(sources, startPath, isPlayable)
         +destroy()
         +navigateToEntry(FileEntry)
@@ -66,6 +68,7 @@ classDiagram
         +requestFile(FileEntry)
         +cancel()
         +consumeFetchResult() optional~FetchResult~
+        +consumeNavigation() NavKind
         +update()
         +getPath() path
         +getContent() vector~FileEntry~
@@ -92,6 +95,7 @@ classDiagram
     FileSystem "1" o-- "*" DataSource : owns, one active
     FileSystem "1" o-- "*" FileEntry : current listing
     FileSystem ..> FetchResult : requestFile / consumeFetchResult
+    FileSystem ..> NavKind : consumeNavigation (scroll-restore signal)
 ```
 
 ## FileEntry
@@ -285,6 +289,22 @@ worker so the 4c spinner overlay covers remote downloads too — one uniform pat
 guarded by `m_working` like scans. Because the worker is shared, `m_workKind` (Scan / Fetch,
 main-thread-only) tells `update()` whether a finished worker's result is a listing to swap or a
 fetch result already parked in `m_fetchResult`.
+
+## Navigation direction signal
+
+`FileSystem` emits a **one-frame descend/ascend signal** (`NavKind`, defined in `NavKind.h`) so the
+Gui can restore the browser's scroll position across navigation (open a directory at the top; restore
+the parent's offset on `..` — see [ui.md](ui.md)). Because navigation is asynchronous — a click only
+*starts* a worker scan and the listing swaps in later — the direction is recorded at the navigate call
+(`m_pendingNavDirection`: `Descend` before each `startScan` in `navigateToEntry`, `Ascend` in
+`navigateToParent`, including its deferred virtual-root branch) but **emitted only when the listing
+actually swaps in**. `update()` promotes `m_pendingNavDirection` into `m_navSignal` on a successful
+scan swap or the virtual-root transition, and **discards it with no signal on a failed scan** (so the
+Gui's scroll stack stays balanced with real navigation). Fetch completions never set the pending
+direction, so they emit nothing. `Application::update()` reads it once per frame via
+`consumeNavigation()` (consume-and-clear, like `consumeFetchResult()`) and surfaces it on
+`UiState::navKind`. `m_pendingNavDirection`/`m_navSignal` are main-thread-only (not shared with the
+worker), so they need no locking.
 
 ## UI seam
 
