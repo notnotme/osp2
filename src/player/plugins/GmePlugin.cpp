@@ -44,6 +44,15 @@ static_assert(
 );
 
 namespace {
+    // Auto-advance play limit (see startTrack): with loop off, a track is faded out so it ends and
+    // playback advances. Most GME formats (NSF/GBS/KSS/…) never self-limit — only SPC does — so without
+    // an explicit fade a looping tune plays forever. Fade start = the track's length (or this default
+    // when the length is unknown, e.g. a bare NSF); fade duration scales with the length, clamped so
+    // full songs get a gentle tail and short jingles are not dragged out.
+    constexpr long kUnknownLengthPlayLimitMs = 150000; // 2:30, libgme's historical default guess
+    constexpr long kMinFadeMs = 500;
+    constexpr long kMaxFadeMs = 8000;
+
     // Maps a possibly-null C string (libgme leaves absent fields as nullptr) to a std::string.
     std::string toString(const char *value) {
         return value != nullptr ? std::string(value) : std::string();
@@ -218,9 +227,9 @@ void GmePlugin::close() {
 }
 
 bool GmePlugin::startTrack(const int index) {
-    // Consulted by gme_start_track when it loads the track length: loop on -> disable the play-length
-    // limit so the track repeats forever (it therefore won't auto-advance to the next subtrack/file —
-    // that's the intended "loop song" behavior). Deferred: it only affects tracks started from here.
+    // Governs SPC's built-in length limit (the only format that self-fades from its stated length):
+    // loop on -> off so an SPC repeats forever. Every other GME format ignores this and is bounded by
+    // the explicit fade set below instead. Deferred: it only affects tracks started from here.
     gme_set_autoload_playback_limit(m_emu.get(), m_loop ? 0 : 1);
 
     if (const gme_err_t error = gme_start_track(m_emu.get(), index)) {
@@ -265,6 +274,17 @@ bool GmePlugin::startTrack(const int index) {
         m_duration = intro + loop > 0 ? (intro + loop) / 1000.0 : 0.0;
     }
     m_currentTrack = index;
+
+    // End-of-track for auto-advance. gme_start_track resets any fade, so (re)apply it here after the
+    // length is known. With loop off, fade out at the track's length — or a default when the length is
+    // unknown — so the track ends and playback advances to the next subtrack/file; without this a
+    // non-SPC tune loops forever. With loop on, leave it running (no fade). set_fade must come after
+    // gme_start_track, which it does.
+    if (!m_loop) {
+        const long limitMs = m_duration > 0.0 ? static_cast<long>(m_duration * 1000.0) : kUnknownLengthPlayLimitMs;
+        const long fadeMs = std::clamp(limitMs / 10, kMinFadeMs, kMaxFadeMs);
+        gme_set_fade_msecs(m_emu.get(), static_cast<int>(limitMs), static_cast<int>(fadeMs));
+    }
 
     gme_free_info(info);
     return true;
