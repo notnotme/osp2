@@ -26,6 +26,7 @@ Location (`configPath()` in `src/Paths.h`, the single source of path truth): des
 ```ini
 [user]
 theme = dark              # dark | light | classic
+visualizer = Bars         # stable VisualizerPlugin::getName(); empty/unknown -> first (index 0)
 default_folder =          # hand-edit only; empty/invalid -> platform default start path
 
 [plugin.libopenmpt]       # section = "plugin." + PlayerPlugin::getName()
@@ -71,6 +72,8 @@ path = /pub/modules
 
 ## Startup wiring & change flow
 
-`Platform` (composition root) loads settings, then applies the persisted `[user] theme` via `Gui::applyTheme` before the loop, and resolves the browser start path from `[user] default_folder` when it names a valid directory. Runtime changes go through `Application` (which holds a `Settings &`): the UI reports intent, the presentation layer applies the visible effect, and `Application` persists it (`set…` + `save()`). See [application.md](application.md) for the theme change flow.
+`Platform` (composition root) loads settings, then applies the persisted `[user] theme` via `Gui::applyTheme` before the loop, restores the persisted `[user] visualizer` by resolving its stable plugin name through `VisualizerController::indexOf` (empty or unknown name keeps the controller's default index 0), and resolves the browser start path from `[user] default_folder` when it names a valid directory. Runtime changes go through `Application` (which holds a `Settings &`): the UI reports intent, the presentation layer applies the visible effect, and `Application` persists it (`set…` + `save()`). See [application.md](application.md) for the theme change flow.
+
+The visualizer is the exception to the "changes go through `Application`" rule: `Application` and `Gui` stay ignorant of the visualizer domain, so `Platform` (which owns both `VisualizerController` and `Settings`) is the sole bridge. Its `onSelectVisualizer` callback selects the plugin, then persists the chosen plugin's stable `getName()` under `[user] visualizer` (`setString` + `save()`) — see [visualization.md](visualization.md).
 
 **Plugin settings** live in `[plugin.<name>]` sections, where `<name>` is each decoder plugin's `PlayerPlugin::getName()`. After `player.create()`, `Platform` iterates `player.getPluginSettings()` and, for every descriptor, pushes `getInt("plugin."+name, key, descriptor.value)` back through `player.applyPluginSetting(...)` — so an absent key keeps the plugin's own default, and no plugin name is hardcoded in `Platform`. The plugin clamps values on store, so a malformed hand-edited value cannot break playback. The INI is **not** seeded with plugin sections on first run (they materialize once chunk 6c writes them on change); reading tolerates their absence. See [audio.md](audio.md) for the descriptor/threading contract.

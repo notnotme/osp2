@@ -22,6 +22,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -47,6 +48,9 @@ public:
     void destroy();
 
     [[nodiscard]] std::vector<std::string> getNames() const;
+    // Index of the plugin whose getName() equals `name`, or nullopt if none match. Lets the
+    // platform layer resolve a persisted stable plugin name back to a selectable index.
+    [[nodiscard]] std::optional<std::size_t> indexOf(const std::string &name) const;
     [[nodiscard]] std::size_t getActiveIndex() const;
     void select(std::size_t index);
     void render(const VisualFrame &frame) const;

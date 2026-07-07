@@ -53,6 +53,15 @@ std::vector<std::string> VisualizerController::getNames() const {
     return names;
 }
 
+std::optional<std::size_t> VisualizerController::indexOf(const std::string &name) const {
+    for (std::size_t i = 0; i < m_plugins.size(); ++i) {
+        if (m_plugins[i]->getName() == name) {
+            return i;
+        }
+    }
+    return std::nullopt;
+}
+
 std::size_t VisualizerController::getActiveIndex() const {
     return m_activeIndex;
 }
