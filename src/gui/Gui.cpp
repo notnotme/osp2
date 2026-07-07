@@ -747,6 +747,20 @@ void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(B
         ImGui::Text(" %s · %s", status.title.c_str(), status.fileName.c_str());
     }
 
+    // Multi-subtrack files show a right-aligned "Track n/N" indicator (1-based) on the track line;
+    // single-track files and the stopped state show nothing. Same "track loaded" test as the title row.
+    if (status.state != PlayerState::STOPPED && !status.fileName.empty() && status.subtrackCount > 1) {
+        char indicator[32];
+        std::snprintf(indicator, sizeof(indicator), "Track %d/%d", status.currentSubtrack + 1, status.subtrackCount);
+        const auto indicator_width = ImGui::CalcTextSize(indicator).x;
+        ImGui::SameLine();
+        // Right-align on the track line, but never left of the cursor: a long title just pushes the
+        // indicator to its right at the default spacing instead of overlapping it.
+        const auto right_aligned_x = ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - indicator_width;
+        ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX(), right_aligned_x));
+        ImGui::TextUnformatted(indicator);
+    }
+
     // Progress row: position | thin track line with a circular playhead | duration. The line and
     // knob are drawn on the window draw list (centred on the label line); the slot is reserved with a
     // plain Dummy so both timer labels keep one baseline — a framed widget would shove them around.

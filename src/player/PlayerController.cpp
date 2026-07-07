@@ -261,6 +261,16 @@ std::string PlayerController::getCurrentTitle() const {
     return m_activePlugin != nullptr ? m_activePlugin->getTitle() : "";
 }
 
+int PlayerController::getSubtrackCount() const {
+    std::scoped_lock lock(m_mutex);
+    return m_activePlugin != nullptr ? m_activePlugin->getSubtrackCount() : 1;
+}
+
+int PlayerController::getCurrentSubtrack() const {
+    std::scoped_lock lock(m_mutex);
+    return m_activePlugin != nullptr ? m_activePlugin->getCurrentSubtrack() : 0;
+}
+
 PlaybackStatus PlayerController::getStatus() const {
     std::scoped_lock lock(m_mutex);
     if (m_activePlugin == nullptr) {

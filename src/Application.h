@@ -64,6 +64,10 @@ private:
     // (manual play, auto-advance, stop). m_metadataPath is the path m_trackMetadata was fetched for.
     TrackMetadata m_trackMetadata;
     std::filesystem::path m_metadataPath;
+    // Subtrack index m_trackMetadata was fetched for. A subtrack switch keeps the same path, so the
+    // metadata refetch is keyed on path AND this index (GME's per-subtrack song/comment differ). -1 =
+    // no metadata fetched yet, so the first update() always refetches.
+    int m_metadataSubtrack = -1;
 
     // Plugin setting descriptors cached across frames (getPluginSettings() locks the audio mutex and
     // allocates, so it must stay off the per-frame path). Built once at startup via
@@ -96,6 +100,7 @@ private:
     void handlePluginSettingChange(const std::string &pluginName, const std::string &key, int value);
     void handlePluginSettingCommit(const std::string &pluginName, const std::string &key, int value);
     void handleCancelWork();
+    void advance(int direction);
     void playAdjacentTrack(int direction);
 };
 

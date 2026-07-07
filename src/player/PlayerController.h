@@ -106,6 +106,10 @@ public:
     [[nodiscard]] std::string getCurrentFileName() const;
     [[nodiscard]] std::filesystem::path getCurrentPath() const;
     [[nodiscard]] std::string getCurrentTitle() const;
+    // Lightweight subtrack navigation queries (getStatus() stays the full per-frame UI snapshot).
+    // A locked read of the active plugin; the safe defaults (1 / 0) apply when nothing is loaded.
+    [[nodiscard]] int getSubtrackCount() const;
+    [[nodiscard]] int getCurrentSubtrack() const;
     [[nodiscard]] PlaybackStatus getStatus() const;
     [[nodiscard]] TrackMetadata getMetadata() const;
     [[nodiscard]] bool isSupported(const std::filesystem::path &path) const;
