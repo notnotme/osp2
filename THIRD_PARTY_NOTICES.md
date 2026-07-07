@@ -15,6 +15,10 @@ OSP2 is licensed under the GPL-3.0-or-later (see `LICENSE`). It includes or link
 - **sc68** (`libsc68` + `file68` + `unice68`) — GPL-3.0-or-later, Copyright (c) 1998-2016 Benjamin Gerard — https://sourceforge.net/projects/sc68/
 - **libcurl** — curl License (a permissive MIT/X-derived license; SPDX identifier `curl`) — https://curl.se/
 
+## Data (`romfs/`)
+
+- **HVSC Songlengths database** (`romfs/sidlength/Songlengths.md5`) — from the **High Voltage SID Collection (HVSC)**, compiled by the HVSC crew; freely redistributable per the HVSC terms — https://www.hvsc.c64.org/ . Maintainer-supplied and `.gitignore`d (not in the repo); only baked into a build when present. Used to look up real SID track lengths (see [docs/audio.md](docs/audio.md)).
+
 ## Fonts (`romfs/font/`)
 
 - **Roboto** — SIL Open Font License 1.1, Copyright 2011 The Roboto Project Authors — license text in `romfs/font/OFL.txt`

@@ -107,9 +107,18 @@ SidPlugin::SidPlugin()
       m_mixPos(0),
       m_mixFrames(0),
       m_model(0),
-      m_clock(0) {}
+      m_clock(0),
+      m_duration(0.0),
+      m_dbReady(false) {}
 
-SidPlugin::~SidPlugin() = default;
+SidPlugin::~SidPlugin() {
+    // Defensive: destroy() normally joins the loader, but if create()/run() throws before destroy()
+    // is reached, a still-joinable std::thread would std::terminate during destruction. The
+    // joinable() check makes this a no-op on the normal (already-joined) path.
+    if (m_dbLoader.joinable()) {
+        m_dbLoader.join();
+    }
+}
 
 void SidPlugin::create(const int sampleRate) {
     m_sampleRate = sampleRate;
@@ -117,6 +126,15 @@ void SidPlugin::create(const int sampleRate) {
     m_engine = std::make_unique<sidplayfp>();
     m_builder = std::make_unique<ReSIDfpBuilder>("ReSIDfp");
     loadRoms();
+
+    // Parse the ~5 MB Songlengths database off the decode path so it never stalls the first SID's
+    // open() (and stretches the loading overlay). It starts here, at startup, and typically finishes
+    // long before the user browses to and picks a tune; a tune opened before it is ready simply shows
+    // an open-ended duration. destroy() joins this thread; open() reads the map only once m_dbReady.
+    m_dbLoader = std::thread([this] {
+        m_songLengths.load(assetPath("sidlength/Songlengths.md5"));
+        m_dbReady.store(true, std::memory_order_release);
+    });
 }
 
 void SidPlugin::loadRoms() {
@@ -139,6 +157,11 @@ void SidPlugin::loadRoms() {
 }
 
 void SidPlugin::destroy() {
+    // Join the background database loader before tearing down (a still-joinable std::thread would
+    // std::terminate at destruction); it only touches m_songLengths, so this is safe any time.
+    if (m_dbLoader.joinable()) {
+        m_dbLoader.join();
+    }
     // Reset the engine first: it holds locked SID emulations owned by the builder.
     m_engine.reset();
     m_builder.reset();
@@ -170,6 +193,8 @@ bool SidPlugin::open(const std::filesystem::path &path) {
     // We read the file ourselves (rather than SidTune's own path loader) to match GmePlugin and to
     // sidestep path-handling quirks on the Switch; the file read can throw (bad_alloc), so honor
     // PlayerPlugin's "must not throw" contract. No external ROMs are set — PSID tunes need none.
+    m_duration = 0.0; // open-ended until the Songlengths database resolves a time below
+
     try {
         std::ifstream file(path, std::ios::binary);
         if (!file.is_open()) {
@@ -224,6 +249,20 @@ bool SidPlugin::open(const std::filesystem::path &path) {
             }
             metadata.sidModel = sidModelString(info->sidModel(0));
             metadata.clock = clockString(info->clockSpeed());
+
+            // Resolve the tune's real length from the Songlengths database. createMD5New() writes a
+            // 32-char lowercase-hex MD5 + NUL that matches the database's keys; currentSong() is the
+            // 1-based default song resolved by selectSong(0), and the database's times are 0-indexed
+            // in song order. Absent tune / empty database → m_duration stays 0 (open-ended).
+            // Only read m_songLengths once the background loader has published it (acquire pairs with
+            // the release in create()); a tune opened before then stays open-ended.
+            if (m_dbReady.load(std::memory_order_acquire)) {
+                char md5[33] = {};
+                m_tune->createMD5New(md5);
+                if (md5[0] != '\0') {
+                    m_duration = m_songLengths.lookup(md5, info->currentSong() - 1).value_or(0.0);
+                }
+            }
         }
         m_title = metadata.title.empty() ? path.filename().string() : metadata.title;
         m_metadata = metadata;
@@ -248,6 +287,7 @@ void SidPlugin::close() {
     m_mixFrames = 0;
     m_metadata = std::monostate{};
     m_title.clear();
+    m_duration = 0.0;
 }
 
 int SidPlugin::decode(std::int16_t *buffer, const int frames) {
@@ -304,9 +344,10 @@ double SidPlugin::getPosition() const {
 }
 
 double SidPlugin::getDuration() const {
-    // SID tunes loop indefinitely and carry no intrinsic length (a song-length database would be
-    // needed); report 0 = unknown, exactly as GmePlugin does for tracks with no play length.
-    return 0.0;
+    // The HVSC Songlengths time for the current subtune, cached in open() when the bundled database
+    // knows the tune. SID tunes carry no intrinsic length, so this is 0 = unknown (open-ended) when
+    // the database is absent or does not list the tune — exactly the previous behaviour.
+    return m_duration;
 }
 
 TrackMetadata SidPlugin::getMetadata() const {
