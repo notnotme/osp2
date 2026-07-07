@@ -58,6 +58,9 @@ private:
     // One-frame latch: the top-bar About entry sets it, the top bar then opens the popup
     // so OpenPopup and BeginPopupModal share the same window ID scope (works in both modes).
     bool m_aboutRequested;
+    // One-frame latch: the top-bar Quit entry sets it, the top bar then opens the confirm popup
+    // so OpenPopup and BeginPopupModal share the same menu-bar window ID scope (works in both modes).
+    bool m_quitRequested;
     // Name of the plugin whose settings popup was requested from the Plugins submenu this
     // frame (empty = none); consumed by the top bar to open that plugin's popup by name.
     std::string m_requestedPluginPopup;
@@ -84,9 +87,11 @@ private:
         const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit,
         const std::vector<std::string> &visualizerNames,
         std::size_t activeVisualizer,
-        const std::function<void(std::size_t)> &onSelectVisualizer
+        const std::function<void(std::size_t)> &onSelectVisualizer,
+        const std::function<void(ButtonId)> &onButtonClick
     );
     void drawAboutPopup() const;
+    void drawQuitConfirmPopup(const std::function<void(ButtonId)> &onButtonClick) const;
     void drawPluginPopups(
         const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings,
         const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange,

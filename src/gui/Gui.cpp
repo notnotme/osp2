@@ -116,7 +116,8 @@ Gui::Gui()
     : m_texture(0),
       m_theme(Theme::DARK),
       m_viewMode(ViewMode::WORKSPACE),
-      m_aboutRequested(false) {}
+      m_aboutRequested(false),
+      m_quitRequested(false) {}
 
 void Gui::initialize() {
     const auto bin_path = assetPath("sprites/sprites.bin");
@@ -207,7 +208,8 @@ void Gui::drawTopBar(
     const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit,
     const std::vector<std::string> &visualizerNames,
     const std::size_t activeVisualizer,
-    const std::function<void(std::size_t)> &onSelectVisualizer
+    const std::function<void(std::size_t)> &onSelectVisualizer,
+    const std::function<void(ButtonId)> &onButtonClick
 ) {
     if (ImGui::BeginMainMenuBar()) {
         ImGui::TextUnformatted("OSP2");
@@ -268,6 +270,10 @@ void Gui::drawTopBar(
             m_aboutRequested = true;
         }
 
+        if (ImGui::MenuItem(" Quit")) {
+            m_quitRequested = true;
+        }
+
         // View-mode toggle, right-aligned: fullscreen glyph in WORKSPACE (go collapse),
         // fullscreen_exit in VISUALIZATION (come back).
         const auto &style = ImGui::GetStyle();
@@ -285,6 +291,13 @@ void Gui::drawTopBar(
             m_aboutRequested = false;
         }
         drawAboutPopup();
+
+        // Same menu-bar scope as the About popup so OpenPopup and BeginPopupModal share the window ID.
+        if (m_quitRequested) {
+            ImGui::OpenPopup("Quit OSP2?");
+            m_quitRequested = false;
+        }
+        drawQuitConfirmPopup(onButtonClick);
 
         if (!m_requestedPluginPopup.empty()) {
             ImGui::OpenPopup(m_requestedPluginPopup.c_str());
@@ -311,6 +324,29 @@ void Gui::drawAboutPopup() const {
         ImGui::Spacing();
 
         if (ImGui::Button("Close")) {
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
+// Confirm step for the top-bar Quit entry: Quit fires onButtonClick(QUIT) (Platform flips the
+// run-loop flag), Cancel just dismisses. Reads no members, so it is const like drawAboutPopup.
+void Gui::drawQuitConfirmPopup(const std::function<void(ButtonId)> &onButtonClick) const {
+    const auto center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    constexpr auto flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
+    if (ImGui::BeginPopupModal("Quit OSP2?", nullptr, flags)) {
+        ImGui::TextUnformatted("Are you sure you want to quit?");
+        ImGui::Spacing();
+
+        if (ImGui::Button("Quit")) {
+            onButtonClick(QUIT);
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
@@ -751,7 +787,8 @@ void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
         actions.onPluginSettingCommit,
         state.visualizerNames,
         state.activeVisualizer,
-        actions.onSelectVisualizer
+        actions.onSelectVisualizer,
+        actions.onButtonClick
     );
 
     // VISUALIZATION mode draws only the top bar; the work area below is handed to the visualizer via

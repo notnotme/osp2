@@ -54,6 +54,9 @@ void Application::handleButtonClick(const ButtonId buttonId) {
     case PREVIOUS:
         playAdjacentTrack(-1);
         break;
+    case QUIT:
+        // Intercepted by Platform (it owns the run-loop flag); never reaches the app layer.
+        break;
     }
 }
 

@@ -21,7 +21,7 @@
 #define OSP2_BUTTON_ID_H
 
 
-enum ButtonId { PLAY_PAUSE, STOP, NEXT, PREVIOUS };
+enum ButtonId { PLAY_PAUSE, STOP, NEXT, PREVIOUS, QUIT };
 
 
 #endif //OSP2_BUTTON_ID_H
