@@ -38,9 +38,11 @@ private:
     // Captured once in open() so getMetadata() never touches the audio-thread-shared module.
     TrackMetadata m_metadata;
     // Cached render settings, re-applied to each module on open(); m_interpolation is an index
-    // into the Interpolation enum labels (see getSettings()).
+    // into the Interpolation enum labels (see getSettings()). m_loop is 0/1 and maps to
+    // set_repeat_count (1 -> -1, loop forever; 0 -> play once).
     int m_stereoSeparation;
     int m_interpolation;
+    int m_loop;
 
 public:
     OpenMptPlugin(const OpenMptPlugin &) = delete;

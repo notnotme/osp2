@@ -151,7 +151,9 @@ bool Sc68Plugin::open(const std::filesystem::path &path) {
     // aSIDifier mode is consumed by sc68_play() (it loads the asidifier replay), so set it first.
     // The enum index maps straight onto SC68_ASID_OFF/ON/FORCE (0/1/2).
     sc68_cntl(m_sc68, SC68_SET_ASID, m_asid);
-    if (sc68_play(m_sc68, SC68_DEF_TRACK, SC68_DEF_LOOP) != SC68_OK) {
+    // The loop count is fixed at sc68_play() time (SC68_CUR_TRACK is a getter, so it can't change
+    // live): SC68_INF_LOOP repeats forever, SC68_DEF_LOOP is the default single playthrough.
+    if (sc68_play(m_sc68, SC68_DEF_TRACK, m_loop ? SC68_INF_LOOP : SC68_DEF_LOOP) != SC68_OK) {
         SDL_Log("Sc68Plugin: cannot play %s", path.c_str());
         sc68_close(m_sc68);
         return false;
@@ -259,7 +261,8 @@ TrackMetadata Sc68Plugin::getMetadata() const {
 
 std::vector<PluginSetting> Sc68Plugin::getSettings() const {
     return {
-        {"asid", "aSID (YM to SID)", EnumOptions{{"Off", "On", "Force"}}, m_asid}
+        {"asid", "aSID (YM to SID)", EnumOptions{{"Off", "On", "Force"}}, m_asid, true},
+        {"loop", "Loop",             EnumOptions{{"Off", "On"}},          m_loop, true}
     };
 }
 
@@ -269,5 +272,9 @@ void Sc68Plugin::applySetting(const std::string &key, const int value) {
     // the tune); only YM/ST tracks that advertise aSID caps are affected — a no-op otherwise.
     if (key == "asid") {
         m_asid = std::clamp(value, 0, 2);
+    } else if (key == "loop") {
+        // Deferred like asid: the loop count is fixed by sc68_play() at open() time, so store it now
+        // and let the next open() pick it up.
+        m_loop = value == 1 ? 1 : 0;
     }
 }

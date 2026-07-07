@@ -48,7 +48,8 @@ GmePlugin::GmePlugin()
       m_trackCount(0),
       m_currentTrack(0),
       m_stereoDepth(0),
-      m_accuracy(0) {}
+      m_accuracy(0),
+      m_loop(0) {}
 
 GmePlugin::~GmePlugin() = default;
 
@@ -106,6 +107,11 @@ void GmePlugin::close() {
 }
 
 bool GmePlugin::startTrack(const int index) {
+    // Consulted by gme_start_track when it loads the track length: loop on -> disable the play-length
+    // limit so the track repeats forever (it therefore won't auto-advance to the next subtrack/file —
+    // that's the intended "loop song" behavior). Deferred: it only affects tracks started from here.
+    gme_set_autoload_playback_limit(m_emu.get(), m_loop ? 0 : 1);
+
     if (const gme_err_t error = gme_start_track(m_emu.get(), index)) {
         SDL_Log("GmePlugin: failed to start track %d: %s", index, error);
         return false;
@@ -180,8 +186,9 @@ TrackMetadata GmePlugin::getMetadata() const {
 
 std::vector<PluginSetting> GmePlugin::getSettings() const {
     return {
-        {"stereo_depth", "Stereo depth",       IntRange{0, 100},                  m_stereoDepth},
-        {"accuracy",     "Emulation accuracy", EnumOptions{{"Fast", "Accurate"}}, m_accuracy   }
+        {"stereo_depth", "Stereo depth", IntRange{0, 100}, m_stereoDepth},
+        {"accuracy", "Emulation accuracy", EnumOptions{{"Fast", "Accurate"}}, m_accuracy},
+        {"loop", "Loop", EnumOptions{{"Off", "On"}}, m_loop, true}
     };
 }
 
@@ -198,6 +205,10 @@ void GmePlugin::applySetting(const std::string &key, const int value) {
         if (m_emu) {
             gme_enable_accuracy(m_emu.get(), m_accuracy);
         }
+    } else if (key == "loop") {
+        // Deferred: the loop flag is consumed by gme_set_autoload_playback_limit at the next
+        // startTrack(), so store it now and do not touch the live emulator.
+        m_loop = value == 1 ? 1 : 0;
     }
 }
 

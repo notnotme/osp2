@@ -447,6 +447,9 @@ void Gui::drawPluginPopups(
                 },
                 setting.shape
             );
+            if (setting.appliesOnNextTrack) {
+                ImGui::TextDisabled("Applies on the next track");
+            }
             ImGui::PopID();
         }
         ImGui::PopID();

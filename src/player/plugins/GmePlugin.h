@@ -47,6 +47,9 @@ private:
     // percent (mapped to gme's 0.0..1.0 depth); m_accuracy is 0/1 (see getSettings()).
     int m_stereoDepth;
     int m_accuracy;
+    // Deferred loop flag (0/1): consumed at each startTrack() to disable gme's play-length limit so
+    // the track repeats forever. Persists across open/close like m_accuracy; clamped on store.
+    int m_loop;
 
 public:
     GmePlugin(const GmePlugin &) = delete;
