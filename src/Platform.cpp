@@ -84,9 +84,17 @@ void Platform::run() {
         m_visualizer.render(frame);
     };
 
-    // Settings→Visualizer picker: switch the active visualizer at runtime. Platform is the sole
-    // bridge — Gui/Application stay ignorant of the domain.
-    actions.onSelectVisualizer = [this](const std::size_t i) { m_visualizer.select(i); };
+    // Settings→Visualizer picker: switch the active visualizer at runtime, then persist the choice as
+    // its stable plugin name (mirrors theme). Platform is the sole bridge — Gui/Application stay
+    // ignorant of the domain.
+    actions.onSelectVisualizer = [this](const std::size_t i) {
+        const std::vector<std::string> names = m_visualizer.getNames();
+        if (i < names.size()) {
+            m_visualizer.select(i);
+            m_settings.setString("user", "visualizer", names[i]);
+            m_settings.save();
+        }
+    };
 
 #if defined(__SWITCH__)
     // The Switch has no mouse: drive the ImGui cursor from the gamepad. A local so it (and the
@@ -272,6 +280,14 @@ void Platform::initPlayerAndSettings() {
     }
     // Seed the Application's cached descriptors with the post-push values (kept off the per-frame path).
     m_app.refreshPluginSettings();
+
+    // Restore the persisted visualizer by stable plugin name (mirrors the theme restore above). An
+    // empty or unknown name leaves the controller's default (index 0) untouched.
+    if (const std::string visualizerName = m_settings.getString("user", "visualizer", ""); !visualizerName.empty()) {
+        if (const auto index = m_visualizer.indexOf(visualizerName)) {
+            m_visualizer.select(*index);
+        }
+    }
 }
 
 std::filesystem::path Platform::resolveStartPath() const {
