@@ -19,3 +19,4 @@ OSP2 is licensed under the GPL-3.0-or-later (see `LICENSE`). It includes or link
 
 - **Roboto** — SIL Open Font License 1.1, Copyright 2011 The Roboto Project Authors — license text in `romfs/font/OFL.txt`
 - **Material Symbols** (Sharp Filled) — Apache License 2.0 — https://github.com/google/material-design-icons — license text in `romfs/font/LICENSE.txt`
+- **Noto Sans JP** (`NotoSansJP-Subset.ttf`, subset to Dear ImGui's Japanese glyph ranges) — SIL Open Font License 1.1, Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name "Source" — https://fonts.google.com/noto/specimen/Noto+Sans+JP — license text in `romfs/font/OFL-NotoSansJP.txt`

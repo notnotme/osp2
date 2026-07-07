@@ -19,6 +19,8 @@
 
 #include "Sc68Plugin.h"
 
+#include "../Charset.h"
+
 #include <sc68/sc68.h>
 #include <SDL_log.h>
 
@@ -163,20 +165,22 @@ bool Sc68Plugin::open(const std::filesystem::path &path) {
     sc68_music_info_t info = {};
     if (sc68_music_info(m_sc68, &info, SC68_DEF_TRACK, nullptr) == SC68_OK) {
         // Fields point into the loaded disk (valid only until sc68_close), so copy every string.
-        metadata.title = toString(info.title);
+        // Atari ST / Amiga tag text is Latin-1; transcode to UTF-8 for Dear ImGui. hw strings are
+        // library-generated but harmless under Latin-1 (ASCII passes through unchanged).
+        metadata.title = toUtf8(toString(info.title), Charset::Latin1);
         if (metadata.title.empty()) {
-            metadata.title = toString(info.album);
+            metadata.title = toUtf8(toString(info.album), Charset::Latin1);
         }
-        metadata.author = toString(info.artist);
-        metadata.composer = findTag(info.trk, "composer");
+        metadata.author = toUtf8(toString(info.artist), Charset::Latin1);
+        metadata.composer = toUtf8(findTag(info.trk, "composer"), Charset::Latin1);
         if (metadata.composer.empty()) {
-            metadata.composer = findTag(info.dsk, "composer");
+            metadata.composer = toUtf8(findTag(info.dsk, "composer"), Charset::Latin1);
         }
-        metadata.hardware = toString(info.trk.hw);
+        metadata.hardware = toUtf8(toString(info.trk.hw), Charset::Latin1);
         if (metadata.hardware.empty()) {
-            metadata.hardware = toString(info.dsk.hw);
+            metadata.hardware = toUtf8(toString(info.dsk.hw), Charset::Latin1);
         }
-        metadata.ripper = toString(info.ripper);
+        metadata.ripper = toUtf8(toString(info.ripper), Charset::Latin1);
 
         const unsigned int time_ms = info.trk.time_ms != 0 ? info.trk.time_ms : info.dsk.time_ms;
         m_duration = time_ms / 1000.0;

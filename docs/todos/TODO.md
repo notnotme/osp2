@@ -49,13 +49,13 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
 - [x] [TODO_14 — Persist selected visualizer](TODO_14.md) — requires TODO_6 + TODO_8; single chunk
 - [x] [TODO_15 — Quit-app button](TODO_15.md) — single chunk
 - [x] [TODO_16 — File-browser scroll position (top on descend, restore on back)](TODO_16.md) — single chunk
-- [ ] [TODO_17 — Playback loading overlay + error notifications](TODO_17.md)
+- [x] [TODO_17 — Playback loading overlay + error notifications](TODO_17.md)
   - [x] 17a — Async decode + loading overlay
   - [x] 17b — Playback error notifications (popup)
 - [x] [TODO_18 — Subtrack navigation (NEXT/PREVIOUS step subtracks)](TODO_18.md) — requires TODO_9; GME multi-track
   - [x] 18a — Plugin subtrack API + GME impl + controller pass-through
   - [x] 18b — Wire NEXT/PREVIOUS + auto-advance to subtracks
 - [x] [TODO_19 — Loop-song setting](TODO_19.md) — requires TODO_6; single chunk
-- [ ] [TODO_20 — Non-UTF-8 track metadata (charset transcoding + CJK font)](TODO_20.md) — requires TODO_9 + TODO_5; independent
-  - [ ] 20a — Charset transcoding to UTF-8 at the plugin boundary
-  - [ ] 20b — CJK-capable font
+- [x] [TODO_20 — Non-UTF-8 track metadata (charset transcoding + CJK font)](TODO_20.md) — requires TODO_9 + TODO_5; independent
+  - [x] 20a — Charset transcoding to UTF-8 at the plugin boundary
+  - [x] 20b — CJK-capable font
