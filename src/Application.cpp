@@ -20,6 +20,7 @@
 #include "Application.h"
 
 #include "Paths.h"
+#include "player/PlayResult.h"
 #include "player/PlayerState.h"
 
 
@@ -63,6 +64,7 @@ void Application::handleButtonClick(const ButtonId buttonId) {
 void Application::handleFileClick(const FileEntry &entry) {
     if (m_player.isSupported(entry.name)) {
         m_advanceDirection = 0;
+        m_pendingPlayName = entry.name; // for a possible error message; a direct click is never silent
         m_fileSystem.requestFile(entry);
     }
 }
@@ -100,6 +102,7 @@ void Application::playAdjacentTrack(const int direction) {
         }
         m_advanceDirection = direction;
         m_lastRequestedName = entry.name;
+        m_pendingPlayName = entry.name; // tracked for a message even though auto-advance stays silent
         m_fileSystem.requestFile(entry);
         return;
     }
@@ -151,6 +154,9 @@ void Application::handleCancelWork() {
     // resulting failed FetchResult (direction 0) just logs instead of kicking off another download.
     m_advanceDirection = 0;
     m_lastRequestedName.clear();
+    // Clearing the pending name suppresses the error a cancelled download/decode would otherwise
+    // pop: the empty-name guard in update() then takes the silent branch (see makeUiState).
+    m_pendingPlayName.clear();
 }
 
 // Builds the cached plugin-setting descriptors from the player (locks the audio mutex, so it is
@@ -161,6 +167,10 @@ void Application::refreshPluginSettings() {
 }
 
 void Application::update() {
+    // Refreshed every frame (like m_pendingNav) so an error lives exactly the frame it is produced
+    // and is picked up by makeUiState() that same frame; the Gui latches it into its modal.
+    m_playbackError.clear();
+
     m_fileSystem.update();
     m_pendingNav = m_fileSystem.consumeNavigation();
     // Reap a finished async load: on success it swaps the decoded plugin in and publishes a
@@ -175,18 +185,36 @@ void Application::update() {
         if (r->succeeded) {
             m_player.play(r->localPath); // async; the retry cursor is dropped once it succeeds
         } else if (m_advanceDirection != 0) {
-            playAdjacentTrack(m_advanceDirection); // skip a broken sibling (fetch failure)
+            playAdjacentTrack(m_advanceDirection); // skip a broken sibling (fetch failure): silent
+        } else if (!m_pendingPlayName.empty()) {
+            // Direct-click fetch failure (direction 0): surface it. An empty pending name means the
+            // work was cancelled by the user (handleCancelWork cleared it), which stays silent.
+            m_playbackError = "Cannot play " + m_pendingPlayName + ": download failed";
         }
-        // Direct-click fetch failure (direction 0): SDL_Log inside the filesystem is enough.
     }
 
-    // Poll the async decode outcome: on success drop the retry cursor, on a decode failure skip a
-    // broken sibling exactly as a failed fetch does (a cancel produces no result, so it is silent).
-    if (const auto ok = m_player.consumePlayResult()) {
-        if (*ok) {
+    // Poll the decode outcome. Auto-advance failures (direction != 0) are a SILENT skip — a broken
+    // sibling is never popped up, only the next candidate is tried. A direct click (direction 0)
+    // surfaces the reason. A cancel produces no result at all, so it is silent either way.
+    if (const auto result = m_player.consumePlayResult()) {
+        switch (*result) {
+        case PlayResult::Ok:
             m_lastRequestedName.clear();
-        } else if (m_advanceDirection != 0) {
-            playAdjacentTrack(m_advanceDirection); // skip a broken sibling (decode failure)
+            break;
+        case PlayResult::Unsupported:
+            if (m_advanceDirection != 0) {
+                playAdjacentTrack(m_advanceDirection);
+            } else if (!m_pendingPlayName.empty()) {
+                m_playbackError = "Cannot play " + m_pendingPlayName + ": unsupported format";
+            }
+            break;
+        case PlayResult::DecodeError:
+            if (m_advanceDirection != 0) {
+                playAdjacentTrack(m_advanceDirection);
+            } else if (!m_pendingPlayName.empty()) {
+                m_playbackError = "Cannot play " + m_pendingPlayName + ": failed to decode";
+            }
+            break;
         }
     }
 
@@ -226,7 +254,8 @@ UiState Application::makeUiState() const {
         std::move(workingLabel),
         m_trackMetadata,
         m_pluginSettings,
-        m_pendingNav
+        m_pendingNav,
+        m_playbackError
     };
 }
 

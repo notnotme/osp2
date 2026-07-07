@@ -209,7 +209,8 @@ void Gui::drawTopBar(
     const std::vector<std::string> &visualizerNames,
     const std::size_t activeVisualizer,
     const std::function<void(std::size_t)> &onSelectVisualizer,
-    const std::function<void(ButtonId)> &onButtonClick
+    const std::function<void(ButtonId)> &onButtonClick,
+    const std::string &error
 ) {
     if (ImGui::BeginMainMenuBar()) {
         ImGui::TextUnformatted("OSP2");
@@ -305,6 +306,15 @@ void Gui::drawTopBar(
         }
         drawPluginPopups(pluginSettings, onPluginSettingChange, onPluginSettingCommit);
 
+        // UiState::error is non-empty for exactly one frame; latch it into m_errorMessage on that
+        // rising edge so the modal persists until Close even after error goes empty again. If one is
+        // already showing, drop the new one (keep it simple). Same menu-bar scope as the other popups.
+        if (!error.empty() && m_errorMessage.empty()) {
+            m_errorMessage = error;
+            ImGui::OpenPopup("Playback error");
+        }
+        drawErrorPopup();
+
         ImGui::EndMainMenuBar();
     }
 }
@@ -348,6 +358,26 @@ void Gui::drawQuitConfirmPopup(const std::function<void(ButtonId)> &onButtonClic
         ImGui::SameLine();
         if (ImGui::Button("Cancel")) {
             ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+}
+
+// Reports a playback failure surfaced by Application (unsupported format, download or decode failure).
+// The message is latched in m_errorMessage (see drawTopBar) so the modal outlives the one-frame
+// UiState::error; Close both dismisses the popup and clears the latch — hence this is non-const.
+void Gui::drawErrorPopup() {
+    const auto center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    constexpr auto flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
+    if (ImGui::BeginPopupModal("Playback error", nullptr, flags)) {
+        ImGui::TextUnformatted(m_errorMessage.c_str());
+        ImGui::Spacing();
+
+        if (ImGui::Button("Close")) {
+            ImGui::CloseCurrentPopup();
+            m_errorMessage.clear();
         }
         ImGui::EndPopup();
     }
@@ -806,7 +836,8 @@ void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
         state.visualizerNames,
         state.activeVisualizer,
         actions.onSelectVisualizer,
-        actions.onButtonClick
+        actions.onButtonClick,
+        state.error
     );
 
     // Latch the one-frame navigation signal before the VISUALIZATION early-return below: a scan can

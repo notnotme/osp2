@@ -52,6 +52,14 @@ private:
     std::string m_lastRequestedName;
     int m_advanceDirection;
 
+    // Name of the file whose playback was last requested (set in handleFileClick / playAdjacentTrack),
+    // used only to compose a user-facing error message. Distinct from m_lastRequestedName (the
+    // auto-advance retry cursor); cleared by handleCancelWork so a user cancel never pops an error.
+    std::string m_pendingPlayName;
+    // Pending user-facing playback error for this frame (empty = none). Refreshed at the top of
+    // update() every frame so it lives exactly the frame it is produced, then handed to makeUiState().
+    std::string m_playbackError;
+
     // Track metadata cached across frames; refetched in update() only when the playing path changes
     // (manual play, auto-advance, stop). m_metadataPath is the path m_trackMetadata was fetched for.
     TrackMetadata m_trackMetadata;
