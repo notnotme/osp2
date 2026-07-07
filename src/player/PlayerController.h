@@ -36,6 +36,7 @@
 #include "Metadata.h"
 #include "PlaybackStatus.h"
 #include "PlayerPlugin.h"
+#include "PlayResult.h"
 #include "PluginSetting.h"
 #include "PlayerState.h"
 
@@ -71,7 +72,9 @@ private:
     PlayerPlugin *m_loadPlugin;       // in-flight target plugin.
     std::filesystem::path m_loadPath; // in-flight target path.
     bool m_loadSucceeded;             // worker outcome; written under m_mutex, read after join.
-    std::optional<bool> m_playResult; // main-thread only: last async play() outcome, consumed once.
+    // Main-thread only: last play() outcome, consumed once. Unsupported is set synchronously in
+    // play(); Ok/DecodeError are published by update() when it reaps the load worker.
+    std::optional<PlayResult> m_playResult;
 
     // Lock-free seqlock publishing the just-decoded block to the visualization reader.
     // Deliberately NOT guarded by m_mutex: the audio thread never blocks to publish and
@@ -112,9 +115,10 @@ public:
     // tracks m_loadPending, not the m_loading atomic, so the overlay stays up for the swap-in frame
     // and never flickers off for one frame between the worker finishing and playback starting.
     [[nodiscard]] bool isLoading() const;
-    // Returns and clears the last async play() outcome (true = playing, false = decode failure);
-    // nullopt while a load is still in flight or nothing is pending. Main-thread only.
-    [[nodiscard]] std::optional<bool> consumePlayResult();
+    // Returns and clears the last play() outcome (Ok = playing, Unsupported = no plugin matched the
+    // extension, DecodeError = the module failed to parse); nullopt while a load is still in flight
+    // or nothing is pending. Main-thread only.
+    [[nodiscard]] std::optional<PlayResult> consumePlayResult();
     // Marks the in-flight load to be discarded on completion. plugin->open() cannot be interrupted,
     // so the parse still finishes in the background; its result is dropped, the plugin is closed,
     // no playback starts and no play result is produced (a cancel must not trigger auto-advance).

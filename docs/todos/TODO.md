@@ -51,7 +51,7 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
 - [x] [TODO_16 — File-browser scroll position (top on descend, restore on back)](TODO_16.md) — single chunk
 - [ ] [TODO_17 — Playback loading overlay + error notifications](TODO_17.md)
   - [x] 17a — Async decode + loading overlay
-  - [ ] 17b — Playback error notifications (popup)
+  - [x] 17b — Playback error notifications (popup)
 - [ ] [TODO_18 — Subtrack navigation (NEXT/PREVIOUS step subtracks)](TODO_18.md) — requires TODO_9; GME multi-track
   - [ ] 18a — Plugin subtrack API + GME impl + controller pass-through
   - [ ] 18b — Wire NEXT/PREVIOUS + auto-advance to subtracks

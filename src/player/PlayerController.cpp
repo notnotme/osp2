@@ -102,6 +102,9 @@ void PlayerController::destroy() {
 void PlayerController::play(const std::filesystem::path &path) {
     auto *plugin = findPluginFor(path);
     if (plugin == nullptr) {
+        // No decoder for this extension: report it synchronously (callers gate on isSupported(),
+        // so this is a defensive path, but the application layer still surfaces the reason).
+        m_playResult = PlayResult::Unsupported;
         return;
     }
 
@@ -189,14 +192,14 @@ void PlayerController::update() {
             m_loadPlugin->close();
         }
     }
-    m_playResult = succeeded;
+    m_playResult = succeeded ? PlayResult::Ok : PlayResult::DecodeError;
 }
 
 bool PlayerController::isLoading() const {
     return m_loadPending;
 }
 
-std::optional<bool> PlayerController::consumePlayResult() {
+std::optional<PlayResult> PlayerController::consumePlayResult() {
     return std::exchange(m_playResult, std::nullopt);
 }
 
