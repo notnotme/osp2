@@ -129,7 +129,7 @@ bool GmePlugin::startTrack(const int index) {
     }
 
     // game/system/author/copyright/comment are file-level (identical across subtracks); song and
-    // play_length are per-track, so title and duration are refreshed for the selected subtrack.
+    // length are per-track, so title and duration are refreshed for the selected subtrack.
     // NSF/GBS/… header fields are Shift-JIS (ASCII tags pass through unchanged); transcode to UTF-8
     // for Dear ImGui at the plugin boundary, where the source charset is known.
     m_metadata = GmeMetadata{
@@ -145,7 +145,16 @@ bool GmePlugin::startTrack(const int index) {
     if (m_title.empty()) {
         m_title = toUtf8(toString(info->game), Charset::ShiftJis);
     }
-    m_duration = info->play_length > 0 ? info->play_length / 1000.0 : 0.0;
+    // Report a real length only. A bare NSF header carries no per-track length, so libgme fills
+    // play_length with its built-in default (150000 ms = 2:30) for every subsong; trusting it would
+    // fake a constant 2:30. Prefer the explicit length (NSFe/.m3u), then intro+loop, else unknown (0).
+    if (info->length > 0) {
+        m_duration = info->length / 1000.0;
+    } else {
+        const auto intro = info->intro_length > 0 ? info->intro_length : 0;
+        const auto loop = info->loop_length > 0 ? info->loop_length : 0;
+        m_duration = intro + loop > 0 ? (intro + loop) / 1000.0 : 0.0;
+    }
     m_currentTrack = index;
 
     gme_free_info(info);
