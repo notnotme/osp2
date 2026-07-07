@@ -15,12 +15,9 @@ The HVSC **Songlengths database** (`DOCUMENTS/Songlengths.md5`, freely redistrib
 
 Since HVSC #68 the keys use the **"new" MD5** (`SidTune::createMD5New()` in libsidplayfp); the older `createMD5()` matched the pre-#68 format. Use `createMD5New()` to match a current DB.
 
-## Design decisions (resolve before implementing)
+## Design decisions
 
-1. **Where the DB comes from — bundle vs. download.**
-   - *Bundle in `romfs/`*: `Songlengths.md5` is a few MB, works offline, but bloats the `.nro` and pins a fixed HVSC version.
-   - *Download-on-first-use + cache* (recommended): fetch once from a configured URL into the app cache dir (same cache root the FTP source uses), parse from there; ship without it. Keeps the `.nro` small and lets the DB update. Needs a source URL and graceful "not downloaded yet → open-ended, as today" fallback.
-   - A hybrid (optional bundled seed, cache overrides) is possible but adds complexity; pick one.
+1. **Where the DB comes from — bundle vs. download. → RESOLVED: bundle in `romfs/`, load-if-present.** `Songlengths.md5` (~5 MB, ~60k entries) ships as `romfs/sidlength/Songlengths.md5`, **maintainer-supplied and `.gitignore`d exactly like the C64 ROMs** (`romfs/roms`). Loaded if present, graceful open-ended fallback if absent. Works offline (important on the Switch), no config, deterministic. The download-on-first-use alternative was rejected: HVSC ships the DB inside zip archives (no clean stable URL), and it would add curl wiring, a config knob, and "no durations offline until downloaded". Since HVSC Songlengths is freely redistributable it could instead be committed, but gitignoring keeps the repo lean.
 2. **Parse + index strategy.** The DB has ~tens of thousands of entries. Load it once (lazily, off the audio thread) into a `std::unordered_map<md5, std::vector<seconds>>` owned outside the audio path; `getDuration()` reads only the cached `m_duration` for the current tune (same lock discipline as the other cached getters — no lookup on the audio thread).
 3. **Which subtune.** `SidPlugin` currently plays the **default subtune only** (`selectSong(0)`). Report that subtune's length now; when per-subtune selection lands, index by the selected subtune.
 

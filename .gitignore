@@ -45,3 +45,6 @@ romfs/music
 # OSP2's to redistribute; kept locally and baked into the .nro at build time)
 romfs/roms
 
+
+# HVSC Songlengths DB (freely redistributable; maintainer-supplied, like romfs/roms)
+romfs/sidlength

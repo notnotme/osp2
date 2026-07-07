@@ -20,11 +20,14 @@
 #ifndef OSP2_SID_PLUGIN_H
 #define OSP2_SID_PLUGIN_H
 
+#include <atomic>
 #include <cstdint>
 #include <memory>
+#include <thread>
 #include <vector>
 
 #include "../PlayerPlugin.h"
+#include "../SongLengthDb.h"
 
 // libsidplayfp types, forward-declared to keep its headers out of this one (mirrors OpenMptPlugin).
 class sidplayfp;
@@ -53,6 +56,19 @@ private:
     // 0=Auto/1=6581/2=8580; m_clock is 0=Auto/1=PAL/2=NTSC (see getSettings()).
     int m_model;
     int m_clock;
+    // HVSC Songlengths time (seconds) for the current subtune, or 0 when the bundled database is
+    // absent or does not know the tune (open-ended, as before). Cached in open(), read by
+    // getDuration() — never looked up on the audio thread.
+    double m_duration;
+    // The Songlengths database. Parsing the ~5 MB file takes long enough on the Switch to be a
+    // visible stall, so it is loaded once on a background thread started in create() rather than on
+    // the open() decode path (which would stretch the loading overlay). m_dbReady (release/acquire)
+    // publishes the finished map; open() only reads m_songLengths once it is set, so the two threads
+    // never touch it concurrently. destroy() joins m_dbLoader. A tune opened before the load finishes
+    // (or with the database absent) just gets an open-ended duration, as before.
+    SongLengthDb m_songLengths;
+    std::thread m_dbLoader;
+    std::atomic<bool> m_dbReady;
 
     // (Re)build the SidConfig from the cached settings and hand it to the engine.
     [[nodiscard]] bool configure();
