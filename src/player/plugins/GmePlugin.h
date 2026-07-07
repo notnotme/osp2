@@ -76,6 +76,12 @@ public:
     void selectSubtrack(int index) override;
 
 private:
+    // Overlays a sibling ".m3u" playlist onto the freshly-opened emulator so libgme reports the
+    // curated per-subtrack titles/lengths the tune's own header lacks. Handles both real-world
+    // layouts (a combined "<stem>.m3u", or several per-track ".m3u" files each referencing the tune
+    // by filename). Strictly best-effort: any failure is logged at most, never propagated or thrown.
+    void overlaySiblingM3u(const std::filesystem::path &tunePath);
+
     // Starts subtrack `index` on the already-open emulator: re-applies stereo depth (start_track can
     // reset effects), re-reads gme_track_info and rebuilds the cached title/duration/metadata, and
     // sets m_currentTrack. Returns false (leaving the caches untouched) if libgme reports an error.

@@ -25,9 +25,16 @@
 #include <SDL_log.h>
 
 #include <algorithm>
+#include <cctype>
 #include <exception>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <string>
+#include <string_view>
+#include <system_error>
+#include <utility>
+#include <vector>
 
 
 // decode() renders straight into the int16 output buffer via gme_play, which takes short*.
@@ -40,6 +47,16 @@ namespace {
     // Maps a possibly-null C string (libgme leaves absent fields as nullptr) to a std::string.
     std::string toString(const char *value) {
         return value != nullptr ? std::string(value) : std::string();
+    }
+
+    // ASCII lowercase for case-insensitive filename/extension matching. The cast through unsigned
+    // char is required: std::tolower has undefined behavior on a plain char that is negative.
+    std::string toLower(std::string_view value) {
+        std::string lowered(value);
+        std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](const unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        return lowered;
     }
 } // namespace
 
@@ -83,6 +100,13 @@ bool GmePlugin::open(const std::filesystem::path &path) {
         }
         m_emu.reset(raw);
 
+        // Overlay a sibling ".m3u" playlist when one sits next to the tune: it carries per-subtune
+        // titles and lengths (the "NSF M3U" convention) that a bare header lacks, populating the
+        // gme_info_t.song/length fields startTrack() reads. Optional enrichment — a missing or
+        // malformed playlist is logged and ignored, never a reason to fail the open. Must run before
+        // m_trackCount is read below, since a loaded playlist redefines gme_track_count.
+        overlaySiblingM3u(path);
+
         // Accuracy is best set before the track starts; stereo depth is applied after.
         gme_enable_accuracy(m_emu.get(), m_accuracy);
 
@@ -96,6 +120,91 @@ bool GmePlugin::open(const std::filesystem::path &path) {
         SDL_Log("GmePlugin: failed to open %s: %s", path.c_str(), e.what());
         m_emu.reset();
         return false;
+    }
+}
+
+void GmePlugin::overlaySiblingM3u(const std::filesystem::path &tunePath) {
+    // Self-contained best-effort: the emulator is already fully loaded, so this enrichment must never
+    // fail the open. The error_code filesystem overloads below cover directory/stat errors; this catch
+    // covers the rest (bad_alloc while gathering lines under the Switch's constrained RAM, etc.) so a
+    // throw here is swallowed rather than propagating into open()'s catch and aborting the track.
+    try {
+        // Combined layout: a single "<stem>.m3u" next to the tune, one line per subtrack. gme_load_m3u
+        // parses it directly; on success we are done and never look at the exploded layout.
+        auto combined = tunePath;
+        combined.replace_extension(".m3u");
+        std::error_code ec;
+        if (std::filesystem::is_regular_file(combined, ec)) {
+            if (const gme_err_t error = gme_load_m3u(m_emu.get(), combined.string().c_str())) {
+                SDL_Log("GmePlugin: ignoring sibling m3u %s: %s", combined.string().c_str(), error);
+            } else {
+                return;
+            }
+        }
+
+        // Exploded layout (common Zophar dumps): no combined playlist, but several ".m3u" files in the
+        // same directory, each named by a track title and holding ONE line that references this tune by
+        // filename + track index (e.g. "TUNE.gbs::GBS,0,Title,2:29,,10"). Concatenating those
+        // referencing lines, ordered by their source ".m3u" filename, rebuilds the curated album
+        // playlist for gme_load_m3u_data.
+        const auto tuneFilename = toLower(tunePath.filename().string());
+        const auto combinedFilename = toLower(combined.filename().string());
+
+        // (source ".m3u" filename, referencing line) — sorted by source filename to recover album order.
+        std::vector<std::pair<std::string, std::string>> entries;
+        for (auto it = std::filesystem::directory_iterator(tunePath.parent_path(), ec);
+             !ec && it != std::filesystem::directory_iterator();
+             it.increment(ec)) {
+            const auto &entryPath = it->path();
+            if (!it->is_regular_file(ec) || ec) {
+                continue;
+            }
+            if (toLower(entryPath.extension().string()) != ".m3u" ||
+                toLower(entryPath.filename().string()) == combinedFilename) {
+                continue;
+            }
+
+            auto file = std::ifstream(entryPath, std::ios::binary);
+            if (!file.is_open()) {
+                continue;
+            }
+            const auto sourceFilename = entryPath.filename().string();
+            std::string line;
+            while (std::getline(file, line)) {
+                if (!line.empty() && line.back() == '\r') {
+                    line.pop_back();
+                }
+                // Keep only lines referencing THIS tune: the field before the first "::" is the
+                // referenced filename. Other lines (comments, blanks, entries for sibling tunes) are
+                // dropped so the rebuilt buffer holds exactly this tune's curated subtracks.
+                const auto separator = line.find("::");
+                if (separator != std::string::npos && toLower(line.substr(0, separator)) == tuneFilename) {
+                    entries.emplace_back(sourceFilename, line);
+                }
+            }
+        }
+
+        if (entries.empty()) {
+            return;
+        }
+        std::sort(entries.begin(), entries.end());
+
+        std::string buffer;
+        for (const auto &[source, line] : entries) {
+            buffer += line;
+            buffer += '\n';
+        }
+
+        if (const gme_err_t error =
+                gme_load_m3u_data(m_emu.get(), buffer.data(), static_cast<long>(buffer.size()))) {
+            SDL_Log(
+                "GmePlugin: ignoring exploded m3u playlist in %s: %s",
+                tunePath.parent_path().string().c_str(),
+                error
+            );
+        }
+    } catch (const std::exception &e) {
+        SDL_Log("GmePlugin: sibling m3u overlay for %s failed: %s", tunePath.string().c_str(), e.what());
     }
 }
 

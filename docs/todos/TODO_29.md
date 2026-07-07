@@ -1,41 +1,40 @@
-# TODO_29 — NSF/GME durations from a sibling `.m3u`
+# TODO_29 — GME durations from a companion `.m3u` (local)
 
-> TODO_21 made bare NSF tracks show open-ended time because libgme reports no real length. Many NSF (and other GME formats) ship with a companion **`.m3u` playlist** that carries per-subtune titles *and* lengths in the "NSF M3U" convention (`tune.nsf::NSF,1,Title,2:30`). libgme can overlay that data via `gme_load_m3u`. Load a sibling `.m3u` when one sits next to the tune (local libraries **and** Modland downloads), so those tracks get accurate per-subtune durations again. Single feature; requires TODO_21. Independent of TODO_30.
+> TODO_21 made bare NSF/GBS/… tracks show open-ended time because libgme reports no real length. Many GME tunes ship with a companion **`.m3u`** that carries per-subtune titles *and* lengths (the "NSF M3U" convention: `tune.gbs::GBS,0,Title,2:30,,10`). libgme overlays that data via `gme_load_m3u` / `gme_load_m3u_data`, which populate the `gme_info_t.song`/`length` fields TODO_21 already reads — and it makes libgme expose the **curated** playlist as the subtrack list. Load a companion `.m3u` when one sits next to a local tune. **Local-only** (Modland/FTP does not ship these — dropped). Requires TODO_21. Independent of TODO_30.
 
 ## Context
 
-`GmePlugin::open` (`src/player/plugins/GmePlugin.cpp:67`) reads the whole file into memory and hands it to `gme_open_data` — it **never** passes a path to libgme, so `gme_load_m3u` is not called today. As a result, even a **local** NSF with a sibling `.m3u` gets no length or per-track names. After TODO_21, `startTrack` (`GmePlugin.cpp:148`) derives `m_duration` from `gme_info_t.length` (else `intro_length + loop_length`, else `0`). `gme_load_m3u` populates exactly those `length`/`song` fields per track, so **no change to the duration derivation is needed** — the existing read picks the m3u values up automatically once the playlist is overlaid.
+`GmePlugin::open` (`src/player/plugins/GmePlugin.cpp`) reads the whole file into memory and hands it to `gme_open_data` — it never overlays any playlist, so even a local tune with a companion `.m3u` gets no length or curated names. After TODO_21, `startTrack` derives `m_duration` from `gme_info_t.length` (else `intro_length + loop_length`, else `0`). `gme_load_m3u`/`gme_load_m3u_data` populate exactly those `length`/`song` fields per playlist entry, and afterwards `gme_track_count` returns the **playlist** size (the curated track count, e.g. 14 curated of 17 raw) — so no change to the duration derivation or subtrack model is needed; the existing reads pick it all up.
 
-For remote sources, `FtpDataSource::fetchFile` (`src/filesystem/FtpDataSource.cpp:534`) downloads only the single requested file to the cache mirror (`.part` → rename on success). A sibling `.m3u` is never fetched, so a cached Modland NSF can't be enriched even if the archive hosts one.
+Two real-world `.m3u` layouts exist and both must work:
 
-## The fix
+1. **Combined** — a single `<stem>.m3u` next to the tune (`game.nsf` + `game.m3u`), one line per track. `gme_load_m3u(path)` parses it directly.
+2. **Exploded** (common Zophar dumps) — no combined file, but several `.m3u` files in the tune's directory, each named by a track title (`01 BGM #01.m3u`) and holding **one** line that references the tune by filename + track index. These are single-entry playlists; loading one only exposes that one track, so they must be **gathered and concatenated** into a combined buffer and loaded via `gme_load_m3u_data`.
 
-Two small, independent pieces:
+## The fix (implemented)
 
-1. **`GmePlugin::open`** — after a successful `gme_open_data`, look for a sibling playlist next to `path` (`path` with extension replaced by `.m3u`). If it exists, call `gme_load_m3u(m_emu.get(), m3uPath.string().c_str())`; on error just `SDL_Log` and continue (the m3u is optional enrichment — a malformed/absent playlist must never fail the open). This alone fixes local libraries. Overlay happens **before** `startTrack(0)` so the first subtrack already reflects the m3u.
-2. **`FtpDataSource::fetchFile`** — after the primary file commits successfully, if the requested file's extension is one GME reads m3u for (at least `nsf`, `nsfe`, `kss`, `gbs`, `hes`, `sap`, `ay` — keep a small set), best-effort fetch the sibling `<stem>.m3u` into the same cache dir (reuse the download/commit path; a 404 or any error is ignored and must not fail or slow the primary result). The GmePlugin sibling-load in (1) then finds it on the cached copy.
+A private best-effort helper `GmePlugin::overlaySiblingM3u(tunePath)`, called from `open()` right after `m_emu.reset(raw)` and **before** `m_trackCount = gme_track_count(...)` so the curated count is picked up:
 
-## Files to change
+- **Combined first**: `<stem>.m3u`; if it is a regular file → `gme_load_m3u`; on success done, on error log and fall through.
+- **Exploded fallback**: iterate `tunePath.parent_path()` (`directory_iterator` with the `error_code` overloads, never throwing out of the helper); for each regular `.m3u` file (case-insensitive) other than the combined one, read it and keep every line whose filename field (before the first `"::"`) case-insensitively equals `tunePath.filename()`. Sort the kept lines by their source `.m3u` filename (album order), concatenate newline-separated, and `gme_load_m3u_data`.
+- Strictly best-effort throughout: any missing file, unreadable directory, or malformed/rejected playlist is `SDL_Log`ged at most and never fails the open. Uses the filesystem `error_code` overloads (the outer `open()` try/catch is not relied on for control flow).
 
-1. **`src/player/plugins/GmePlugin.cpp`** — sibling `.m3u` detection + `gme_load_m3u` in `open()` (`:67`).
-2. **`src/filesystem/FtpDataSource.cpp`** — opportunistic sibling `.m3u` fetch in `fetchFile()` (`:534`), scoped to GME-m3u extensions, best-effort.
+## Files changed
+
+1. **`src/player/plugins/GmePlugin.h`** — declare `overlaySiblingM3u`.
+2. **`src/player/plugins/GmePlugin.cpp`** — the helper + its call in `open()`.
 
 ## Docs
 
-- **`docs/audio.md`** — note that GME now overlays a sibling `.m3u` (`gme_load_m3u`) when present, which supplies the `length`/`song` fields TODO_21 reads; absent/malformed playlists are ignored.
-- **`docs/filesystem.md`** — note the best-effort sibling-`.m3u` fetch alongside GME tunes and that it never affects the primary download's success.
+- **`docs/audio.md`** — GmePlugin now overlays a companion `.m3u` (both layouts) at `open()`, supplying the curated subtrack list + the `length`/`song` fields TODO_21 reads.
 
 ## Coordination
 
-- Requires **TODO_21** (real-length-only duration; the m3u simply supplies that length). Touches `FtpDataSource.cpp` — serialise with any other FTP work. Independent of **TODO_30** (SID lengths).
-
-## Caveats
-
-- Payoff for the remote path depends on Modland actually hosting `.m3u` siblings in its GME trees — not guaranteed archive-wide. The mechanism is cheap and degrades to today's behaviour when no playlist is present, and it benefits any local library that has them regardless.
+- Requires **TODO_21** (real-length-only duration; the m3u supplies that length). Independent of **TODO_30** (SID lengths). No filesystem/FTP changes.
 
 ## Verification
 
 - Desktop + Switch builds green.
-- A local NSF **with** a sibling `.m3u` shows real per-subtune durations and titles; the same NSF **without** the m3u is unchanged (open-ended, per TODO_21).
-- Downloading that NSF from an FTP source that hosts the `.m3u` produces the same enriched durations; a source without it still plays (open-ended), with no error and no perceptible extra delay.
-- Non-GME formats and GME formats with no m3u are unaffected.
+- A local tune with a **combined** `<stem>.m3u`, and one with the **exploded** per-track layout (verified against a `CGB-AYPE-USA.gbs` GBS + 14 per-track `.m3u` files: libgme reports 14 curated subtracks named `BGM #01…`/`Jingle #01…` with lengths 2:29, 0:37, 0:33, 0:20, 0:32, 0:12, 0:04, 0:01, …), both show real per-subtune durations and curated titles.
+- The same tune **without** any `.m3u` is unchanged (raw tracks, open-ended per TODO_21).
+- Non-GME formats and other decoders are unaffected.
