@@ -26,7 +26,9 @@
 #include <filesystem>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -58,6 +60,19 @@ private:
     // Set by the audio thread at end of track, consumed once by the main loop.
     std::atomic_bool m_trackEnded;
 
+    // Async decode. plugin->open() (a whole-module parse) runs on this worker instead of the UI
+    // thread, so a large module never freezes the UI. The plugin being opened is guaranteed
+    // inactive (play() nulls m_activePlugin first), so the audio thread outputs silence and the
+    // worker touches the plugin off m_mutex; update() swaps it in under m_mutex once done.
+    std::thread m_loadWorker;
+    std::atomic_bool m_loading;       // worker-running flag; the worker clears it last.
+    bool m_loadPending;               // main-thread only: a load is in flight or awaiting swap-in.
+    bool m_loadCancelled;             // main-thread only: drop the in-flight load's result.
+    PlayerPlugin *m_loadPlugin;       // in-flight target plugin.
+    std::filesystem::path m_loadPath; // in-flight target path.
+    bool m_loadSucceeded;             // worker outcome; written under m_mutex, read after join.
+    std::optional<bool> m_playResult; // main-thread only: last async play() outcome, consumed once.
+
     // Lock-free seqlock publishing the just-decoded block to the visualization reader.
     // Deliberately NOT guarded by m_mutex: the audio thread never blocks to publish and
     // the reader never contends the decode lock.
@@ -72,10 +87,16 @@ public:
 public:
     void create();
     void destroy();
-    bool play(const std::filesystem::path &path);
+    // Starts an asynchronous load of path (findPluginFor + plugin->open() on m_loadWorker).
+    // Returns immediately; poll isLoading()/consumePlayResult() and pump update() each frame.
+    // A null plugin match is a defensive no-op (callers gate on isSupported()).
+    void play(const std::filesystem::path &path);
     void play();
     void pause();
     void stop();
+    // Main thread, once per frame: reaps a finished load worker and, on success, swaps the
+    // freshly-opened plugin in under m_mutex (or closes it on failure/cancel).
+    void update();
 
 public:
     [[nodiscard]] PlayerState getState() const;
@@ -86,6 +107,18 @@ public:
     [[nodiscard]] TrackMetadata getMetadata() const;
     [[nodiscard]] bool isSupported(const std::filesystem::path &path) const;
     [[nodiscard]] bool consumeTrackEnded();
+
+    // True from play() until update() swaps the loaded plugin in (main-thread only). Deliberately
+    // tracks m_loadPending, not the m_loading atomic, so the overlay stays up for the swap-in frame
+    // and never flickers off for one frame between the worker finishing and playback starting.
+    [[nodiscard]] bool isLoading() const;
+    // Returns and clears the last async play() outcome (true = playing, false = decode failure);
+    // nullopt while a load is still in flight or nothing is pending. Main-thread only.
+    [[nodiscard]] std::optional<bool> consumePlayResult();
+    // Marks the in-flight load to be discarded on completion. plugin->open() cannot be interrupted,
+    // so the parse still finishes in the background; its result is dropped, the plugin is closed,
+    // no playback starts and no play result is produced (a cancel must not trigger auto-advance).
+    void cancelLoad();
 
     // Copies up to maxFrames of the most recently decoded interleaved-stereo block into out
     // (which must hold maxFrames * CHANNELS floats); returns frames copied (0 if nothing has
@@ -103,6 +136,9 @@ private:
     static void audioCallback(void *userdata, Uint8 *stream, int len);
     void decode(Uint8 *stream, int len);
     [[nodiscard]] PlayerPlugin *findPluginFor(const std::filesystem::path &path) const;
+    // Worker body: parses the module off m_mutex (the plugin is inactive), stores the outcome
+    // under m_mutex, then clears m_loading last so update() observes a fully-published result.
+    void loadTrack(PlayerPlugin *plugin, const std::filesystem::path &path);
 };
 
 

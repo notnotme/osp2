@@ -41,7 +41,12 @@ PlayerController::PlayerController()
     : m_device(0),
       m_activePlugin(nullptr),
       m_state(PlayerState::STOPPED),
-      m_trackEnded(false) {}
+      m_trackEnded(false),
+      m_loading(false),
+      m_loadPending(false),
+      m_loadCancelled(false),
+      m_loadPlugin(nullptr),
+      m_loadSucceeded(false) {}
 
 void PlayerController::create() {
     m_plugins.emplace_back(std::make_unique<OpenMptPlugin>());
@@ -72,6 +77,13 @@ void PlayerController::create() {
 }
 
 void PlayerController::destroy() {
+    // Join any in-flight parse before touching the device or plugins: no open() may run while we
+    // tear plugins down. The plugin being opened is inactive, so the device need not be closed yet.
+    if (m_loadWorker.joinable()) {
+        m_loadWorker.join();
+    }
+    m_loadPending = false;
+
     // Close the device first so the callback can never fire on destroyed plugins.
     if (m_device != 0) {
         SDL_CloseAudioDevice(m_device);
@@ -87,29 +99,111 @@ void PlayerController::destroy() {
     m_state = PlayerState::STOPPED;
 }
 
-bool PlayerController::play(const std::filesystem::path &path) {
+void PlayerController::play(const std::filesystem::path &path) {
     auto *plugin = findPluginFor(path);
     if (plugin == nullptr) {
-        return false;
+        return;
     }
 
-    std::scoped_lock lock(m_mutex);
-    if (m_activePlugin != nullptr) {
-        m_activePlugin->close();
-        m_activePlugin = nullptr;
+    {
+        std::scoped_lock lock(m_mutex);
+        if (m_activePlugin != nullptr) {
+            m_activePlugin->close();
+            m_activePlugin = nullptr;
+        }
+        m_state = PlayerState::STOPPED;
+        m_currentPath.clear();
+        // Cleared synchronously so an explicit click landing as the current track ends wins over
+        // auto-advance: the later consumeTrackEnded() in the same frame then reads false.
+        m_trackEnded.store(false);
     }
-    m_state = PlayerState::STOPPED;
-    m_currentPath.clear();
-    m_trackEnded.store(false);
 
-    if (!plugin->open(path)) {
-        return false;
+    // Join a still-running previous load and discard its result. In the common browser-click case
+    // the load already finished (the overlay disabled the browser during it), so this is a no-op;
+    // only a transport press made during a load makes this block briefly on the parse.
+    if (m_loadWorker.joinable()) {
+        m_loadWorker.join();
+        // That worker may have finished a *successful* open() that update() never reaped (it
+        // early-returns while m_loading is set). Close the orphaned module before we overwrite
+        // m_loadPlugin, so interrupting a load with another play() never leaks a parsed module.
+        // The plugin is inactive (m_activePlugin was nulled above), so this is main-thread teardown.
+        if (m_loadPending && m_loadSucceeded) {
+            std::scoped_lock lock(m_mutex);
+            m_loadPlugin->close();
+        }
     }
 
-    m_activePlugin = plugin;
-    m_state = PlayerState::PLAYING;
-    m_currentPath = path;
-    return true;
+    m_loadPlugin = plugin;
+    m_loadPath = path;
+    m_loadPending = true;
+    m_loadCancelled = false;
+    m_loading.store(true);
+    m_loadWorker = std::thread(&PlayerController::loadTrack, this, plugin, path);
+}
+
+void PlayerController::loadTrack(PlayerPlugin *plugin, const std::filesystem::path &path) {
+    // Runs off m_mutex: the plugin is inactive (play() nulled m_activePlugin) so the audio thread
+    // outputs silence and never touches it while it is being parsed.
+    const bool ok = plugin->open(path);
+    {
+        std::scoped_lock lock(m_mutex);
+        m_loadSucceeded = ok;
+    }
+    // Cleared last so update() only observes a completed load after m_loadSucceeded is published.
+    m_loading.store(false);
+}
+
+void PlayerController::update() {
+    if (!m_loadPending || m_loading.load()) {
+        return;
+    }
+
+    // The worker has finished (m_loading cleared last); join to reap it and establish a
+    // happens-before with the m_loadSucceeded write, then consume the outcome.
+    if (m_loadWorker.joinable()) {
+        m_loadWorker.join();
+    }
+    const bool succeeded = m_loadSucceeded;
+    m_loadPending = false;
+
+    if (m_loadCancelled) {
+        // The parse could not be interrupted, so it finished in the background; drop its result.
+        // Close the freshly-opened module so it does not linger, start no playback, and produce
+        // NO play result (a cancel must not trigger auto-advance).
+        m_loadCancelled = false;
+        if (succeeded) {
+            std::scoped_lock lock(m_mutex);
+            m_loadPlugin->close();
+        }
+        return;
+    }
+
+    {
+        std::scoped_lock lock(m_mutex);
+        if (succeeded) {
+            m_activePlugin = m_loadPlugin;
+            m_state = PlayerState::PLAYING;
+            m_currentPath = m_loadPath;
+        } else {
+            // A failed open() may leave a half-parsed module; close it so the plugin returns to idle.
+            m_loadPlugin->close();
+        }
+    }
+    m_playResult = succeeded;
+}
+
+bool PlayerController::isLoading() const {
+    return m_loadPending;
+}
+
+std::optional<bool> PlayerController::consumePlayResult() {
+    return std::exchange(m_playResult, std::nullopt);
+}
+
+void PlayerController::cancelLoad() {
+    if (m_loadPending) {
+        m_loadCancelled = true;
+    }
 }
 
 void PlayerController::play() {
@@ -127,6 +221,13 @@ void PlayerController::pause() {
 }
 
 void PlayerController::stop() {
+    // A load can be in flight (the transport bar stays live while the browser overlay is up), so
+    // drop its pending result the same way cancelLoad() does: otherwise update() would swap the
+    // just-parsed plugin in and resume playing right after the user pressed Stop.
+    if (m_loadPending) {
+        m_loadCancelled = true;
+    }
+
     std::scoped_lock lock(m_mutex);
     if (m_activePlugin != nullptr) {
         m_activePlugin->close();

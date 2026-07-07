@@ -144,6 +144,9 @@ void Application::handlePluginSettingCommit(const std::string &pluginName, const
 
 void Application::handleCancelWork() {
     m_fileSystem.cancel();
+    // Cancel covers both stages the overlay can be showing: a download (FileSystem) and a decode
+    // (PlayerController). The player parse cannot be interrupted, so its result is merely dropped.
+    m_player.cancelLoad();
     // A cancelled download must NOT auto-advance to the next sibling: drop the advance intent so the
     // resulting failed FetchResult (direction 0) just logs instead of kicking off another download.
     m_advanceDirection = 0;
@@ -160,17 +163,31 @@ void Application::refreshPluginSettings() {
 void Application::update() {
     m_fileSystem.update();
     m_pendingNav = m_fileSystem.consumeNavigation();
+    // Reap a finished async load: on success it swaps the decoded plugin in and publishes a
+    // play result (consumed below); the "Loading..." overlay stays up until this swap-in.
+    m_player.update();
 
-    // Resolve a pending request first: a successful play() clears the track-ended flag,
-    // so an explicit click made just as the current track ends wins over auto-advance
-    // (rather than being clobbered by it when both land in the same frame).
+    // Resolve a fetched file: play() is now asynchronous (it starts the decode on a player worker
+    // and returns), so success/failure is decided later at the consumePlayResult() poll below.
+    // play() still clears the track-ended flag synchronously, so an explicit click made just as the
+    // current track ends wins over auto-advance rather than being clobbered by it in the same frame.
     if (const auto r = m_fileSystem.consumeFetchResult()) {
-        if (r->succeeded && m_player.play(r->localPath)) {
+        if (r->succeeded) {
+            m_player.play(r->localPath); // async; the retry cursor is dropped once it succeeds
+        } else if (m_advanceDirection != 0) {
+            playAdjacentTrack(m_advanceDirection); // skip a broken sibling (fetch failure)
+        }
+        // Direct-click fetch failure (direction 0): SDL_Log inside the filesystem is enough.
+    }
+
+    // Poll the async decode outcome: on success drop the retry cursor, on a decode failure skip a
+    // broken sibling exactly as a failed fetch does (a cancel produces no result, so it is silent).
+    if (const auto ok = m_player.consumePlayResult()) {
+        if (*ok) {
             m_lastRequestedName.clear();
         } else if (m_advanceDirection != 0) {
-            playAdjacentTrack(m_advanceDirection); // skip a broken sibling
+            playAdjacentTrack(m_advanceDirection); // skip a broken sibling (decode failure)
         }
-        // Direct-click failure (direction 0): SDL_Log inside the player is enough.
     }
 
     if (m_player.consumeTrackEnded()) {
@@ -188,10 +205,16 @@ void Application::update() {
 UiState Application::makeUiState() const {
     const auto &path = m_fileSystem.getPath();
 
-    // Read the working flag once so the flag and its label can't disagree if the worker finishes mid-build.
-    const bool working = m_fileSystem.isWorking();
+    // Read each working flag once so a flag and its label can't disagree if a worker finishes
+    // mid-build. The player's decode load reuses the same browser overlay as the filesystem, with a
+    // distinct label taking priority (a decode always follows the fetch that fed it).
+    const bool loading = m_player.isLoading();
+    const bool fsWorking = m_fileSystem.isWorking();
+    const bool working = loading || fsWorking;
     std::string workingLabel;
-    if (working) {
+    if (loading) {
+        workingLabel = "Loading...";
+    } else if (fsWorking) {
         workingLabel = m_fileSystem.isFetching() ? "Downloading..." : "Scanning...";
     }
 
