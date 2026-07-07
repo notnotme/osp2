@@ -33,6 +33,7 @@ add_executable(OSP2
     src/gui/Gui.cpp
     src/input/CursorEmulator.cpp
     src/player/PlayerController.cpp
+    src/player/Charset.cpp
     src/player/plugins/OpenMptPlugin.cpp
     src/player/plugins/GmePlugin.cpp
     src/player/plugins/SidPlugin.cpp

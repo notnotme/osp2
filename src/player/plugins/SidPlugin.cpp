@@ -33,6 +33,7 @@
 #include <cstring>
 
 #include "../../Paths.h"
+#include "../Charset.h"
 
 
 // mix() writes interleaved-stereo 16-bit samples into a short buffer; we hand it our int16 scratch.
@@ -210,14 +211,16 @@ bool SidPlugin::open(const std::filesystem::path &path) {
         SidMetadata metadata;
         if (const SidTuneInfo *info = m_tune->getInfo(); info != nullptr) {
             const unsigned int strings = info->numberOfInfoStrings();
+            // PSID/STIL info strings are Latin-1; transcode to UTF-8 for Dear ImGui. sidModel/clock
+            // below are library-generated ASCII and need no transcoding.
             if (strings > 0) {
-                metadata.title = toString(info->infoString(0));
+                metadata.title = toUtf8(toString(info->infoString(0)), Charset::Latin1);
             }
             if (strings > 1) {
-                metadata.author = toString(info->infoString(1));
+                metadata.author = toUtf8(toString(info->infoString(1)), Charset::Latin1);
             }
             if (strings > 2) {
-                metadata.released = toString(info->infoString(2));
+                metadata.released = toUtf8(toString(info->infoString(2)), Charset::Latin1);
             }
             metadata.sidModel = sidModelString(info->sidModel(0));
             metadata.clock = clockString(info->clockSpeed());

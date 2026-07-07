@@ -19,6 +19,8 @@
 
 #include "GmePlugin.h"
 
+#include "../Charset.h"
+
 #include <gme/gme.h>
 #include <SDL_log.h>
 
@@ -128,18 +130,20 @@ bool GmePlugin::startTrack(const int index) {
 
     // game/system/author/copyright/comment are file-level (identical across subtracks); song and
     // play_length are per-track, so title and duration are refreshed for the selected subtrack.
+    // NSF/GBS/… header fields are Shift-JIS (ASCII tags pass through unchanged); transcode to UTF-8
+    // for Dear ImGui at the plugin boundary, where the source charset is known.
     m_metadata = GmeMetadata{
-        toString(info->game),
-        toString(info->system),
-        toString(info->author),
-        toString(info->copyright),
-        toString(info->comment),
+        toUtf8(toString(info->game), Charset::ShiftJis),
+        toUtf8(toString(info->system), Charset::ShiftJis),
+        toUtf8(toString(info->author), Charset::ShiftJis),
+        toUtf8(toString(info->copyright), Charset::ShiftJis),
+        toUtf8(toString(info->comment), Charset::ShiftJis),
         gme_track_count(m_emu.get())
     };
 
-    m_title = toString(info->song);
+    m_title = toUtf8(toString(info->song), Charset::ShiftJis);
     if (m_title.empty()) {
-        m_title = toString(info->game);
+        m_title = toUtf8(toString(info->game), Charset::ShiftJis);
     }
     m_duration = info->play_length > 0 ? info->play_length / 1000.0 : 0.0;
     m_currentTrack = index;
