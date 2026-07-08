@@ -64,7 +64,7 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
 - [x] [TODO_23 — Right-align file size in the browser](TODO_23.md) — single chunk; presentation-only
 - [x] [TODO_24 — Better About box (version, author, credits, link)](TODO_24.md) — single chunk
 - [x] [TODO_25 — Hide ".." when browsing the root (sources)](TODO_25.md) — single chunk
-- [ ] [TODO_26 — Remove the default bundled sound (romfs/music/)](TODO_26.md) — single chunk
+- [x] [TODO_26 — Remove the default bundled sound (romfs/music/)](TODO_26.md) — single chunk
 - [ ] [TODO_27 — Reorder Settings menu → Theme, Visualizer, Plugins](TODO_27.md) — single chunk; presentation-only
 - [ ] [TODO_28 — Playlist tab (add/remove/shuffle/repeat)](TODO_28.md) — requires TODO_9 + TODO_17 + TODO_18; multi-chunk
   - [ ] 28a — PlayList module + wiring
