@@ -569,7 +569,12 @@ void Gui::drawFileBrowser(
 
                 ImGui::TableNextColumn();
                 if (!file_entry.is_directory) {
-                    ImGui::TextUnformatted(formatSize(file_entry.file_size).c_str());
+                    // Right-align the size within its fixed column (same idiom as the "Track n/N"
+                    // indicator and the duration label): flush the text to the column's right edge.
+                    const auto size_text = formatSize(file_entry.file_size);
+                    const auto size_width = ImGui::CalcTextSize(size_text.c_str()).x;
+                    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - size_width);
+                    ImGui::TextUnformatted(size_text.c_str());
                 }
             }
         }
