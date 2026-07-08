@@ -60,6 +60,24 @@ if (NINTENDO_SWITCH)
     target_sources(OSP2 PRIVATE src/player/plugins/switch_compat.c)
 endif ()
 
+# App version surfaced to the About box. OSP_VERSION comes from project(VERSION);
+# OSP_GIT_REV is a best-effort short commit hash ("" when git or the repo is unavailable,
+# so the build string degrades cleanly).
+set(OSP_GIT_REV "")
+find_package(Git QUIET)
+if (Git_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} -C ${CMAKE_CURRENT_SOURCE_DIR} rev-parse --short HEAD
+        OUTPUT_VARIABLE OSP_GIT_REV
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+endif ()
+target_compile_definitions(OSP2 PRIVATE
+    OSP_VERSION="${PROJECT_VERSION}"
+    OSP_GIT_REV="${OSP_GIT_REV}"
+)
+
 # Formatting / linting (developer tooling; decoupled from the normal build)
 # ========================================
 # Operate on a glob of src/ — never external/ or cmake-build-* — rather than the
