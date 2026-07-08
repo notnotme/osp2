@@ -48,6 +48,10 @@ void Application::handleButtonClick(const ButtonId buttonId) {
         break;
     case STOP:
         m_player.stop();
+        // stop() cancels any in-flight load, so consumePlayResult() returns nullopt and never clears
+        // this — reset it here (mirroring handleCancelWork) so a suppressed advance overlay does not
+        // leak into the next non-fetch play (e.g. PLAY from STOPPED).
+        m_advanceLoadInFlight = false;
         break;
     case NEXT:
         advance(+1);
@@ -174,6 +178,7 @@ void Application::handleCancelWork() {
     // A cancelled download must NOT auto-advance to the next sibling: drop the advance intent so the
     // resulting failed FetchResult (direction 0) just logs instead of kicking off another download.
     m_advanceDirection = 0;
+    m_advanceLoadInFlight = false;
     m_lastRequestedName.clear();
     // Clearing the pending name suppresses the error a cancelled download/decode would otherwise
     // pop: the empty-name guard in update() then takes the silent branch (see makeUiState).
@@ -205,6 +210,9 @@ void Application::update() {
     if (const auto r = m_fileSystem.consumeFetchResult()) {
         if (r->succeeded) {
             m_player.play(r->localPath); // async; the retry cursor is dropped once it succeeds
+            // Suppress the decode overlay only for a boundary/auto advance (direction != 0); a direct
+            // click (direction 0) keeps it. m_advanceDirection is coherent at this consume point.
+            m_advanceLoadInFlight = (m_advanceDirection != 0);
         } else if (m_advanceDirection != 0) {
             playAdjacentTrack(m_advanceDirection); // skip a broken sibling (fetch failure): silent
         } else if (!m_pendingPlayName.empty()) {
@@ -218,6 +226,9 @@ void Application::update() {
     // sibling is never popped up, only the next candidate is tried. A direct click (direction 0)
     // surfaces the reason. A cancel produces no result at all, so it is silent either way.
     if (const auto result = m_player.consumePlayResult()) {
+        // The advance load resolved (any outcome): clear the overlay-suppression flag. A retrying
+        // advance (Unsupported/DecodeError -> playAdjacentTrack) re-sets it at the next play() call.
+        m_advanceLoadInFlight = false;
         switch (*result) {
         case PlayResult::Ok:
             m_lastRequestedName.clear();
@@ -247,9 +258,13 @@ void Application::update() {
     // auto-advance, subtrack switch, stop), not per frame — getMetadata() locks the audio mutex. A
     // subtrack switch keeps the same path but GME reports different song/comment per subtrack, so the
     // index is part of the key. A cleared path resets to monostate.
+    // Skip while reloading: during a boundary advance the outgoing plugin is closed, so
+    // getCurrentSubtrack() reads 0 (its real value, which advance() needs) even though the bar still
+    // shows the outgoing track via the reload snapshot. Refetching now would blank the Metadata tab
+    // (getMetadata() returns empty with no active plugin); hold the outgoing metadata until swap-in.
     const auto path = m_player.getCurrentPath();
     const int subtrack = m_player.getCurrentSubtrack();
-    if (path != m_metadataPath || subtrack != m_metadataSubtrack) {
+    if (!m_player.isReloading() && (path != m_metadataPath || subtrack != m_metadataSubtrack)) {
         m_metadataPath = path;
         m_metadataSubtrack = subtrack;
         m_trackMetadata = m_player.getMetadata();
@@ -262,7 +277,10 @@ UiState Application::makeUiState() const {
     // Read each working flag once so a flag and its label can't disagree if a worker finishes
     // mid-build. The player's decode load reuses the same browser overlay as the filesystem, with a
     // distinct label taking priority (a decode always follows the fetch that fed it).
-    const bool loading = m_player.isLoading();
+    // Suppress the decode "Loading..." overlay for a boundary/auto advance (m_advanceLoadInFlight):
+    // reload continuity keeps the outgoing track on screen, so the fast local decode needs no overlay.
+    // A remote sibling still shows "Downloading..." via fsWorking during the FTP fetch.
+    const bool loading = m_player.isLoading() && !m_advanceLoadInFlight;
     const bool fsWorking = m_fileSystem.isWorking();
     const bool working = loading || fsWorking;
     std::string workingLabel;

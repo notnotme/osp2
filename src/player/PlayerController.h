@@ -58,6 +58,13 @@ private:
     PlayerState m_state;
     std::filesystem::path m_currentPath;
 
+    // Reload continuity (guarded by m_mutex): while play(path) replaces a live track, m_reloadActive
+    // stays true and getStatus() serves m_reloadStatus — a snapshot of the outgoing track — so the
+    // player bar keeps its title/highlight instead of flashing to STOPPED during the async load.
+    // Cleared on swap-in success; a failure/cancel/stop reverts to a genuine STOPPED "No track".
+    PlaybackStatus m_reloadStatus{};
+    bool m_reloadActive;
+
     // Set by the audio thread at end of track, consumed once by the main loop.
     std::atomic_bool m_trackEnded;
 
@@ -119,6 +126,9 @@ public:
     // tracks m_loadPending, not the m_loading atomic, so the overlay stays up for the swap-in frame
     // and never flickers off for one frame between the worker finishing and playback starting.
     [[nodiscard]] bool isLoading() const;
+    // True while play(path) is replacing a live track (the outgoing snapshot is being served from
+    // getStatus()); lets the app hold the outgoing metadata/subtrack until the swap-in. Under lock.
+    [[nodiscard]] bool isReloading() const;
     // Returns and clears the last play() outcome (Ok = playing, Unsupported = no plugin matched the
     // extension, DecodeError = the module failed to parse); nullopt while a load is still in flight
     // or nothing is pending. Main-thread only.
