@@ -38,6 +38,7 @@
 #include "../player/Metadata.h"
 #include "../player/PlaybackStatus.h"
 #include "../player/PluginSetting.h"
+#include "../playlist/PlaylistEntry.h"
 
 
 class Gui {
@@ -123,13 +124,15 @@ private:
         const std::string &playingFileName,
         bool isAtRoot
     );
-    void drawTabsSection(const TrackMetadata &metadata);
+    void drawTabsSection(
+        const TrackMetadata &metadata, const std::vector<PlaylistEntry> &playlist, const std::string &playingFileName
+    );
     void drawFileMetadata(const TrackMetadata &metadata);
     void drawModuleMetadata(const ModuleMetadata &metadata);
     void drawGmeMetadata(const GmeMetadata &metadata);
     void drawSidMetadata(const SidMetadata &metadata);
     void drawSc68Metadata(const Sc68Metadata &metadata);
-    void drawTabPlaylist();
+    void drawTabPlaylist(const std::vector<PlaylistEntry> &playlist, const std::string &playingFileName);
     void drawPlayerBar(const PlaybackStatus &status, const std::function<void(ButtonId)> &onButtonClick) const;
 
 public:
