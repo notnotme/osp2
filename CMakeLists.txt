@@ -39,6 +39,7 @@ add_executable(OSP2
     src/player/plugins/GmePlugin.cpp
     src/player/plugins/SidPlugin.cpp
     src/player/plugins/Sc68Plugin.cpp
+    src/playlist/PlayList.cpp
     src/settings/Settings.cpp
     src/visualizer/VisualizerController.cpp
     src/visualizer/visualizers/BarsVisualizer.cpp

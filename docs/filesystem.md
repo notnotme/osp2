@@ -66,11 +66,13 @@ classDiagram
         +navigateToEntry(FileEntry)
         +navigateToParent()
         +requestFile(FileEntry)
+        +requestFileFromSource(sourceIndex, path)
         +cancel()
         +consumeFetchResult() optional~FetchResult~
         +consumeNavigation() NavKind
         +update()
         +getPath() path
+        +getActiveSourceIndex() int
         +getContent() vector~FileEntry~
         +isWorking() bool
         +isFetching() bool
@@ -262,6 +264,11 @@ holds one `FileEntry{displayName, 0, "Source", true}` per source, built by `show
 `navigateToParent()` from a source root transitions here; entering a source entry activates it
 and scans its `getRootPath()`.
 
+`getActiveSourceIndex()` (main-thread only, like `getPath()`) returns the index of `m_activeSource`
+within the source list — a linear find — or `-1` at the virtual root. It identifies the source that
+produced the current listing so the playlist can capture an entry's full identity (source +
+source-relative path) at add-time; 28e's replay resolves the stored index back to a `DataSource`.
+
 `showVirtualRoot()` mutates `m_content` synchronously, so it must never run **during a draw** —
 `UiState::files` is a reference to `m_content`, and the Gui fires navigation callbacks mid-frame
 while its list clipper is iterating that vector; clearing it in place would shrink the vector
@@ -289,6 +296,16 @@ worker so the 4c spinner overlay covers remote downloads too — one uniform pat
 guarded by `m_working` like scans. Because the worker is shared, `m_workKind` (Scan / Fetch,
 main-thread-only) tells `update()` whether a finished worker's result is a listing to swap or a
 fetch result already parked in `m_fetchResult`.
+
+**`requestFileFromSource(sourceIndex, path)` — playlist replay (28e)**: fetches a file addressed by
+`(source index, source-relative path)` rather than by a `FileEntry` from the *active* listing. It
+guards on `m_working` and bounds-checks `sourceIndex`, then launches the same `fetch(...)` worker as
+`startFetch` — but crucially it does **not** touch `m_activeSource` or `m_path`. A playlist entry may
+live in a different source (or a different directory) than the one currently browsed, so replay must
+leave the browser listing exactly where it is; the resulting `FetchResult` flows through the unchanged
+`consumeFetchResult()` path. **Known limitation**: `cancel()` targets `m_activeSource`, so a playlist
+fetch from a *non-active* remote source cannot be cancelled mid-transfer this round (the download runs
+to completion or its own stall/connect timeout).
 
 ## Navigation direction signal
 

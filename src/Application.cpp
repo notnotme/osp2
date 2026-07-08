@@ -23,11 +23,14 @@
 #include "player/PlayerState.h"
 
 
-Application::Application(PlayerController &player, FileSystem &fileSystem, Settings &settings)
+Application::Application(PlayerController &player, FileSystem &fileSystem, Settings &settings, PlayList &playList)
     : m_player(player),
       m_fileSystem(fileSystem),
       m_settings(settings),
-      m_advanceDirection(0) {}
+      m_playList(playList),
+      m_advanceDirection(0),
+      m_playlistIndex(-1),
+      m_consecutivePlaylistSkips(0) {}
 
 void Application::handleButtonClick(const ButtonId buttonId) {
     switch (buttonId) {
@@ -66,6 +69,7 @@ void Application::handleButtonClick(const ButtonId buttonId) {
 
 void Application::handleFileClick(const FileEntry &entry) {
     if (m_player.isSupported(entry.name)) {
+        m_playlistIndex = -1; // a browser click leaves playlist mode: later advance uses the browser
         m_advanceDirection = 0;
         m_pendingPlayName = entry.name; // for a possible error message; a direct click is never silent
         m_fileSystem.requestFile(entry);
@@ -84,23 +88,73 @@ void Application::handleDirectoryClick(const FileEntry &entry) {
 
 // Subtrack-first navigation shared by the NEXT/PREVIOUS transport buttons and auto-advance.
 // direction: +1 for NEXT, -1 for PREVIOUS. Steps within the current file's subtracks while another
-// one exists in that direction; at a boundary it falls through to playAdjacentTrack (the next/previous
-// FILE). When nothing is loaded (count 1 / current 0) or a single-track file plays, target is out of
-// [0,count) in both directions, so it always falls through to file navigation — preserving today's
-// behavior. PREVIOUS from subtrack 0 lands on the PREVIOUS FILE at ITS subtrack 0, not that file's
-// last subtrack: the last-subtrack variant would need to defer a "select last" until the async load
-// completes; the simple per-file-first choice is intentional. Subtrack selection performs no fetch, so
-// it deliberately does not touch m_advanceDirection/m_pendingPlayName/m_lastRequestedName (those are
-// always freshly set by playAdjacentTrack before any fetch, so a stale value can never reach a
-// fetch-failure site).
+// one exists in that direction; at a boundary it dispatches to advanceTrack — the PLAYLIST's
+// next/previous entry when a playlist entry is playing, otherwise the browser's next/previous FILE.
+// When nothing is loaded (count 1 / current 0) or a single-track file plays, target is out of
+// [0,count) in both directions, so it always falls through to file/playlist navigation — preserving
+// today's behavior. PREVIOUS from subtrack 0 lands on the PREVIOUS entry at ITS subtrack 0, not that
+// entry's last subtrack: the last-subtrack variant would need to defer a "select last" until the async
+// load completes; the simple per-file-first choice is intentional. Subtrack selection performs no
+// fetch, so it deliberately does not touch m_advanceDirection/m_pendingPlayName/m_lastRequestedName
+// (those are always freshly set before any fetch, so a stale value can never reach a fetch-failure site).
 void Application::advance(const int direction) {
     const int count = m_player.getSubtrackCount();
     const int target = m_player.getCurrentSubtrack() + direction;
     if (target >= 0 && target < count) {
         m_player.selectSubtrack(target); // stay in this file, step the subtrack (instant, no fetch)
     } else {
-        playAdjacentTrack(direction); // at a boundary: fall through to the next/previous file
+        advanceTrack(direction); // at a boundary: fall through to the next/previous playlist entry or file
     }
+}
+
+// File-boundary dispatch: while a playlist entry is playing, NEXT/PREVIOUS and auto-advance traverse
+// the PLAYLIST; otherwise they walk the browser's adjacent file. Also used by the fetch/decode-failure
+// retry sites so a broken playlist entry is skipped within the playlist, just as a broken browser
+// sibling is skipped in the browser.
+void Application::advanceTrack(const int direction) {
+    if (m_playlistIndex >= 0) {
+        advancePlaylist(direction);
+    } else {
+        playAdjacentTrack(direction);
+    }
+}
+
+// Playlist counterpart of playAdjacentTrack: requests the playlist's next/previous entry (shuffle/
+// repeat decided by PlayList::nextIndex). m_playlistIndex is advanced BEFORE the fetch so a failure
+// retry (advanceTrack(m_advanceDirection) again) keeps skipping through the playlist; on PlayResult::Ok
+// it already points at the now-playing entry.
+void Application::advancePlaylist(const int direction) {
+    const auto &entries = m_playList.entries();
+    if (entries.empty() || m_playlistIndex < 0 || static_cast<std::size_t>(m_playlistIndex) >= entries.size()) {
+        // The list emptied or the index fell out of range (e.g. after removals): detach from playlist mode.
+        m_playlistIndex = -1;
+        return;
+    }
+
+    const auto next = m_playList.nextIndex(static_cast<std::size_t>(m_playlistIndex), direction);
+    if (!next) {
+        // End of the playlist with repeat off: drop the browser retry cursor (mirroring
+        // playAdjacentTrack's tail) and let playback simply end.
+        m_lastRequestedName.clear();
+        return;
+    }
+
+    m_playlistIndex = static_cast<int>(*next);
+
+    // Bound the failure-retry chain: with Repeat/Shuffle on, nextIndex never returns nullopt, so an
+    // all-unplayable playlist would loop forever re-fetching. Stop once every entry has been tried once
+    // since the last successful play (the counter resets to 0 on PlayResult::Ok, so it only accrues
+    // across consecutive failures).
+    if (m_consecutivePlaylistSkips >= static_cast<int>(m_playList.size())) {
+        m_consecutivePlaylistSkips = 0;
+        return; // playback ends
+    }
+    ++m_consecutivePlaylistSkips;
+
+    const auto &entry = entries[*next];
+    m_advanceDirection = direction;
+    m_pendingPlayName = entry.name; // tracked for a message even though auto-advance stays silent
+    m_fileSystem.requestFileFromSource(entry.sourceIndex, entry.path);
 }
 
 // direction: +1 for NEXT, -1 for PREVIOUS. Requests the first playable sibling of the current track;
@@ -184,6 +238,61 @@ void Application::handleCancelWork() {
     m_pendingPlayName.clear();
 }
 
+void Application::handleAddToPlaylist(const FileEntry &entry) {
+    // Only file rows carry the context menu, but guard defensively so a directory never lands
+    // in the playlist. Capture the source-relative path (getPath()/name) and owning source index
+    // now: the browser may later navigate elsewhere or switch source, but replay (28e) must still
+    // re-fetch from where the file actually lives.
+    if (entry.is_directory) {
+        return;
+    }
+    const int sourceIndex = m_fileSystem.getActiveSourceIndex();
+    auto path = m_fileSystem.getPath() / entry.name;
+    // Reject duplicates: a file's identity is (sourceIndex, source-relative path), so adding the
+    // same file again is a no-op rather than a repeated row.
+    for (const auto &existing : m_playList.entries()) {
+        if (existing.sourceIndex == sourceIndex && existing.path == path) {
+            return;
+        }
+    }
+    m_playList.add(PlaylistEntry{entry.name, std::move(path), sourceIndex});
+}
+
+void Application::handleRemoveFromPlaylist(const std::size_t index) {
+    m_playList.removeAt(index); // bounds-checked no-op if out of range
+    // Keep the playing-entry cursor coherent with the shifted vector: entries before it slide down by
+    // one; removing the playing entry itself detaches from playlist mode (the track keeps playing, but
+    // a later NEXT falls back to browser advance).
+    if (m_playlistIndex >= 0) {
+        if (static_cast<int>(index) < m_playlistIndex) {
+            m_playlistIndex--;
+        } else if (static_cast<int>(index) == m_playlistIndex) {
+            m_playlistIndex = -1;
+        }
+    }
+}
+
+void Application::handlePlayPlaylistEntry(const std::size_t index) {
+    const auto &entries = m_playList.entries();
+    if (index >= entries.size()) {
+        return;
+    }
+    const auto &entry = entries[index];
+    m_playlistIndex = static_cast<int>(index); // enter playlist mode: later advance traverses the playlist
+    m_consecutivePlaylistSkips = 0;            // a user-initiated play starts the skip guard fresh
+    m_advanceDirection = 0;                    // a direct click: errors are surfaced, decode overlay kept (not silent)
+    m_pendingPlayName = entry.name;            // for a possible error message; a direct click is never silent
+    m_fileSystem.requestFileFromSource(entry.sourceIndex, entry.path);
+}
+
+void Application::handleToggleShuffle() {
+    m_playList.toggleShuffle();
+}
+
+void Application::handleToggleRepeat() {
+    m_playList.toggleRepeat();
+}
+
 // Builds the cached plugin-setting descriptors from the player (locks the audio mutex, so it is
 // called only at settled points — once from main.cpp after the startup push — never per frame and
 // never during a draw). Live edits keep the cache current in place, so no rebuild is needed after.
@@ -213,7 +322,7 @@ void Application::update() {
             // click (direction 0) keeps it. m_advanceDirection is coherent at this consume point.
             m_advanceLoadInFlight = (m_advanceDirection != 0);
         } else if (m_advanceDirection != 0) {
-            playAdjacentTrack(m_advanceDirection); // skip a broken sibling (fetch failure): silent
+            advanceTrack(m_advanceDirection); // skip a broken entry (fetch failure): silent, playlist- or browser-aware
         } else if (!m_pendingPlayName.empty()) {
             // Direct-click fetch failure (direction 0): surface it. An empty pending name means the
             // work was cancelled by the user (handleCancelWork cleared it), which stays silent.
@@ -231,17 +340,18 @@ void Application::update() {
         switch (*result) {
         case PlayResult::Ok:
             m_lastRequestedName.clear();
+            m_consecutivePlaylistSkips = 0; // a track played: the playlist-skip guard starts fresh
             break;
         case PlayResult::Unsupported:
             if (m_advanceDirection != 0) {
-                playAdjacentTrack(m_advanceDirection);
+                advanceTrack(m_advanceDirection);
             } else if (!m_pendingPlayName.empty()) {
                 m_playbackError = "Cannot play " + m_pendingPlayName + ": unsupported format";
             }
             break;
         case PlayResult::DecodeError:
             if (m_advanceDirection != 0) {
-                playAdjacentTrack(m_advanceDirection);
+                advanceTrack(m_advanceDirection);
             } else if (!m_pendingPlayName.empty()) {
                 m_playbackError = "Cannot play " + m_pendingPlayName + ": failed to decode";
             }
@@ -299,7 +409,10 @@ UiState Application::makeUiState() const {
         m_pluginSettings,
         m_pendingNav,
         m_playbackError,
-        path.empty() // isAtRoot: the empty FileSystem path is the virtual root (sources list)
+        path.empty(), // isAtRoot: the empty FileSystem path is the virtual root (sources list)
+        m_playList.entries(),
+        m_playList.shuffle(),
+        m_playList.repeat()
     };
 }
 
@@ -315,6 +428,11 @@ UiActions Application::makeUiActions() {
         [this](const std::string &pluginName, const std::string &key, const int value) {
             handlePluginSettingCommit(pluginName, key, value);
         },
-        [this]() { handleCancelWork(); }
+        [this]() { handleCancelWork(); },
+        [this](const FileEntry &entry) { handleAddToPlaylist(entry); },
+        [this](const std::size_t index) { handleRemoveFromPlaylist(index); },
+        [this](const std::size_t index) { handlePlayPlaylistEntry(index); },
+        [this]() { handleToggleShuffle(); },
+        [this]() { handleToggleRepeat(); }
     };
 }

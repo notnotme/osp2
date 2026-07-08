@@ -42,6 +42,14 @@ struct UiActions {
     std::function<void(const std::string &pluginName, const std::string &key, int value)> onPluginSettingCommit;
     // Fired by the browser-overlay Cancel button to abort an in-flight scan/download.
     std::function<void()> onCancelWork;
+    // Playlist tab intents. onAddToPlaylist fires from the browser row context menu (28c);
+    // onRemoveFromPlaylist / onPlayPlaylistEntry carry a playlist index (28d/28e); the two toggles
+    // flip the model's shuffle/repeat flags (28e). Wired in 28a with placeholder handlers.
+    std::function<void(const FileEntry &)> onAddToPlaylist;
+    std::function<void(std::size_t index)> onRemoveFromPlaylist;
+    std::function<void(std::size_t index)> onPlayPlaylistEntry;
+    std::function<void()> onToggleShuffle;
+    std::function<void()> onToggleRepeat;
     // Invoked in VISUALIZATION mode with the reserved rect (screen coords) below the top bar.
     // main.cpp reads the audio tap, builds a VisualFrame, and renders the active visualizer.
     std::function<void(float x, float y, float w, float h)> onRenderVisualization;

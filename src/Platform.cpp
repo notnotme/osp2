@@ -48,7 +48,7 @@
 
 
 Platform::Platform()
-    : m_app(m_player, m_fileSystem, m_settings) {}
+    : m_app(m_player, m_fileSystem, m_settings, m_playList) {}
 
 void Platform::create() {
     initNetwork(); // before m_fileSystem.create() spawns the worker
@@ -58,6 +58,7 @@ void Platform::create() {
     // GL context + glad are up by now: a no-op for the current ImGui-only plugin, correct for
     // future GL plugins that allocate shaders/VBOs in create().
     m_visualizer.create();
+    m_playList.create();
     initPlayerAndSettings();
 
     const std::filesystem::path start_path = resolveStartPath();
@@ -178,6 +179,7 @@ void Platform::destroy() {
     m_player.destroy();
     // Free visualizer GL objects while the GL context is still valid.
     m_visualizer.destroy();
+    m_playList.destroy();
     m_gui.finalize();
 
     ImGui_ImplOpenGL3_Shutdown();

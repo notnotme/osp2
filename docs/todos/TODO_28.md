@@ -35,11 +35,11 @@
 
 ## Task chunks (implement, verify, and commit one at a time)
 
-- [ ] **28a — PlayList module + wiring**: create the `PlayList` module (data model + shuffle/repeat flags), own it by value in `Platform`, inject into `Application`, add its `.cpp` to CMakeLists.txt, and expose a playlist slice on `UiState` + placeholder `UiActions`. The tab is now data-driven but still effectively empty. Build desktop + Switch.
-- [ ] **28b — Draw the Playlist tab**: fill `drawTabPlaylist` (`Gui.cpp:719`) — iterate the `UiState` playlist slice; per row draw the tofu state icon (empty vs filled by current-track match) + `SameLine` + `Selectable`, copying the browser row idiom. **Resolve the tofu-glyph question here** (extend glyph range vs Material Symbols square).
-- [ ] **28c — Add to playlist (right-click)**: add `ImGui::BeginPopupContextItem` on the browser file rows (`Gui.cpp:562`) with an "Add to playlist" item → new `onAddToPlaylist(FileEntry)` action → `Application` appends to `PlayList`, capturing the full path/source at add-time (not just the source-relative `FileEntry`).
-- [ ] **28d — Remove from playlist**: a per-row remove control in the tab → `onRemoveFromPlaylist(index)` → `Application` erases the entry.
-- [ ] **28e — Play + Shuffle + Repeat**: clicking a playlist entry plays it (reuse the `requestFile` + `play` async path); Shuffle / Repeat checkboxes at the top of the tab influence next-track selection in the auto-advance logic (`advance` / `playAdjacentTrack` `:93-134` and the `consumeTrackEnded` branch `:242-244`) — shuffle randomizes the next entry, repeat wraps at the end.
+- [x] **28a — PlayList module + wiring**: create the `PlayList` module (data model + shuffle/repeat flags), own it by value in `Platform`, inject into `Application`, add its `.cpp` to CMakeLists.txt, and expose a playlist slice on `UiState` + placeholder `UiActions`. The tab is now data-driven but still effectively empty. Build desktop + Switch.
+- [x] **28b — Draw the Playlist tab**: fill `drawTabPlaylist` (`Gui.cpp:719`) — iterate the `UiState` playlist slice; per row draw the tofu state icon (empty vs filled by current-track match) + `SameLine` + `Selectable`, copying the browser row idiom. **Resolve the tofu-glyph question here** (extend glyph range vs Material Symbols square).
+- [x] **28c — Add to playlist (right-click)**: add `ImGui::BeginPopupContextItem` on the browser file rows (`Gui.cpp:562`) with an "Add to playlist" item → new `onAddToPlaylist(FileEntry)` action → `Application` appends to `PlayList`, capturing the full path/source at add-time (not just the source-relative `FileEntry`).
+- [x] **28d — Remove from playlist**: a per-row remove control in the tab → `onRemoveFromPlaylist(index)` → `Application` erases the entry.
+- [x] **28e — Play + Shuffle + Repeat**: clicking a playlist entry plays it (reuse the `requestFile` + `play` async path); Shuffle / Repeat checkboxes at the top of the tab influence next-track selection in the auto-advance logic (`advance` / `playAdjacentTrack` `:93-134` and the `consumeTrackEnded` branch `:242-244`) — shuffle randomizes the next entry, repeat wraps at the end.
 
 Each chunk ends with green desktop + Switch builds, docs updated, user verification, then a commit. Run cpp-reviewer on the diff before committing.
 

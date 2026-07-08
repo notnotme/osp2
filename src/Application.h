@@ -20,6 +20,7 @@
 #ifndef OSP2_APPLICATION_H
 #define OSP2_APPLICATION_H
 
+#include <cstddef>
 #include <filesystem>
 #include <string>
 #include <utility>
@@ -35,6 +36,7 @@
 #include "player/Metadata.h"
 #include "player/PlayerController.h"
 #include "player/PluginSetting.h"
+#include "playlist/PlayList.h"
 #include "settings/Settings.h"
 
 
@@ -46,11 +48,24 @@ private:
     PlayerController &m_player;
     FileSystem &m_fileSystem;
     Settings &m_settings;
+    PlayList &m_playList;
 
     // Playback-request retry state: m_lastRequestedName is the cursor playAdjacentTrack advances
     // from when a fetched sibling fails; m_advanceDirection is the direction (+1/-1, 0 for a direct click).
     std::string m_lastRequestedName;
     int m_advanceDirection;
+
+    // Index of the currently-playing playlist entry, or -1 when playback originated from the browser
+    // (not the playlist). While >= 0, NEXT/PREVIOUS and auto-advance traverse the PLAYLIST instead of
+    // the browser's adjacent file; a browser file click resets it to -1 (leaving playlist mode).
+    int m_playlistIndex;
+
+    // Count of consecutive playlist entries fetched without one successfully playing. Bounds the
+    // failure-retry chain: Repeat/Shuffle make PlayList::nextIndex never return nullopt, so an
+    // all-unplayable playlist would otherwise loop forever. advancePlaylist stops once this reaches the
+    // playlist size (every entry tried once since the last success); reset to 0 on a successful decode
+    // and at the start of a user-initiated playlist play.
+    int m_consecutivePlaylistSkips;
 
     // Main-thread only: true while a boundary/auto advance load is in flight, so makeUiState()
     // suppresses the decode "Loading..." overlay for the seamless fast local case (a direct click
@@ -89,7 +104,7 @@ private:
 public:
     Application(const Application &) = delete;
     Application &operator=(const Application &) = delete;
-    explicit Application(PlayerController &player, FileSystem &fileSystem, Settings &settings);
+    explicit Application(PlayerController &player, FileSystem &fileSystem, Settings &settings, PlayList &playList);
     ~Application() = default;
 
 public:
@@ -106,7 +121,18 @@ private:
     void handlePluginSettingChange(const std::string &pluginName, const std::string &key, int value);
     void handlePluginSettingCommit(const std::string &pluginName, const std::string &key, int value);
     void handleCancelWork();
+    // Playlist action handlers. 28a wires them through UiActions but leaves the bodies as stubs;
+    // the real behavior lands in the noted later chunks.
+    void handleAddToPlaylist(const FileEntry &entry);
+    void handleRemoveFromPlaylist(std::size_t index);
+    void handlePlayPlaylistEntry(std::size_t index);
+    void handleToggleShuffle();
+    void handleToggleRepeat();
     void advance(int direction);
+    // File-boundary advance dispatch: traverses the playlist when a playlist entry is playing
+    // (m_playlistIndex >= 0), otherwise the browser's adjacent file.
+    void advanceTrack(int direction);
+    void advancePlaylist(int direction);
     void playAdjacentTrack(int direction);
 };
 

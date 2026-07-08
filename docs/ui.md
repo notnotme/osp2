@@ -24,13 +24,13 @@ classDiagram
         -drawErrorPopup()
         -drawCurrentPath(path)
         -drawFileBrowser(files, onFileClick, onDirectoryClick, isWorking, workingLabel, onCancelWork, playingFileName, isAtRoot)
-        -drawTabsSection(metadata)
+        -drawTabsSection(metadata, playlist, playingFileName, onRemoveFromPlaylist)
         -drawFileMetadata(metadata)
         -drawModuleMetadata(metadata)
         -drawGmeMetadata(metadata)
         -drawSidMetadata(metadata)
         -drawSc68Metadata(metadata)
-        -drawTabPlaylist()
+        -drawTabPlaylist(playlist, playingFileName, onRemoveFromPlaylist)
         -drawPlayerBar(status, onButtonClick)
     }
 
@@ -45,6 +45,10 @@ classDiagram
         +vector~pair~string, vector~PluginSetting~~~ pluginSettings
         +NavKind navKind
         +string error
+        +bool isAtRoot
+        +const vector~PlaylistEntry~& playlist
+        +bool playlistShuffle
+        +bool playlistRepeat
         +vector~string~ visualizerNames
         +size_t activeVisualizer
     }
@@ -58,6 +62,11 @@ classDiagram
         +function~void(string, string, int)~ onPluginSettingChange
         +function~void(string, string, int)~ onPluginSettingCommit
         +function~void()~ onCancelWork
+        +function~void(const FileEntry&)~ onAddToPlaylist
+        +function~void(size_t)~ onRemoveFromPlaylist
+        +function~void(size_t)~ onPlayPlaylistEntry
+        +function~void()~ onToggleShuffle
+        +function~void()~ onToggleRepeat
         +function~void(float, float, float, float)~ onRenderVisualization
         +function~void(size_t)~ onSelectVisualizer
     }
@@ -140,6 +149,9 @@ classDiagram
 - **NEXT/PREVIOUS step subtracks first, then files.** The on-screen transport `NEXT`/`PREVIOUS` buttons (clickable via mouse or the Switch cursor) fire `onButtonClick(NEXT/PREVIOUS)`; `Application::advance` advances to the next/previous **subtrack** within the current file while one remains in that direction, and only at a boundary falls through to the next/previous **file** (auto-advance on track-end takes the same branch). **PREVIOUS from subtrack 0 lands on the previous file at ITS subtrack 0**, not that file's last subtrack — a deliberate, documented choice (see [application.md](application.md)). Single-track files always fall straight through to file navigation, so the old behavior is unchanged for them. No new `ButtonId` was added — the existing transport ids drive this. A file-local `formatTime(double)` renders `m:ss`. **Progress is drawn by hand on the window draw list** (`GetWindowDrawList()`): a thin full-width `FrameBg` line, and — only while a track is loaded (`state != STOPPED`) — the played portion filled in `PlotHistogram` up to a circular playhead (`AddCircleFilled`) sliding along it, all vertically centred on the label line. When stopped the row is just the empty line (no knob). This replaced `ImGui::ProgressBar` (a framed widget whose `FramePadding.y` text-baseline offset pushed the timer labels out of alignment, and whose filled rectangle could not be rounded cleanly at partial/zero widths). The knob's travel is inset by its radius so it never overflows the line ends or the labels, and the row's slot is reserved with a plain `Dummy` so both labels keep one baseline.
 - `UiState::status` is a `PlaybackStatus` snapshot from the player domain (see [audio.md](audio.md)). `UiState::metadata` is a non-owning `TrackMetadata` reference (the variant built by `Application`, see [application.md](application.md)) valid for the frame.
 - **The Metadata tab dispatches on the variant.** `drawFileMetadata(metadata)` runs `std::visit` over a file-local `overloaded{}` lambda set — `std::monostate` renders a centered, dimmed *"No track loaded"*; `ModuleMetadata` calls `drawModuleMetadata`; `GmeMetadata` calls `drawGmeMetadata`; `SidMetadata` calls `drawSidMetadata`; `Sc68Metadata` calls `drawSc68Metadata`. There is deliberately **no** generic `auto` fallback: adding a plugin's metadata alternative to the variant fails to compile here until its own draw function exists (the exhaustiveness guard is the plugin author's checklist). `drawModuleMetadata` renders a two-column field table (text rows — Title/Artist/Format/Tracker — skipped when empty; count rows — Channels/Patterns/Samples/Instruments — always shown) and, when the song message is non-empty, a scrollable word-wrapped child region drawn with `TextUnformatted` (never printf-formatting user-authored text). `drawGmeMetadata` follows the same shape for libgme's fields (text rows — Game/System/Author/Copyright; count row — Tracks; scrollable Comment block). `drawSidMetadata` renders libsidplayfp's fields as a text-row-only table (Title/Author/Released/SID model/Clock, each skipped when empty). `drawSc68Metadata` does the same for libsc68's fields (Title/Author/Composer/Hardware/Ripper, each skipped when empty).
+- **The Playlist tab is data-driven** (as of 28a): `makeUiState()` fills a per-frame playlist slice on `UiState` — `playlist` (a non-owning view over `PlayList::entries()`, valid for the frame) plus the `playlistShuffle` / `playlistRepeat` flags — and `UiActions` carries five playlist callbacks (`onAddToPlaylist`, `onRemoveFromPlaylist`, `onPlayPlaylistEntry`, `onToggleShuffle`, `onToggleRepeat`). See [playlist.md](playlist.md).
+- **`drawTabPlaylist(playlist, playingFileName)` renders the slice** (as of 28b): an empty playlist shows a dimmed *"Playlist is empty"* placeholder (mirroring the "No configurable plugins" idiom); otherwise one row per entry, copying the browser file-row idiom — a per-row "tofu" state icon via `TextColored` (same blue as the browser file glyph), `SameLine`, then a span-all-columns `Selectable`. The tofu is a **Material Symbols square** drawn as raw UTF-8: `check_box_outline_blank` (U+E835) an empty box on idle rows, `check_box` (U+E834) the filled box on the currently-playing row; both glyphs are in the shipped `MaterialSymbolsSharp_Filled` cmap and the loaded `0x0030–0xFFCB` range. The filled tofu and the `Selectable`'s selected (highlighted) state both track the current entry by the **same basis as the browser highlight** — `playingFileName` (empty when stopped, else `PlaybackStatus.fileName`), computed once in `drawUserInterface` and shared by both panes so they agree. Each row is wrapped in `PushID(index)` so identical basenames from different directories don't collide as ImGui ids. **A right-click "Remove from playlist" context menu** (as of 28d) is attached per row (mirroring the browser's add menu); the chosen index is recorded in a local and applied **after** the loop (`onRemoveFromPlaylist(index)`), never mid-iteration, since `playlist` is a live slice of `PlayList` that the callback mutates. `onRemoveFromPlaylist` is threaded through `drawTabsSection`/`drawTabPlaylist`. **Click-to-play + Shuffle/Repeat** (as of 28e): a **Shuffle** and a **Repeat** `Checkbox` are drawn at the **top** of the tab (before the empty-check, so they show even for an empty playlist) followed by a `Separator`; each mirrors its immutable `UiState` flag (`playlistShuffle`/`playlistRepeat`) into a local `bool*` and fires `onToggleShuffle`/`onToggleRepeat` on change (the model owns the state). A **left-click** on a row's `Selectable` fires `onPlayPlaylistEntry(index)` (right-click still removes). The four extra params (`shuffle`, `repeat`, `onPlayPlaylistEntry`, `onToggleShuffle`, `onToggleRepeat`) are threaded through `drawTabsSection`/`drawTabPlaylist`. **Playback then follows the playlist**: once a playlist entry is playing, the transport `NEXT`/`PREVIOUS` and auto-advance traverse the playlist rather than the browser's adjacent file (Shuffle randomizes the forward target, Repeat wraps at the end) — see [application.md](application.md) and [playlist.md](playlist.md).
+- **Browser file rows carry a right-click "Add to playlist" context menu** (as of 28c): the file branch of `drawFileBrowser`'s row loop attaches `BeginPopupContextItem()` (no id — it reuses the row `Selectable`'s id, unique because basenames are unique within a directory) with a single `Add to playlist` `MenuItem` that fires `onAddToPlaylist(file_entry)`. **Only file rows** get the menu — not directory rows nor the pinned `..` row. `onAddToPlaylist` is threaded into `drawFileBrowser` as a parameter and passed `actions.onAddToPlaylist` at the call site. `Application::handleAddToPlaylist` captures the entry's full identity — basename, source-relative path (`getPath()/name`), and `getActiveSourceIndex()` — and appends it to `PlayList`, so a new row appears in the Playlist tab (with the tofu icon from 28b). Adding the same file twice is a no-op — duplicates (same `(sourceIndex, source-relative path)`) are rejected. See [playlist.md](playlist.md).
 - `Theme` (`src/gui/Theme.h`) selects one of ImGui's three built-in color palettes; `Gui::applyTheme(Theme)` dispatches to `StyleColorsDark`/`Light`/`Classic` and records `m_theme` (presentation state, drives the Settings menu checkmark). `initialize()` sets the theme-independent style metrics (rounding, padding, spacing) once and then applies the dark default; `applyTheme` only swaps colors, so it is safe to call live from the menu. Theme choice is persisted via `onThemeChange` (see [settings.md](settings.md)). The full design lives in [ui-design.md](ui-design.md).
 
 - Sprites are loaded in `initialize()` from `romfs/sprites/sprites.bin` (custom `SPSH` format) + `sprites.png` into one GL texture; `Sprite` holds the UV rect (s/t/p/q) and pixel size.

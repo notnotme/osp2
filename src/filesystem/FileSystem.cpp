@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstddef>
 #include <utility>
 
 
@@ -149,6 +150,26 @@ void FileSystem::requestFile(const FileEntry &entry) {
     startFetch(m_path / entry.name);
 }
 
+void FileSystem::requestFileFromSource(const int sourceIndex, const std::filesystem::path &path) {
+    if (m_working.load()) {
+        return;
+    }
+    if (sourceIndex < 0 || static_cast<std::size_t>(sourceIndex) >= m_sources.size()) {
+        return;
+    }
+    // Deliberately does NOT touch m_activeSource or m_path: a playlist entry may live in a different
+    // source than the one currently browsed, so replay must not disturb the browser listing. The
+    // FetchResult flows through the existing consumeFetchResult() path unchanged.
+    // Known limitation: cancel() targets m_activeSource, so a playlist fetch from a *non-active*
+    // remote source cannot be cancelled mid-transfer (acceptable this round).
+    if (m_worker.joinable()) {
+        m_worker.join();
+    }
+    m_workKind = WorkKind::Fetch;
+    m_working.store(true);
+    m_worker = std::thread(&FileSystem::fetch, this, m_sources[static_cast<std::size_t>(sourceIndex)].get(), path);
+}
+
 void FileSystem::cancel() {
     // Signal the active source to abort its in-flight transfer; the worker then finishes normally
     // (scan -> nullopt keeps the listing; fetch -> empty path -> failure). Navigation is blocked
@@ -230,6 +251,18 @@ const std::filesystem::path &FileSystem::getPath() const {
 
 const std::vector<FileEntry> &FileSystem::getContent() const {
     return m_content;
+}
+
+int FileSystem::getActiveSourceIndex() const {
+    if (m_activeSource == nullptr) {
+        return -1; // virtual root: no source produced this listing
+    }
+    for (std::size_t i = 0; i < m_sources.size(); ++i) {
+        if (m_sources[i].get() == m_activeSource) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
 }
 
 bool FileSystem::isWorking() const {
