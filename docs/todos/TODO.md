@@ -74,3 +74,17 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
   - [x] 28e — Play + Shuffle + Repeat
 - [x] [TODO_29 — GME durations from a companion `.m3u` (local)](TODO_29.md) — requires TODO_21; GmePlugin combined + exploded m3u overlay
 - [x] [TODO_30 — SID durations from the HVSC Songlengths database](TODO_30.md) — requires TODO_9; bundled Songlengths.md5 (load-if-present)
+
+Batch from the 2026-07 whole-codebase architecture audit (cpp-architect, findings verified) — TODO_31 and TODO_34 are independent; TODO_33 requires TODO_32:
+
+- [ ] [TODO_31 — Filesystem robustness: cancellable playlist-replay fetches + FTP listing dedup](TODO_31.md) — independent; top value (user-facing Cancel defect)
+  - [ ] 31a — Work-source cancel fix (`FileSystem::m_workSource`)
+  - [ ] 31b — FTP listing-splitter dedup (`parseListing`)
+- [ ] [TODO_32 — UI seam hardening (visualizer into Application, designated initializers, Gui helpers take bundles, SettingsKeys)](TODO_32.md) — behavior-preserving; blocks TODO_33
+  - [ ] 32a — Visualizer bridge into Application + designated initializers
+  - [ ] 32b — Gui draw helpers take `(state, actions)` + `Gui final` + cleanups
+  - [ ] 32c — SettingsKeys.h (single-source INI section/key names)
+- [ ] [TODO_33 — Playlist "now playing" highlight by index](TODO_33.md) — requires TODO_32; single chunk; fixes false highlights
+- [ ] [TODO_34 — Player plugins: RAII lifecycle + PluginUtil dedup](TODO_34.md) — independent; most churn, do last
+  - [ ] 34a — RAII collapse (`PlayerPlugin` ctor/dtor; NOT `VisualizerPlugin`; also empty `PlayList` lifecycle)
+  - [ ] 34b — PluginUtil.h dedup + `statusLocked()` + OpenMpt title cache
