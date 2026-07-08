@@ -57,6 +57,20 @@ namespace {
         return out->good() ? byte_count : 0;
     }
 
+    // One listing transfer into response (cleared first) on a handle already reset with the common
+    // options applied: URL, custom command ("MLSD"; nullptr issues the default LIST), write-to-string
+    // accumulation, perform.
+    CURLcode
+    performListingTransfer(CURL *curl, const std::string &url, const char *customRequest, std::string &response) {
+        response.clear();
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+        // nullptr restores curl's default verb, so a stale "MLSD" can never leak between calls.
+        curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, customRequest);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeToString);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+        return curl_easy_perform(curl);
+    }
+
     enum class LineOutcome {
         Parsed,    // out holds a usable entry
         Skip,      // valid but ignored (MLSD cdir/pdir self/parent refs; LIST "total"/device lines)
@@ -132,9 +146,11 @@ namespace {
     constexpr long kStallSpeedBytesPerSec = 1; // below this...
     constexpr long kStallTimeoutSeconds = 15;  // ...for this long -> abort (was 30)
 
-    // Splits a raw MLSD response into FileEntry rows (trailing \r stripped, empty lines skipped,
-    // malformed lines logged and skipped). Shared by the live-fetch and cache-hit paths.
-    std::vector<FileEntry> parseMlsdListing(const std::string &response) {
+    // Splits a raw listing response into FileEntry rows (trailing \r stripped, empty lines skipped,
+    // malformed lines logged under formatLabel and skipped); parseLine handles one line of the format.
+    std::vector<FileEntry> parseListing(
+        const std::string &response, LineOutcome (*parseLine)(const std::string &, FileEntry &), const char *formatLabel
+    ) {
         std::vector<FileEntry> entries;
         size_t start = 0;
         while (start < response.size()) {
@@ -151,18 +167,23 @@ namespace {
             }
 
             FileEntry entry;
-            switch (parseMlsdLine(line, entry)) {
+            switch (parseLine(line, entry)) {
             case LineOutcome::Parsed:
                 entries.push_back(std::move(entry));
                 break;
             case LineOutcome::Skip:
                 break;
             case LineOutcome::Malformed:
-                SDL_Log("FtpDataSource: skipping unparseable MLSD line: '%s'", line.c_str());
+                SDL_Log("FtpDataSource: skipping unparseable %s line: '%s'", formatLabel, line.c_str());
                 break;
             }
         }
         return entries;
+    }
+
+    // Shared by the live-fetch and cache-hit paths.
+    std::vector<FileEntry> parseMlsdListing(const std::string &response) {
+        return parseListing(response, parseMlsdLine, "MLSD");
     }
 
     // One Unix `ls -l`-style LIST line, e.g.:
@@ -229,37 +250,9 @@ namespace {
         return LineOutcome::Parsed;
     }
 
-    // Splits a raw LIST response into FileEntry rows, mirroring parseMlsdListing (trailing \r stripped,
-    // empty lines skipped, malformed lines logged and skipped) but delegating to parseListLine.
+    // Used only for arbitrary user servers that reject MLSD (never cached; see the fallback site).
     std::vector<FileEntry> parseListListing(const std::string &response) {
-        std::vector<FileEntry> entries;
-        size_t start = 0;
-        while (start < response.size()) {
-            const auto newline = response.find('\n', start);
-            const auto end = newline == std::string::npos ? response.size() : newline;
-            std::string line = response.substr(start, end - start);
-            start = newline == std::string::npos ? response.size() : newline + 1;
-
-            if (!line.empty() && line.back() == '\r') {
-                line.pop_back();
-            }
-            if (line.empty()) {
-                continue;
-            }
-
-            FileEntry entry;
-            switch (parseListLine(line, entry)) {
-            case LineOutcome::Parsed:
-                entries.push_back(std::move(entry));
-                break;
-            case LineOutcome::Skip:
-                break;
-            case LineOutcome::Malformed:
-                SDL_Log("FtpDataSource: skipping unparseable LIST line: '%s'", line.c_str());
-                break;
-            }
-        }
-        return entries;
+        return parseListing(response, parseListLine, "LIST");
     }
 
 } // namespace
@@ -469,12 +462,7 @@ std::optional<std::vector<FileEntry>> FtpDataSource::listDirectory(const std::fi
         applyCommonOptions();
 
         std::string response;
-        curl_easy_setopt(m_curl, CURLOPT_URL, url.c_str());
-        curl_easy_setopt(m_curl, CURLOPT_CUSTOMREQUEST, "MLSD");
-        curl_easy_setopt(m_curl, CURLOPT_WRITEFUNCTION, writeToString);
-        curl_easy_setopt(m_curl, CURLOPT_WRITEDATA, &response);
-
-        if (const CURLcode result = curl_easy_perform(m_curl); result == CURLE_OK) {
+        if (const CURLcode result = performListingTransfer(m_curl, url, "MLSD", response); result == CURLE_OK) {
             writeListingCache(cacheFile, response); // best-effort; refreshes the mtime/TTL
             return parseMlsdListing(response);
         } else {
@@ -497,15 +485,11 @@ std::optional<std::vector<FileEntry>> FtpDataSource::listDirectory(const std::fi
                 // LIST fallback: a plain LIST on the directory URL (no CUSTOMREQUEST). NOT cached — the
                 // .listing cache stores raw MLSD text and the cache-hit path re-parses it with
                 // parseMlsdListing, so caching LIST text there would corrupt cache-hit parsing.
-                response.clear();
                 curl_easy_reset(m_curl);
                 applyCommonOptions();
 
-                curl_easy_setopt(m_curl, CURLOPT_URL, url.c_str());
-                curl_easy_setopt(m_curl, CURLOPT_WRITEFUNCTION, writeToString);
-                curl_easy_setopt(m_curl, CURLOPT_WRITEDATA, &response);
-
-                if (const CURLcode listResult = curl_easy_perform(m_curl); listResult == CURLE_OK) {
+                if (const CURLcode listResult = performListingTransfer(m_curl, url, nullptr, response);
+                    listResult == CURLE_OK) {
                     return parseListListing(response);
                 } else {
                     if (listResult == CURLE_ABORTED_BY_CALLBACK) {
