@@ -91,6 +91,7 @@ void FileSystem::destroy() {
     // destruction, which would tear the handle down after the global curl/socket stack is already gone.
     m_activeSource = nullptr;
     m_sourceBeforeScan = nullptr;
+    m_workSource = nullptr;
     m_sources.clear();
 }
 
@@ -160,22 +161,16 @@ void FileSystem::requestFileFromSource(const int sourceIndex, const std::filesys
     // Deliberately does NOT touch m_activeSource or m_path: a playlist entry may live in a different
     // source than the one currently browsed, so replay must not disturb the browser listing. The
     // FetchResult flows through the existing consumeFetchResult() path unchanged.
-    // Known limitation: cancel() targets m_activeSource, so a playlist fetch from a *non-active*
-    // remote source cannot be cancelled mid-transfer (acceptable this round).
-    if (m_worker.joinable()) {
-        m_worker.join();
-    }
-    m_workKind = WorkKind::Fetch;
-    m_working.store(true);
-    m_worker = std::thread(&FileSystem::fetch, this, m_sources[static_cast<std::size_t>(sourceIndex)].get(), path);
+    startWorker(WorkKind::Fetch, m_sources[static_cast<std::size_t>(sourceIndex)].get(), path);
 }
 
 void FileSystem::cancel() {
-    // Signal the active source to abort its in-flight transfer; the worker then finishes normally
-    // (scan -> nullopt keeps the listing; fetch -> empty path -> failure). Navigation is blocked
-    // while working, so m_activeSource is exactly the source the worker is using.
-    if (m_working.load() && m_activeSource != nullptr) {
-        m_activeSource->cancel();
+    // Signal the worker's source to abort its in-flight transfer; the worker then finishes normally
+    // (scan -> nullopt keeps the listing; fetch -> empty path -> failure). m_workSource — not
+    // m_activeSource — is the source captured at worker start: a playlist-replay fetch may be
+    // downloading from a source other than the browsed one.
+    if (m_working.load() && m_workSource != nullptr) {
+        m_workSource->cancel();
     }
 }
 
@@ -204,6 +199,7 @@ void FileSystem::update() {
         if (m_worker.joinable()) {
             m_worker.join();
             m_workKind = WorkKind::None;
+            m_workSource = nullptr;
         }
         m_activeSource = nullptr;
         showVirtualRoot();
@@ -243,6 +239,7 @@ void FileSystem::update() {
         m_pendingNavDirection = NavKind::None;
     }
     m_workKind = WorkKind::None;
+    m_workSource = nullptr;
 }
 
 const std::filesystem::path &FileSystem::getPath() const {
@@ -274,26 +271,27 @@ bool FileSystem::isFetching() const {
     return m_workKind == WorkKind::Fetch;
 }
 
-void FileSystem::startScan(const std::filesystem::path &path) {
+void FileSystem::startWorker(const WorkKind kind, DataSource *source, std::filesystem::path path) {
     // Called on the main thread with the worker idle; join any finished-but-unswapped worker first.
     if (m_worker.joinable()) {
         m_worker.join();
     }
-    auto *source = m_activeSource;
-    m_workKind = WorkKind::Scan;
+    m_workKind = kind;
+    m_workSource = source;
     m_working.store(true);
-    m_worker = std::thread(&FileSystem::scan, this, source, path);
+    if (kind == WorkKind::Scan) {
+        m_worker = std::thread(&FileSystem::scan, this, source, std::move(path));
+    } else {
+        m_worker = std::thread(&FileSystem::fetch, this, source, std::move(path));
+    }
+}
+
+void FileSystem::startScan(const std::filesystem::path &path) {
+    startWorker(WorkKind::Scan, m_activeSource, path);
 }
 
 void FileSystem::startFetch(const std::filesystem::path &path) {
-    // Called on the main thread with the worker idle; join any finished-but-unswapped worker first.
-    if (m_worker.joinable()) {
-        m_worker.join();
-    }
-    auto *source = m_activeSource;
-    m_workKind = WorkKind::Fetch;
-    m_working.store(true);
-    m_worker = std::thread(&FileSystem::fetch, this, source, path);
+    startWorker(WorkKind::Fetch, m_activeSource, path);
 }
 
 void FileSystem::showVirtualRoot() {

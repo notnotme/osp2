@@ -78,7 +78,7 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
 Batch from the 2026-07 whole-codebase architecture audit (cpp-architect, findings verified) — TODO_31 and TODO_34 are independent; TODO_33 requires TODO_32:
 
 - [ ] [TODO_31 — Filesystem robustness: cancellable playlist-replay fetches + FTP listing dedup](TODO_31.md) — independent; top value (user-facing Cancel defect)
-  - [ ] 31a — Work-source cancel fix (`FileSystem::m_workSource`)
+  - [x] 31a — Work-source cancel fix (`FileSystem::m_workSource`)
   - [ ] 31b — FTP listing-splitter dedup (`parseListing`)
 - [ ] [TODO_32 — UI seam hardening (visualizer into Application, designated initializers, Gui helpers take bundles, SettingsKeys)](TODO_32.md) — behavior-preserving; blocks TODO_33
   - [ ] 32a — Visualizer bridge into Application + designated initializers
