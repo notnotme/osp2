@@ -21,13 +21,23 @@
 
 #include "player/PlayResult.h"
 #include "player/PlayerState.h"
+#include "settings/SettingsKeys.h"
+#include "visualizer/VisualFrame.h"
+#include "visualizer/VisualizerController.h"
 
 
-Application::Application(PlayerController &player, FileSystem &fileSystem, Settings &settings, PlayList &playList)
+Application::Application(
+    PlayerController &player,
+    FileSystem &fileSystem,
+    Settings &settings,
+    PlayList &playList,
+    VisualizerController &visualizer
+)
     : m_player(player),
       m_fileSystem(fileSystem),
       m_settings(settings),
       m_playList(playList),
+      m_visualizer(visualizer),
       m_advanceDirection(0),
       m_playlistIndex(-1),
       m_consecutivePlaylistSkips(0) {}
@@ -192,8 +202,33 @@ void Application::playAdjacentTrack(const int direction) {
 
 // The Gui already applied the theme visually (it owns the ImGui style); here we only persist it.
 void Application::handleThemeChange(const Theme theme) {
-    m_settings.setString("user", "theme", themeToString(theme));
+    m_settings.setString(settingskeys::kUserSection, settingskeys::kTheme, themeToString(theme));
     m_settings.save();
+}
+
+// VISUALIZATION-mode render hook: the Gui reports the reserved rect, we read the audio tap, build a
+// VisualFrame, and render the active visualizer inside the ImGui frame.
+void Application::handleRenderVisualization(const float x, const float y, const float w, const float h) {
+    // Zero-initialized so the frameCount==0 (idle) and partial-read tails are silence, never
+    // indeterminate stack — a plugin that reads samples without gating on frameCount stays safe.
+    float samples[PlayerController::BUFFER_FRAMES * PlayerController::CHANNELS] = {};
+    // decode() publishes nothing when idle, so an ungated read returns the last stale block:
+    // gate on PLAYING and pass frameCount 0 otherwise so the visual decays to rest.
+    const bool playing = m_player.getState() == PlayerState::PLAYING;
+    const std::size_t frames = playing ? m_player.readLatestAudio(samples, PlayerController::BUFFER_FRAMES) : 0;
+    const VisualFrame frame{x, y, w, h, samples, frames, PlayerController::CHANNELS, PlayerController::SAMPLE_RATE};
+    m_visualizer.render(frame);
+}
+
+// Settings→Visualizer picker: switch the active visualizer at runtime, then persist the choice as
+// its stable plugin name (mirrors handleThemeChange). The startup restore of the persisted name
+// stays in Platform (the composition root).
+void Application::handleSelectVisualizer(const std::size_t index) {
+    if (index < m_visualizerNames.size()) {
+        m_visualizer.select(index);
+        m_settings.setString(settingskeys::kUserSection, settingskeys::kVisualizer, m_visualizerNames[index]);
+        m_settings.save();
+    }
 }
 
 // Live edit (fires every frame while a slider is dragged, or once per combo change): apply to the
@@ -219,7 +254,7 @@ void Application::handlePluginSettingChange(const std::string &pluginName, const
 // Commit (fired per setting by the popup's Save button): the decoder already holds the value from
 // the live edits, so only persist it to the INI.
 void Application::handlePluginSettingCommit(const std::string &pluginName, const std::string &key, const int value) {
-    m_settings.setInt("plugin." + pluginName, key, value);
+    m_settings.setInt(settingskeys::kPluginSectionPrefix + pluginName, key, value);
     m_settings.save();
 }
 
@@ -298,6 +333,12 @@ void Application::handleToggleRepeat() {
 // never during a draw). Live edits keep the cache current in place, so no rebuild is needed after.
 void Application::refreshPluginSettings() {
     m_pluginSettings = m_player.getPluginSettings();
+}
+
+// Builds the cached visualizer-name list (getNames() allocates). Called once from Platform::create()
+// after VisualizerController::create() registers the plugins — the set never changes afterwards.
+void Application::refreshVisualizerNames() {
+    m_visualizerNames = m_visualizer.getNames();
 }
 
 void Application::update() {
@@ -400,39 +441,45 @@ UiState Application::makeUiState() const {
     }
 
     return {
-        m_player.getStatus(),
-        path.empty() ? "Sources" : path.string(),
-        m_fileSystem.getContent(),
-        working,
-        std::move(workingLabel),
-        m_trackMetadata,
-        m_pluginSettings,
-        m_pendingNav,
-        m_playbackError,
-        path.empty(), // isAtRoot: the empty FileSystem path is the virtual root (sources list)
-        m_playList.entries(),
-        m_playList.shuffle(),
-        m_playList.repeat()
+        .status = m_player.getStatus(),
+        .path = path.empty() ? "Sources" : path.string(),
+        .files = m_fileSystem.getContent(),
+        .isWorking = working,
+        .workingLabel = std::move(workingLabel),
+        .metadata = m_trackMetadata,
+        .pluginSettings = m_pluginSettings,
+        .navKind = m_pendingNav,
+        .error = m_playbackError,
+        .isAtRoot = path.empty(), // the empty FileSystem path is the virtual root (sources list)
+        .playlist = m_playList.entries(),
+        .playlistShuffle = m_playList.shuffle(),
+        .playlistRepeat = m_playList.repeat(),
+        .visualizerNames = m_visualizerNames,
+        .activeVisualizer = m_visualizer.getActiveIndex()
     };
 }
 
 UiActions Application::makeUiActions() {
     return {
-        [this](const ButtonId buttonId) { handleButtonClick(buttonId); },
-        [this](const FileEntry &entry) { handleFileClick(entry); },
-        [this](const FileEntry &entry) { handleDirectoryClick(entry); },
-        [this](const Theme theme) { handleThemeChange(theme); },
-        [this](const std::string &pluginName, const std::string &key, const int value) {
-            handlePluginSettingChange(pluginName, key, value);
-        },
-        [this](const std::string &pluginName, const std::string &key, const int value) {
-            handlePluginSettingCommit(pluginName, key, value);
-        },
-        [this]() { handleCancelWork(); },
-        [this](const FileEntry &entry) { handleAddToPlaylist(entry); },
-        [this](const std::size_t index) { handleRemoveFromPlaylist(index); },
-        [this](const std::size_t index) { handlePlayPlaylistEntry(index); },
-        [this]() { handleToggleShuffle(); },
-        [this]() { handleToggleRepeat(); }
+        .onButtonClick = [this](const ButtonId buttonId) { handleButtonClick(buttonId); },
+        .onFileClick = [this](const FileEntry &entry) { handleFileClick(entry); },
+        .onDirectoryClick = [this](const FileEntry &entry) { handleDirectoryClick(entry); },
+        .onThemeChange = [this](const Theme theme) { handleThemeChange(theme); },
+        .onPluginSettingChange = [this](
+                                     const std::string &pluginName, const std::string &key, const int value
+                                 ) { handlePluginSettingChange(pluginName, key, value); },
+        .onPluginSettingCommit = [this](
+                                     const std::string &pluginName, const std::string &key, const int value
+                                 ) { handlePluginSettingCommit(pluginName, key, value); },
+        .onCancelWork = [this]() { handleCancelWork(); },
+        .onAddToPlaylist = [this](const FileEntry &entry) { handleAddToPlaylist(entry); },
+        .onRemoveFromPlaylist = [this](const std::size_t index) { handleRemoveFromPlaylist(index); },
+        .onPlayPlaylistEntry = [this](const std::size_t index) { handlePlayPlaylistEntry(index); },
+        .onToggleShuffle = [this]() { handleToggleShuffle(); },
+        .onToggleRepeat = [this]() { handleToggleRepeat(); },
+        .onRenderVisualization = [this](
+                                     const float x, const float y, const float w, const float h
+                                 ) { handleRenderVisualization(x, y, w, h); },
+        .onSelectVisualizer = [this](const std::size_t index) { handleSelectVisualizer(index); }
     };
 }

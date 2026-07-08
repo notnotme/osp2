@@ -39,8 +39,7 @@
 
 // Platform / lifecycle layer: owns the SDL/OpenGL/ImGui handles and the process's subsystems, and
 // runs the event + render loop. main() just constructs one and calls create()/run()/destroy()
-// (formerly the free functions plus file-scope globals in main.cpp). The visualizer bridge lives
-// here, not in Application — it is a platform-layer concern. See docs/platform.md.
+// (formerly the free functions plus file-scope globals in main.cpp). See docs/platform.md.
 class Platform final {
 private:
     // Window dimensions — shared by SDL_CreateWindow and the Switch CursorEmulator, which clamps
@@ -54,7 +53,8 @@ private:
     SDL_GLContext m_glContext = nullptr;
 
     // Subsystems, owned by value. Declaration order is load-bearing: m_player, m_fileSystem,
-    // m_settings and m_playList precede m_app, whose constructor binds references to them.
+    // m_visualizer, m_settings and m_playList precede m_app, whose constructor binds references
+    // to them.
     Gui m_gui;
     PlayerController m_player;
     FileSystem m_fileSystem;

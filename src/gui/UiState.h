@@ -50,10 +50,10 @@ struct UiState {
     const std::vector<PlaylistEntry> &playlist;
     bool playlistShuffle;
     bool playlistRepeat;
-    // Default-initialized so Application's aggregate `return {…}` in makeUiState() stays valid untouched;
-    // main.cpp (the visualizer bridge) fills these before drawUserInterface (see visualization.md).
-    std::vector<std::string> visualizerNames{}; // for the Settings→Visualizer picker
-    std::size_t activeVisualizer = 0;           // currently-selected visualizer index
+    // Visualizer picker slice (Settings→Visualizer). `visualizerNames` is a non-owning view of
+    // Application's startup-built cache, valid for the frame.
+    const std::vector<std::string> &visualizerNames;
+    std::size_t activeVisualizer; // currently-selected visualizer index
 };
 
 

@@ -51,10 +51,11 @@ struct UiActions {
     std::function<void()> onToggleShuffle;
     std::function<void()> onToggleRepeat;
     // Invoked in VISUALIZATION mode with the reserved rect (screen coords) below the top bar.
-    // main.cpp reads the audio tap, builds a VisualFrame, and renders the active visualizer.
+    // Application reads the audio tap, builds a VisualFrame, and renders the active visualizer.
     std::function<void(float x, float y, float w, float h)> onRenderVisualization;
-    // Fired by the Settings→Visualizer picker with the chosen index; main.cpp calls
-    // VisualizerController::select. Gui stays ignorant of the visualizer domain (same as onButtonClick).
+    // Fired by the Settings→Visualizer picker with the chosen index; Application selects the
+    // visualizer and persists the choice. Gui stays ignorant of the visualizer domain (same as
+    // onButtonClick).
     std::function<void(std::size_t index)> onSelectVisualizer;
 };
 

@@ -10,8 +10,9 @@ three in order — there are no file-scope globals.
 
 This is the platform layer; `Application` is the orchestration layer above it (see
 [application.md](application.md)). The visualizer bridge (audio tap → `VisualFrame` → active
-visualizer) lives here, not in `Application`, because it is a platform-layer concern —
-`Gui`/`Application` stay ignorant of the visualizer domain.
+visualizer, plus the Settings→Visualizer picker) lives in `Application` like every other UI
+action; `Platform` only owns the `VisualizerController` and restores the persisted selection at
+startup (see [visualization.md](visualization.md)).
 
 ```mermaid
 classDiagram
@@ -45,22 +46,26 @@ classDiagram
     Platform *-- Application : owns
     Application o-- PlayerController : references
     Application o-- FileSystem : references
+    Application o-- VisualizerController : references
     Application o-- Settings : references
 ```
 
 ## Notes
 
 - **Ownership vs. wiring.** `Platform` *owns* the subsystems by value; `Application` (also a member)
-  holds *references* to `m_player`/`m_fileSystem`/`m_settings`. Member **declaration order is
-  load-bearing**: those three precede `m_app`, so they are constructed before `Application`'s
-  constructor binds references to them. `Platform` is non-copyable and non-movable (deleted copy +
+  holds *references* to `m_player`/`m_fileSystem`/`m_visualizer`/`m_settings`/`m_playList`. Member
+  **declaration order is load-bearing**: those five precede `m_app`, so they are constructed before
+  `Application`'s constructor binds references to them. `Platform` is non-copyable and non-movable (deleted copy +
   user-declared destructor) and lives as a `main()` local, so those references never dangle.
-- **`create()` order is load-bearing** and mirrors the old `initialize()`:
+- **`create()` order is load-bearing**:
+  `initNetwork()` first (`curl_global_init` is not thread-safe, and `socketInitializeDefault()` on
+  Switch — both must precede `m_fileSystem.create(...)` spawning its worker thread) →
   `initSdlAndGl()` → `initImGui()` (context + backends + `loadFonts()` + `m_gui.initialize()`) →
-  `m_visualizer.create()` (GL context must be up) → `initPlayerAndSettings()` (settings load +
-  theme + `m_player.create()` + the persisted plugin-setting push) → `resolveStartPath()` →
-  `initNetwork()` (`curl_global_init`, and `socketInitializeDefault()` on Switch) **before**
-  `m_fileSystem.create(...)` spawns its worker thread.
+  `m_visualizer.create()` (GL context must be up) followed by `m_app.refreshVisualizerNames()`
+  (the plugin set is fixed from then on, so the name cache is built once — see
+  [application.md](application.md)) → `m_playList.create()` → `initPlayerAndSettings()` (settings
+  load + theme + `m_player.create()` + the persisted plugin-setting push) → `resolveStartPath()` →
+  `m_fileSystem.create(...)`.
 - **`destroy()` is the exact reverse teardown** (`m_fileSystem.destroy()` joins the worker first,
   then `curl_global_cleanup()` / Switch `socketExit()`, then player/visualizer/gui, ImGui shutdown,
   controller close, GL context + window, `SDL_Quit`, `IMG_Quit`). Exceptions from `create()` are

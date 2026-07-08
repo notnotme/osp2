@@ -1,6 +1,6 @@
 # Application domain
 
-Use-case layer in `src/Application.{h,cpp}`. `Application` sits between the domain (`PlayerController`, `FileSystem`) and the presentation layer (`Gui`): it turns UI intent into playback/navigation actions and produces the per-frame view model. It holds references to the player and filesystem (both outlive it) and no state of its own. The platform layer — `Platform` (see [platform.md](platform.md)) — owns the `Application`, calls `update()` each frame, and forwards `makeUiState()`/`makeUiActions()` to `Gui`; `main.cpp` itself is just the entry point that constructs a `Platform` and runs it.
+Use-case layer in `src/Application.{h,cpp}`. `Application` sits between the domain (`PlayerController`, `FileSystem`, `VisualizerController`) and the presentation layer (`Gui`): it turns UI intent into playback/navigation actions and produces the per-frame view model. It holds references to the player, filesystem, settings, playlist, and visualizer controller (all outlive it) and no domain state of its own — only per-frame view/orchestration caches (visualizer names, metadata, plugin settings, retry cursors). The platform layer — `Platform` (see [platform.md](platform.md)) — owns the `Application`, calls `update()` each frame, and forwards `makeUiState()`/`makeUiActions()` to `Gui`; `main.cpp` itself is just the entry point that constructs a `Platform` and runs it.
 
 ```mermaid
 classDiagram
@@ -9,6 +9,7 @@ classDiagram
         -FileSystem& m_fileSystem
         -Settings& m_settings
         -PlayList& m_playList
+        -VisualizerController& m_visualizer
         -string m_lastRequestedName
         -int m_advanceDirection
         -int m_playlistIndex
@@ -19,11 +20,14 @@ classDiagram
         -path m_metadataPath
         -int m_metadataSubtrack
         -vector~pair~string, vector~PluginSetting~~~ m_pluginSettings
-        +Application(PlayerController&, FileSystem&, Settings&, PlayList&)
+        -vector~string~ m_visualizerNames
+        +Application(PlayerController&, FileSystem&, Settings&, PlayList&, VisualizerController&)
         +handleButtonClick(ButtonId)
         +handleFileClick(const FileEntry&)
         +handleDirectoryClick(const FileEntry&)
         +handleThemeChange(Theme)
+        +handleRenderVisualization(x, y, w, h)
+        +handleSelectVisualizer(index)
         +handlePluginSettingChange(pluginName, key, value)
         +handlePluginSettingCommit(pluginName, key, value)
         +handleAddToPlaylist(const FileEntry&)
@@ -32,6 +36,7 @@ classDiagram
         +handleToggleShuffle()
         +handleToggleRepeat()
         +refreshPluginSettings()
+        +refreshVisualizerNames()
         +advance(int direction)
         +advanceTrack(int direction)
         +advancePlaylist(int direction)
@@ -50,6 +55,7 @@ classDiagram
 
     Application o-- PlayerController : drives playback
     Application o-- FileSystem : reads listing
+    Application o-- VisualizerController : renders / selects
     Application o-- Settings : persists user choices
     Application ..> UiState : builds per frame
     Application ..> UiActions : builds once at init
@@ -60,7 +66,7 @@ classDiagram
 
 ## Notes
 
-- **Callback style, one seam.** UI reports intent, `Application` decides. `makeUiActions()` returns a `UiActions` whose lambdas capture `this`; it is called once at startup because `Application` outlives the actions. `makeUiState()` runs every frame — the domain → view-model translation (edge translation) lives here, never in `Gui`.
+- **Callback style, one seam.** UI reports intent, `Application` decides. `makeUiActions()` returns a `UiActions` whose lambdas capture `this`; it is called once at startup because `Application` outlives the actions. `makeUiState()` runs every frame — the domain → view-model translation (edge translation) lives here, never in `Gui`. Both aggregates are built with **C++20 designated initializers** naming every member in declaration order, so extending the seam (its documented growth mode — see the last note) can never silently swap two same-typed fields or handlers: a missed member is a visible `{}`-default, a misordered one a compile error.
 - `handleButtonClick` owns the `ButtonId` switch, including the `TODO(temporary)` hardcoded `music/test.s3m` played on PLAY while STOPPED (until `FileSystem` returns real directories). It resolves the asset via the `assetPath()` helper from `src/Paths.h`.
 - **`src/Paths.h` is the single source of path truth** (header-only). It defines the read-only asset root once — the `assetPath(relative)` helper returning a `std::filesystem::path` (`romfs:/` on Switch, `romfs/` on desktop; e.g. `assetPath("music/test.s3m")`) — used here, in `Platform` (fonts, `gui.initialize`), and in `SidPlugin` (C64 ROMs). It also exposes the writable-path helpers `configPath()` (the `osp2.ini` location) and `cachePath()` (remote-source download root), which share a `nextToExecutable()` helper on desktop and return fixed `/switch/…` SD-card paths on Switch (romfs is read-only). `Platform` calls these; the per-platform `#if defined(__SWITCH__)` split lives only in `Paths.h`.
 - **Playback is routed through `FileSystem`** (so TODO_7 can resolve remote files asynchronously without touching callers). A file click / auto-advance no longer calls `player.play()` directly: `handleFileClick` sets `m_advanceDirection = 0` and calls `m_fileSystem.requestFile(entry)`; `playAdjacentTrack(direction)` requests only the *first* playable sibling, records it in `m_lastRequestedName` (the retry cursor) and keeps the direction in `m_advanceDirection`. Because success isn't known at request time, the play loop lives at the consume site in `update()`.
@@ -75,5 +81,6 @@ classDiagram
 - `handleDirectoryClick(entry)` routes `entry.name == ".."` to `FileSystem::navigateToParent()` and any other entry to `navigateToEntry(entry)` — no path joining, since at the virtual root `entry.name` is a source display name, not a path component (`FileSystem` resolves it against the active source). Wired as the third `UiActions` lambda (`onDirectoryClick`).
 - `makeUiState()` maps `FileSystem`'s empty path (the virtual root) to the label `"Sources"` — a view-model translation that belongs in `Application`, not in `FileSystem` or `Gui`.
 - **Theme change flow.** `Application` holds a `Settings &` (persistence domain, see [settings.md](settings.md)). The Gui's Theme menu applies the palette *itself* (`applyTheme` — presentation owns the ImGui style) and also fires `onThemeChange(theme)`; `Application::handleThemeChange` then persists only — `settings.setString("user", "theme", themeToString(theme))` + `settings.save()`. Keeping the visual apply in the Gui avoids dragging ImGui knowledge into the use-case layer, so the persistence handler has a single responsibility. The initial theme is applied at startup by `Platform` (the composition root, see [platform.md](platform.md)) from `[user] theme`, not by `Application`.
+- **Visualizer bridge.** `Application` holds a `VisualizerController &` and owns both ends of the bridge (see [visualization.md](visualization.md)): `handleRenderVisualization(x, y, w, h)` (wired as `onRenderVisualization`, fired by the Gui in VISUALIZATION mode with the reserved rect) reads the audio tap via `PlayerController::readLatestAudio` — gated on `PlayerState::PLAYING` so the visual decays to rest when idle — builds a `VisualFrame`, and calls `VisualizerController::render`; `handleSelectVisualizer(index)` (wired as `onSelectVisualizer`, fired by the Settings→Visualizer picker) selects the plugin and persists its stable name under `[user] visualizer` — the same select-then-persist shape as `handleThemeChange`. **The names are cached, not fetched per frame**: `VisualizerController::getNames()` allocates, so `refreshVisualizerNames()` builds `m_visualizerNames` once — called by `Platform::create()` right after `m_visualizer.create()`, since the plugin set never changes afterwards — and `makeUiState()` exposes it as the non-owning `UiState::visualizerNames` view plus `activeVisualizer`. The startup *restore* of the persisted name stays in `Platform` (composition-root work), mirroring the theme restore.
 - **Plugin-setting flow is apply-live-on-edit, persist-on-Save.** The Gui popup owns a working copy and applies edits to the decoder live for an audio preview, persisting only when the user clicks **Save** (see [ui.md](ui.md)). The seam has **two** callbacks: `onPluginSettingChange` → `Application::handlePluginSettingChange` applies to the live decoder via `player.applyPluginSetting(pluginName, key, value)` (mutex-guarded, see [audio.md](audio.md)) for immediate audio and **also patches the matching cached descriptor's value in place** so `m_pluginSettings` tracks the live decoder value; it does **not** save. `onPluginSettingCommit` → `Application::handlePluginSettingCommit` only persists (`settings.setInt("plugin." + pluginName, key, value)` + `settings.save()`), fired by the popup's Save button once per descriptor. The decoder already holds the value from the live edits, so the commit handler never touches the player. **The descriptors are cached, not fetched per frame.** `player.getPluginSettings()` locks the audio mutex and allocates, so — like `m_trackMetadata` — `Application` keeps a `m_pluginSettings` snapshot, built by `refreshPluginSettings()` **once at startup** (from `Platform` after the persisted-value push); thereafter the in-place patch on each live edit keeps it current, so there is no per-frame or deferred rebuild (the old `m_pluginSettingsDirty` flag is gone). The in-place write mutates only an `int` in an existing element (no reallocation), so it is safe even though `makeUiState()` hands `m_pluginSettings` to the Gui by reference — during the popup the Gui reads its own working copy, touching the cache only to seed on open. No plugin name is hardcoded in `Application` — the pair list drives everything.
 - Later TODOs extend the seam by adding members to `UiState`/`UiActions` rather than changing signatures: `PlaybackStatus` (TODO_2), `onDirectoryClick` (TODO_4), `metadata` (TODO_5), `onThemeChange` (TODO_6a), `onPluginSettingChange` (TODO_6c), `error` (TODO_17).
