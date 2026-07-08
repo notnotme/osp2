@@ -19,7 +19,6 @@
 
 #include "Application.h"
 
-#include "Paths.h"
 #include "player/PlayResult.h"
 #include "player/PlayerState.h"
 
@@ -41,8 +40,8 @@ void Application::handleButtonClick(const ButtonId buttonId) {
             m_player.play();
             break;
         case PlayerState::STOPPED:
-            // TODO(temporary): hardcoded test track until FileSystem returns real directories.
-            m_player.play(assetPath("music/test.s3m"));
+            // Nothing loaded: PLAY_PAUSE is a no-op (a track is started by selecting a file in the
+            // browser, not by the transport). play() with no path only resumes an existing track.
             break;
         }
         break;
