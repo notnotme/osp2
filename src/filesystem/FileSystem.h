@@ -61,6 +61,11 @@ private:
     enum class WorkKind { None, Scan, Fetch };
     WorkKind m_workKind = WorkKind::None; // main thread only: what the current/last worker is doing
 
+    // Main thread only: the source captured at worker start, targeted by cancel(). May differ from
+    // m_activeSource for playlist-replay fetches (requestFileFromSource downloads from a non-browsed
+    // source). The cross-thread part of cancellation is DataSource::cancel()'s own atomic.
+    DataSource *m_workSource = nullptr;
+
     // Set by navigateToParent() when it reaches the virtual root, applied by update() next frame.
     // Deferred (not swapped in place) because navigation callbacks fire mid-draw while the Gui is
     // iterating m_content: clearing it synchronously would shrink the vector under the list clipper.
@@ -117,6 +122,7 @@ public:
     [[nodiscard]] bool isFetching() const; // true while a file download (not a scan) is in flight
 
 private:
+    void startWorker(WorkKind kind, DataSource *source, std::filesystem::path path);
     void startScan(const std::filesystem::path &path);
     void startFetch(const std::filesystem::path &path);
     void showVirtualRoot();

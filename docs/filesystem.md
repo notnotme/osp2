@@ -53,6 +53,7 @@ classDiagram
         -vector~FileEntry~ m_content
         -DataSource* m_activeSource
         -WorkKind m_workKind
+        -DataSource* m_workSource
         -atomic_bool m_working
         -thread m_worker
         -mutex m_mutex
@@ -223,12 +224,14 @@ style as the audio domain (atomic flag + mutex-guarded handoff, swap on the main
 | `m_working` | `std::atomic_bool` (worker clears; Gui overlay + navigate/request guards read) |
 | `m_worker` | main thread only (launch in `startScan`, join in `update`/`destroy`) |
 | `m_sources`, `m_isPlayable` | immutable after `create()` until `destroy()` releases the sources (worker already joined); `m_isPlayable` is called on the worker: `PlayerController::isSupported` reads only immutable plugin extension lists |
-| `m_activeSource`, `m_sourceBeforeScan`, `m_workKind` | main thread only, mutated while the worker is idle; the worker uses the source pointer captured at launch. `m_workKind` is set in `startScan`/`startFetch` and read in `update()` |
+| `m_activeSource`, `m_sourceBeforeScan`, `m_workKind`, `m_workSource` | main thread only, mutated while the worker is idle; the worker uses the source pointer captured at launch. `m_workKind`/`m_workSource` are set at each worker start (`startScan`/`startFetch`/`requestFileFromSource`) and cleared in `update()` (and `destroy()`); `m_workSource` is read by `cancel()` |
 | `m_pendingVirtualRoot` | main thread only — set by `navigateToParent()` (mid-draw), applied and cleared by `update()` |
 | `m_fetchResult` | `m_mutex` (worker writes in `fetch()`; `consumeFetchResult()` reads on the main thread) |
 
-- **Worker lifecycle**: `startScan(path)` joins any finished-but-unswapped worker, sets
-  `m_working = true`, spawns `scan(source, path)` with the active source captured by value.
+- **Worker lifecycle**: every launch goes through the shared `startWorker(kind, source, path)` —
+  join any finished-but-unswapped worker, set `m_workKind`/`m_workSource`, set `m_working = true`,
+  spawn `scan`/`fetch` with the source captured by value. `startScan(path)` runs it with
+  `m_activeSource` and `WorkKind::Scan`.
   `scan` calls `listDirectory`, drops files failing `m_isPlayable`, derives `type`, sorts
   (directories first, then files, case-insensitive by name), writes `m_pending*` under the
   mutex, and stores `m_working = false` **last**. `update()` detects the finished edge
@@ -238,15 +241,16 @@ style as the audio domain (atomic flag + mutex-guarded handoff, swap on the main
   the sources (so `FtpDataSource`'s `curl_easy_cleanup` runs while curl is still initialized) —
   **main.cpp calls `file_system.destroy()` before `player.destroy()`** because the worker's
   predicate calls into `PlayerController`, and before `curl_global_cleanup()`.
-- **Fetch lifecycle**: `requestFile` launches `startFetch(path)` — the same join-then-launch
-  pattern as `startScan`, tagged `m_workKind = Fetch`. The worker runs `fetch(source, path)`
+- **Fetch lifecycle**: `requestFile` launches `startFetch(path)` — the same `startWorker` launch
+  as `startScan`, tagged `m_workKind = Fetch`. The worker runs `fetch(source, path)`
   (`source->fetchFile`, store `m_fetchResult` under the mutex, `m_working = false` **last**).
   `update()` joins the finished worker and, only for a `Scan`, swaps the listing; a `Fetch` leaves
   its result parked for `consumeFetchResult()`. The single worker stays sufficient because all
   FileSystem work is UI-modal — a listing and a download never need to overlap.
-- **Cancellation**: `FileSystem::cancel()` (main thread) forwards to `m_activeSource->cancel()` while
-  `m_working` — since navigation is blocked during work, `m_activeSource` is exactly the source the
-  worker is using. The worker then finishes normally (its aborted transfer surfaces as `nullopt` /
+- **Cancellation**: `FileSystem::cancel()` (main thread) forwards to `m_workSource->cancel()` while
+  `m_working` — `m_workSource` is the source captured at worker start, which for a playlist-replay
+  fetch (`requestFileFromSource`) can differ from the browsed `m_activeSource`. The worker then
+  finishes normally (its aborted transfer surfaces as `nullopt` /
   empty path) and `update()` swaps as usual. The Gui overlay's Cancel button drives this via
   `UiActions::onCancelWork` → `Application::handleCancelWork`, which also drops the auto-advance intent
   so a cancelled download doesn't chain into the next sibling (see [application.md](application.md)).
@@ -303,9 +307,9 @@ guards on `m_working` and bounds-checks `sourceIndex`, then launches the same `f
 `startFetch` — but crucially it does **not** touch `m_activeSource` or `m_path`. A playlist entry may
 live in a different source (or a different directory) than the one currently browsed, so replay must
 leave the browser listing exactly where it is; the resulting `FetchResult` flows through the unchanged
-`consumeFetchResult()` path. **Known limitation**: `cancel()` targets `m_activeSource`, so a playlist
-fetch from a *non-active* remote source cannot be cancelled mid-transfer this round (the download runs
-to completion or its own stall/connect timeout).
+`consumeFetchResult()` path. Cancellation works here like everywhere else: `cancel()` targets
+`m_workSource` (captured at worker start), so a playlist fetch from a *non-active* remote source
+aborts mid-transfer just like a browser-initiated download.
 
 ## Navigation direction signal
 
