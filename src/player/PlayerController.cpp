@@ -41,6 +41,7 @@ PlayerController::PlayerController()
     : m_device(0),
       m_activePlugin(nullptr),
       m_state(PlayerState::STOPPED),
+      m_reloadActive(false),
       m_trackEnded(false),
       m_loading(false),
       m_loadPending(false),
@@ -110,12 +111,42 @@ void PlayerController::play(const std::filesystem::path &path) {
 
     {
         std::scoped_lock lock(m_mutex);
+        // Is a track currently being presented? The m_reloadActive term keeps continuity across
+        // CHAINED advances (e.g. next pressed twice while a load is in flight): m_activePlugin is
+        // already null then, but a prior outgoing snapshot in m_reloadStatus is still valid.
+        const bool reload = (m_activePlugin != nullptr) || m_reloadActive;
+        if (reload && m_activePlugin != nullptr) {
+            // Snapshot the outgoing track so getStatus() can keep serving it during the async load,
+            // avoiding a transient flash to STOPPED/empty. Inline the same reads getStatus() does
+            // under the lock — m_mutex is non-recursive, so we must NOT call getStatus(). When
+            // reloading with m_activePlugin already null (chained advance), keep the existing
+            // m_reloadStatus — it already holds the outgoing track.
+            m_reloadStatus = {
+                PlayerState::PLAYING,
+                m_activePlugin->getTitle(),
+                m_currentPath.filename().string(),
+                m_activePlugin->getPosition(),
+                m_activePlugin->getDuration(),
+                m_activePlugin->getSubtrackCount(),
+                m_activePlugin->getCurrentSubtrack()
+            };
+        }
+        // The audio-thread contract requires the plugin being opened to be inactive; decode() outputs
+        // silence when m_activePlugin == nullptr.
         if (m_activePlugin != nullptr) {
             m_activePlugin->close();
             m_activePlugin = nullptr;
         }
-        m_state = PlayerState::STOPPED;
-        m_currentPath.clear();
+        if (reload) {
+            // Keep m_state/m_currentPath so getCurrentPath()/metadata stay stable during the reload
+            // window (m_state PLAYING with a null plugin is fine: decode() checks both and outputs
+            // silence). getStatus() serves m_reloadStatus until update() swaps the replacement in.
+            m_reloadActive = true;
+        } else {
+            // Nothing currently presented (first play from stopped): today's immediate teardown.
+            m_state = PlayerState::STOPPED;
+            m_currentPath.clear();
+        }
         // Cleared synchronously so an explicit click landing as the current track ends wins over
         // auto-advance: the later consumeTrackEnded() in the same frame then reads false.
         m_trackEnded.store(false);
@@ -174,10 +205,15 @@ void PlayerController::update() {
         // Close the freshly-opened module so it does not linger, start no playback, and produce
         // NO play result (a cancel must not trigger auto-advance).
         m_loadCancelled = false;
+        std::scoped_lock lock(m_mutex);
         if (succeeded) {
-            std::scoped_lock lock(m_mutex);
             m_loadPlugin->close();
         }
+        // A reload may have left the outgoing track presented (we no longer cleared it in play());
+        // a cancel must end up stopped (matching cancelLoad/handleCancelWork intent).
+        m_reloadActive = false;
+        m_state = PlayerState::STOPPED;
+        m_currentPath.clear();
         return;
     }
 
@@ -187,9 +223,15 @@ void PlayerController::update() {
             m_activePlugin = m_loadPlugin;
             m_state = PlayerState::PLAYING;
             m_currentPath = m_loadPath;
+            m_reloadActive = false;
         } else {
             // A failed open() may leave a half-parsed module; close it so the plugin returns to idle.
             m_loadPlugin->close();
+            // A reload kept the outgoing track's m_state/m_currentPath; a failed load must revert to a
+            // genuine "No track" (Application still surfaces/handles the error).
+            m_state = PlayerState::STOPPED;
+            m_currentPath.clear();
+            m_reloadActive = false;
         }
     }
     m_playResult = succeeded ? PlayResult::Ok : PlayResult::DecodeError;
@@ -197,6 +239,11 @@ void PlayerController::update() {
 
 bool PlayerController::isLoading() const {
     return m_loadPending;
+}
+
+bool PlayerController::isReloading() const {
+    std::scoped_lock lock(m_mutex);
+    return m_reloadActive;
 }
 
 std::optional<PlayResult> PlayerController::consumePlayResult() {
@@ -238,6 +285,8 @@ void PlayerController::stop() {
     }
     m_state = PlayerState::STOPPED;
     m_currentPath.clear();
+    // An explicit Stop during a reload must show "No track", not the outgoing snapshot.
+    m_reloadActive = false;
     m_trackEnded.store(false);
 }
 
@@ -273,6 +322,11 @@ int PlayerController::getCurrentSubtrack() const {
 
 PlaybackStatus PlayerController::getStatus() const {
     std::scoped_lock lock(m_mutex);
+    // While a reload is in flight, serve the outgoing track's snapshot so the player bar keeps its
+    // title/highlight instead of flashing to STOPPED until update() swaps the replacement in.
+    if (m_reloadActive) {
+        return m_reloadStatus;
+    }
     if (m_activePlugin == nullptr) {
         return {m_state, "", m_currentPath.filename().string(), 0.0, 0.0, 1, 0};
     }

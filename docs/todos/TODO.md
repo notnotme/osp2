@@ -60,7 +60,7 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
   - [x] 20a — Charset transcoding to UTF-8 at the plugin boundary
   - [x] 20b — CJK-capable font
 - [x] [TODO_21 — Accurate NES/NSF duration (drop the fake 2:30)](TODO_21.md) — requires TODO_9 + TODO_18; single chunk
-- [ ] [TODO_22 — No UI blink when next/prev crosses a file boundary](TODO_22.md) — requires TODO_17 + TODO_18; single chunk
+- [x] [TODO_22 — No UI blink when next/prev crosses a file boundary](TODO_22.md) — requires TODO_17 + TODO_18; single chunk
 - [ ] [TODO_23 — Right-align file size in the browser](TODO_23.md) — single chunk; presentation-only
 - [ ] [TODO_24 — Better About box (version, author, credits, link)](TODO_24.md) — single chunk
 - [ ] [TODO_25 — Hide ".." when browsing the root (sources)](TODO_25.md) — single chunk

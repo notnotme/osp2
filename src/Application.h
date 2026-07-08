@@ -52,6 +52,12 @@ private:
     std::string m_lastRequestedName;
     int m_advanceDirection;
 
+    // Main-thread only: true while a boundary/auto advance load is in flight, so makeUiState()
+    // suppresses the decode "Loading..." overlay for the seamless fast local case (a direct click
+    // keeps it; a remote sibling still shows the "Downloading..." fetch overlay). Set at the play()
+    // call site when m_advanceDirection != 0, cleared when the play result is consumed/cancelled.
+    bool m_advanceLoadInFlight = false;
+
     // Name of the file whose playback was last requested (set in handleFileClick / playAdjacentTrack),
     // used only to compose a user-facing error message. Distinct from m_lastRequestedName (the
     // auto-advance retry cursor); cleared by handleCancelWork so a user cancel never pops an error.
