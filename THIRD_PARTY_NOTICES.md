@@ -17,7 +17,7 @@ OSP2 is licensed under the GPL-3.0-or-later (see `LICENSE`). It includes or link
 
 ## Data (`romfs/`)
 
-- **HVSC Songlengths database** (`romfs/sidlength/Songlengths.md5`) — from the **High Voltage SID Collection (HVSC)**, compiled by the HVSC crew; freely redistributable per the HVSC terms — https://www.hvsc.c64.org/ . Maintainer-supplied and `.gitignore`d (not in the repo); only baked into a build when present. Used to look up real SID track lengths (see [docs/audio.md](docs/audio.md)).
+- **HVSC Songlengths database** (`romfs/sidlength/Songlengths.md5`) — from the **High Voltage SID Collection (HVSC)**, compiled by the HVSC crew; freely redistributable per the HVSC terms — https://www.hvsc.c64.org/ . Bundled in the repo and baked into the build; used to look up real SID track lengths (see [docs/audio.md](docs/audio.md)). See `romfs/sidlength/README.md` for the source and redistribution terms.
 
 ## Fonts (`romfs/font/`)
 

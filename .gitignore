@@ -44,7 +44,3 @@ romfs/music
 # C64 ROM images (copyright Commodore/Cloanto, from the VICE distribution — not
 # OSP2's to redistribute; kept locally and baked into the .nro at build time)
 romfs/roms
-
-
-# HVSC Songlengths DB (freely redistributable; maintainer-supplied, like romfs/roms)
-romfs/sidlength
