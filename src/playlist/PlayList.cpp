@@ -22,6 +22,9 @@
 #include <utility>
 
 
+PlayList::PlayList()
+    : m_rng(std::random_device{}()) {}
+
 void PlayList::create() {
     // Nothing to allocate — the entry vector and flags are default-constructed. Kept for lifecycle
     // symmetry with the other subsystems and for future use.
@@ -67,6 +70,35 @@ void PlayList::toggleShuffle() {
 
 void PlayList::toggleRepeat() {
     m_repeat = !m_repeat;
+}
+
+std::optional<std::size_t> PlayList::nextIndex(const std::size_t current, const int direction) {
+    const std::size_t size = m_entries.size();
+    if (size == 0) {
+        return std::nullopt;
+    }
+
+    // Shuffle only affects the forward/auto-advance target of a multi-entry list; a single entry falls
+    // through to the linear case below. Pick a uniform index in [0,size-1) then skip over `current`,
+    // yielding a uniform pick among the size-1 other entries in one draw.
+    if (m_shuffle && direction > 0 && size > 1) {
+        std::uniform_int_distribution<std::size_t> dist(0, size - 2);
+        std::size_t pick = dist(m_rng);
+        if (pick >= current) {
+            ++pick;
+        }
+        return pick;
+    }
+
+    // Linear: covers PREVIOUS always, and NEXT when shuffle is off. Repeat wraps at either end.
+    const long t = static_cast<long>(current) + direction;
+    if (t >= 0 && t < static_cast<long>(size)) {
+        return static_cast<std::size_t>(t);
+    }
+    if (m_repeat) {
+        return t >= static_cast<long>(size) ? std::size_t{0} : size - 1;
+    }
+    return std::nullopt;
 }
 
 const std::vector<PlaylistEntry> &PlayList::entries() const {

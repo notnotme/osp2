@@ -129,7 +129,12 @@ private:
         const TrackMetadata &metadata,
         const std::vector<PlaylistEntry> &playlist,
         const std::string &playingFileName,
-        const std::function<void(std::size_t)> &onRemoveFromPlaylist
+        bool shuffle,
+        bool repeat,
+        const std::function<void(std::size_t)> &onRemoveFromPlaylist,
+        const std::function<void(std::size_t)> &onPlayPlaylistEntry,
+        const std::function<void()> &onToggleShuffle,
+        const std::function<void()> &onToggleRepeat
     );
     void drawFileMetadata(const TrackMetadata &metadata);
     void drawModuleMetadata(const ModuleMetadata &metadata);
@@ -139,7 +144,12 @@ private:
     void drawTabPlaylist(
         const std::vector<PlaylistEntry> &playlist,
         const std::string &playingFileName,
-        const std::function<void(std::size_t)> &onRemoveFromPlaylist
+        bool shuffle,
+        bool repeat,
+        const std::function<void(std::size_t)> &onRemoveFromPlaylist,
+        const std::function<void(std::size_t)> &onPlayPlaylistEntry,
+        const std::function<void()> &onToggleShuffle,
+        const std::function<void()> &onToggleRepeat
     );
     void drawPlayerBar(const PlaybackStatus &status, const std::function<void(ButtonId)> &onButtonClick) const;
 

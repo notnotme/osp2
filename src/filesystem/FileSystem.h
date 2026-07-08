@@ -99,6 +99,9 @@ public:
     void navigateToEntry(const FileEntry &entry);
     void navigateToParent();
     void requestFile(const FileEntry &entry);
+    // Fetches a file addressed by (source index, source-relative path) for playlist replay, without
+    // changing the browsed location (m_activeSource / m_path stay put). Main-thread only.
+    void requestFileFromSource(int sourceIndex, const std::filesystem::path &path);
     void cancel();
     [[nodiscard]] std::optional<FetchResult> consumeFetchResult();
     [[nodiscard]] NavKind consumeNavigation();

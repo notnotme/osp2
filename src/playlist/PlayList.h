@@ -21,6 +21,8 @@
 #define OSP2_PLAY_LIST_H
 
 #include <cstddef>
+#include <optional>
+#include <random>
 #include <vector>
 
 #include "PlaylistEntry.h"
@@ -35,11 +37,12 @@ private:
     std::vector<PlaylistEntry> m_entries;
     bool m_shuffle = false;
     bool m_repeat = false;
+    std::mt19937 m_rng; // advanced by nextIndex() when shuffle picks a random forward target
 
 public:
     PlayList(const PlayList &) = delete;
     PlayList &operator=(const PlayList &) = delete;
-    explicit PlayList() = default;
+    explicit PlayList();
     ~PlayList() = default;
 
     // Nothing to allocate; kept for symmetry with the other subsystems and for future use.
@@ -49,6 +52,13 @@ public:
     void add(PlaylistEntry entry);
     void removeAt(std::size_t index); // bounds-checked no-op if out of range
     void clear();
+
+    // Traversal policy for playlist-aware advance. `current` is the playing entry's index, `direction`
+    // is +1 (NEXT / auto-advance) or -1 (PREVIOUS). Returns the next index or nullopt when there is no
+    // next (empty list, or a boundary with repeat off). Shuffle randomizes only the forward target
+    // (direction > 0, size > 1) — PREVIOUS always steps linearly; repeat wraps at either end. Non-const:
+    // it advances the shuffle RNG. Deliberate simplification: no shuffle history for PREVIOUS.
+    [[nodiscard]] std::optional<std::size_t> nextIndex(std::size_t current, int direction);
 
     [[nodiscard]] bool shuffle() const;
     [[nodiscard]] bool repeat() const;

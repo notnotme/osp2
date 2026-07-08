@@ -55,6 +55,18 @@ private:
     std::string m_lastRequestedName;
     int m_advanceDirection;
 
+    // Index of the currently-playing playlist entry, or -1 when playback originated from the browser
+    // (not the playlist). While >= 0, NEXT/PREVIOUS and auto-advance traverse the PLAYLIST instead of
+    // the browser's adjacent file; a browser file click resets it to -1 (leaving playlist mode).
+    int m_playlistIndex;
+
+    // Count of consecutive playlist entries fetched without one successfully playing. Bounds the
+    // failure-retry chain: Repeat/Shuffle make PlayList::nextIndex never return nullopt, so an
+    // all-unplayable playlist would otherwise loop forever. advancePlaylist stops once this reaches the
+    // playlist size (every entry tried once since the last success); reset to 0 on a successful decode
+    // and at the start of a user-initiated playlist play.
+    int m_consecutivePlaylistSkips;
+
     // Main-thread only: true while a boundary/auto advance load is in flight, so makeUiState()
     // suppresses the decode "Loading..." overlay for the seamless fast local case (a direct click
     // keeps it; a remote sibling still shows the "Downloading..." fetch overlay). Set at the play()
@@ -117,6 +129,10 @@ private:
     void handleToggleShuffle();
     void handleToggleRepeat();
     void advance(int direction);
+    // File-boundary advance dispatch: traverses the playlist when a playlist entry is playing
+    // (m_playlistIndex >= 0), otherwise the browser's adjacent file.
+    void advanceTrack(int direction);
+    void advancePlaylist(int direction);
     void playAdjacentTrack(int direction);
 };
 

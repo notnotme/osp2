@@ -668,7 +668,12 @@ void Gui::drawTabsSection(
     const TrackMetadata &metadata,
     const std::vector<PlaylistEntry> &playlist,
     const std::string &playingFileName,
-    const std::function<void(std::size_t)> &onRemoveFromPlaylist
+    const bool shuffle,
+    const bool repeat,
+    const std::function<void(std::size_t)> &onRemoveFromPlaylist,
+    const std::function<void(std::size_t)> &onPlayPlaylistEntry,
+    const std::function<void()> &onToggleShuffle,
+    const std::function<void()> &onToggleRepeat
 ) {
     // The zero WindowPadding is only wanted for the tab bar itself (so it sits flush with the pane);
     // pop it before drawing tab content so tab bodies and their popups (e.g. the row context menu)
@@ -678,7 +683,16 @@ void Gui::drawTabsSection(
     ImGui::PopStyleVar();
     if (tabs_open) {
         drawFileMetadata(metadata);
-        drawTabPlaylist(playlist, playingFileName, onRemoveFromPlaylist);
+        drawTabPlaylist(
+            playlist,
+            playingFileName,
+            shuffle,
+            repeat,
+            onRemoveFromPlaylist,
+            onPlayPlaylistEntry,
+            onToggleShuffle,
+            onToggleRepeat
+        );
         ImGui::EndTabBar();
     }
 }
@@ -762,9 +776,28 @@ void Gui::drawSc68Metadata(const Sc68Metadata &metadata) {
 void Gui::drawTabPlaylist(
     const std::vector<PlaylistEntry> &playlist,
     const std::string &playingFileName,
-    const std::function<void(std::size_t)> &onRemoveFromPlaylist
+    const bool shuffle,
+    const bool repeat,
+    const std::function<void(std::size_t)> &onRemoveFromPlaylist,
+    const std::function<void(std::size_t)> &onPlayPlaylistEntry,
+    const std::function<void()> &onToggleShuffle,
+    const std::function<void()> &onToggleRepeat
 ) {
     if (ImGui::BeginTabItem("Playlist")) {
+        // Shuffle / Repeat toggles at the top of the tab, always visible (even when the list is empty).
+        // ImGui::Checkbox needs a bool*, so mirror the immutable incoming flag into a local and fire the
+        // toggle callback on change; the model owns the state, this frame just reflects it.
+        bool shuffle_local = shuffle;
+        if (ImGui::Checkbox("Shuffle", &shuffle_local)) {
+            onToggleShuffle();
+        }
+        ImGui::SameLine();
+        bool repeat_local = repeat;
+        if (ImGui::Checkbox("Repeat", &repeat_local)) {
+            onToggleRepeat();
+        }
+        ImGui::Separator();
+
         if (playlist.empty()) {
             // Centered, dimmed placeholder — same idiom as the Metadata tab's "No track loaded".
             constexpr auto text = "Playlist is empty";
@@ -798,9 +831,9 @@ void Gui::drawTabPlaylist(
                 ImGui::TextColored(tofu_color, "%s", is_current ? tofu_filled : tofu_empty);
                 ImGui::SameLine();
                 // The Selectable's selected state reflects the current track so the playing row is highlighted,
-                // like the browser. Click-to-play is wired later (28e).
+                // like the browser. A left-click plays this entry; a right-click removes it (below).
                 if (ImGui::Selectable(entry.name.c_str(), is_current, ImGuiSelectableFlags_SpanAllColumns)) {
-                    // 28e: play this entry.
+                    onPlayPlaylistEntry(index);
                 }
                 // Right-click a row to remove it (mirrors the browser's "Add to playlist" menu).
                 if (ImGui::BeginPopupContextItem()) {
@@ -1020,7 +1053,17 @@ void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
     ImGui::SameLine();
 
     if (ImGui::BeginChild("right_pane", ImVec2(right_width, panes_height), ImGuiChildFlags_Borders)) {
-        drawTabsSection(state.metadata, state.playlist, playingFileName, actions.onRemoveFromPlaylist);
+        drawTabsSection(
+            state.metadata,
+            state.playlist,
+            playingFileName,
+            state.playlistShuffle,
+            state.playlistRepeat,
+            actions.onRemoveFromPlaylist,
+            actions.onPlayPlaylistEntry,
+            actions.onToggleShuffle,
+            actions.onToggleRepeat
+        );
     }
     ImGui::EndChild();
 

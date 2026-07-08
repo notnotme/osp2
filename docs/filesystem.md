@@ -66,6 +66,7 @@ classDiagram
         +navigateToEntry(FileEntry)
         +navigateToParent()
         +requestFile(FileEntry)
+        +requestFileFromSource(sourceIndex, path)
         +cancel()
         +consumeFetchResult() optional~FetchResult~
         +consumeNavigation() NavKind
@@ -295,6 +296,16 @@ worker so the 4c spinner overlay covers remote downloads too — one uniform pat
 guarded by `m_working` like scans. Because the worker is shared, `m_workKind` (Scan / Fetch,
 main-thread-only) tells `update()` whether a finished worker's result is a listing to swap or a
 fetch result already parked in `m_fetchResult`.
+
+**`requestFileFromSource(sourceIndex, path)` — playlist replay (28e)**: fetches a file addressed by
+`(source index, source-relative path)` rather than by a `FileEntry` from the *active* listing. It
+guards on `m_working` and bounds-checks `sourceIndex`, then launches the same `fetch(...)` worker as
+`startFetch` — but crucially it does **not** touch `m_activeSource` or `m_path`. A playlist entry may
+live in a different source (or a different directory) than the one currently browsed, so replay must
+leave the browser listing exactly where it is; the resulting `FetchResult` flows through the unchanged
+`consumeFetchResult()` path. **Known limitation**: `cancel()` targets `m_activeSource`, so a playlist
+fetch from a *non-active* remote source cannot be cancelled mid-transfer this round (the download runs
+to completion or its own stall/connect timeout).
 
 ## Navigation direction signal
 
