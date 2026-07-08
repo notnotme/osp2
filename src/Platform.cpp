@@ -43,12 +43,10 @@
 #include "gui/Theme.h"
 #include "gui/UiState.h"
 #include "input/CursorEmulator.h"
-#include "player/PlayerState.h"
-#include "visualizer/VisualFrame.h"
 
 
 Platform::Platform()
-    : m_app(m_player, m_fileSystem, m_settings, m_playList) {}
+    : m_app(m_player, m_fileSystem, m_settings, m_playList, m_visualizer) {}
 
 void Platform::create() {
     initNetwork(); // before m_fileSystem.create() spawns the worker
@@ -58,6 +56,9 @@ void Platform::create() {
     // GL context + glad are up by now: a no-op for the current ImGui-only plugin, correct for
     // future GL plugins that allocate shaders/VBOs in create().
     m_visualizer.create();
+    // The plugin set is fixed from here on: build the Application's visualizer-name cache once,
+    // keeping getNames() (which allocates) off the per-frame makeUiState() path.
+    m_app.refreshVisualizerNames();
     m_playList.create();
     initPlayerAndSettings();
 
@@ -69,33 +70,6 @@ void Platform::create() {
 
 void Platform::run() {
     auto actions = m_app.makeUiActions();
-
-    // Wired here (not in Application) because the visualizer is a platform-layer concern: the callback
-    // reads the audio tap, builds a VisualFrame, and renders the active visualizer inside the ImGui
-    // frame. Captures this — Platform outlives the loop.
-    actions.onRenderVisualization = [this](const float x, const float y, const float w, const float h) {
-        // Zero-initialized so the frameCount==0 (idle) and partial-read tails are silence, never
-        // indeterminate stack — a plugin that reads samples without gating on frameCount stays safe.
-        float samples[PlayerController::BUFFER_FRAMES * PlayerController::CHANNELS] = {};
-        // decode() publishes nothing when idle, so an ungated read returns the last stale block:
-        // gate on PLAYING and pass frameCount 0 otherwise so the visual decays to rest.
-        const bool playing = m_player.getState() == PlayerState::PLAYING;
-        const std::size_t frames = playing ? m_player.readLatestAudio(samples, PlayerController::BUFFER_FRAMES) : 0;
-        const VisualFrame frame{x, y, w, h, samples, frames, PlayerController::CHANNELS, PlayerController::SAMPLE_RATE};
-        m_visualizer.render(frame);
-    };
-
-    // Settings→Visualizer picker: switch the active visualizer at runtime, then persist the choice as
-    // its stable plugin name (mirrors theme). Platform is the sole bridge — Gui/Application stay
-    // ignorant of the domain.
-    actions.onSelectVisualizer = [this](const std::size_t i) {
-        const std::vector<std::string> names = m_visualizer.getNames();
-        if (i < names.size()) {
-            m_visualizer.select(i);
-            m_settings.setString("user", "visualizer", names[i]);
-            m_settings.save();
-        }
-    };
 
     bool is_running = true;
 
@@ -153,11 +127,7 @@ void Platform::run() {
         cursorEmulator.update(ImGui::GetIO());
 #endif
         ImGui::NewFrame();
-        // Application does not know the visualizer domain, so Platform (the bridge) supplies the
-        // picker state onto the per-frame view model before handing it to the Gui.
-        UiState state = m_app.makeUiState();
-        state.visualizerNames = m_visualizer.getNames();
-        state.activeVisualizer = m_visualizer.getActiveIndex();
+        const UiState state = m_app.makeUiState();
         m_gui.drawUserInterface(state, actions);
         ImGui::Render();
 

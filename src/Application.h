@@ -39,6 +39,8 @@
 #include "playlist/PlayList.h"
 #include "settings/Settings.h"
 
+class VisualizerController;
+
 
 // Use-case layer: turns UI intent into playback/navigation actions and produces
 // the per-frame view model. Depends on the domain (PlayerController, FileSystem),
@@ -49,6 +51,7 @@ private:
     FileSystem &m_fileSystem;
     Settings &m_settings;
     PlayList &m_playList;
+    VisualizerController &m_visualizer;
 
     // Playback-request retry state: m_lastRequestedName is the cursor playAdjacentTrack advances
     // from when a fetched sibling fails; m_advanceDirection is the direction (+1/-1, 0 for a direct click).
@@ -98,18 +101,31 @@ private:
     // while drawing, so reassigning it mid-draw would dangle.
     std::vector<std::pair<std::string, std::vector<PluginSetting>>> m_pluginSettings;
 
+    // Visualizer plugin names cached across frames (getNames() allocates a vector<string>, so it must
+    // stay off the per-frame path). The set is fixed after VisualizerController::create(), so the cache
+    // is built once via refreshVisualizerNames() and never rebuilt; makeUiState() hands it to the Gui
+    // as a non-owning view.
+    std::vector<std::string> m_visualizerNames;
+
     // Per-frame browser nav signal relayed from FileSystem to the Gui via UiState (scroll restore).
     NavKind m_pendingNav = NavKind::None;
 
 public:
     Application(const Application &) = delete;
     Application &operator=(const Application &) = delete;
-    explicit Application(PlayerController &player, FileSystem &fileSystem, Settings &settings, PlayList &playList);
+    explicit Application(
+        PlayerController &player,
+        FileSystem &fileSystem,
+        Settings &settings,
+        PlayList &playList,
+        VisualizerController &visualizer
+    );
     ~Application() = default;
 
 public:
     void update();
     void refreshPluginSettings();
+    void refreshVisualizerNames();
     [[nodiscard]] UiState makeUiState() const;
     [[nodiscard]] UiActions makeUiActions();
 
@@ -118,6 +134,8 @@ private:
     void handleFileClick(const FileEntry &entry);
     void handleDirectoryClick(const FileEntry &entry);
     void handleThemeChange(Theme theme);
+    void handleRenderVisualization(float x, float y, float w, float h);
+    void handleSelectVisualizer(std::size_t index);
     void handlePluginSettingChange(const std::string &pluginName, const std::string &key, int value);
     void handlePluginSettingCommit(const std::string &pluginName, const std::string &key, int value);
     void handleCancelWork();

@@ -81,7 +81,7 @@ Batch from the 2026-07 whole-codebase architecture audit (cpp-architect, finding
   - [x] 31a — Work-source cancel fix (`FileSystem::m_workSource`)
   - [x] 31b — FTP listing-splitter dedup (`parseListing`)
 - [ ] [TODO_32 — UI seam hardening (visualizer into Application, designated initializers, Gui helpers take bundles, SettingsKeys)](TODO_32.md) — behavior-preserving; blocks TODO_33
-  - [ ] 32a — Visualizer bridge into Application + designated initializers
+  - [x] 32a — Visualizer bridge into Application + designated initializers
   - [ ] 32b — Gui draw helpers take `(state, actions)` + `Gui final` + cleanups
   - [ ] 32c — SettingsKeys.h (single-source INI section/key names)
 - [ ] [TODO_33 — Playlist "now playing" highlight by index](TODO_33.md) — requires TODO_32; single chunk; fixes false highlights

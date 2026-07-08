@@ -234,8 +234,8 @@ void Gui::drawTopBar(
             }
 
             // Visualizer picker: one entry per registered visualizer, checkmark on the active one.
-            // Selecting fires onSelectVisualizer(i); main.cpp calls VisualizerController::select — Gui
-            // stays ignorant of the visualizer domain (same principle as onRenderVisualization).
+            // Selecting fires onSelectVisualizer(i); Application selects and persists — Gui stays
+            // ignorant of the visualizer domain (same principle as onRenderVisualization).
             if (ImGui::BeginMenu("Visualizer")) {
                 for (std::size_t i = 0; i < visualizerNames.size(); ++i) {
                     if (ImGui::MenuItem(visualizerNames[i].c_str(), nullptr, i == activeVisualizer)) {

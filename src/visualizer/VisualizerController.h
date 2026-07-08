@@ -32,7 +32,7 @@
 
 // Owns the registered visualizer plugins and dispatches rendering to the active one. Mirrors
 // PlayerController's ownership pattern: one emplace_back per plugin in create(), each given a
-// create()/destroy() lifecycle. Independent of the player and Gui domains — main.cpp wires them.
+// create()/destroy() lifecycle. Independent of the player and Gui domains — Application bridges them.
 class VisualizerController final {
 private:
     std::vector<std::unique_ptr<VisualizerPlugin>> m_plugins;
