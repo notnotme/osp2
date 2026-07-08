@@ -6,8 +6,9 @@ Domain module in `src/playlist/`. `PlayList` is an ordered, session-only list of
 classDiagram
     class PlaylistEntry {
         <<value object>>
-        +path path
         +string name
+        +path path
+        +int sourceIndex
     }
 
     class PlayList {
@@ -35,7 +36,7 @@ classDiagram
 
 ## Notes
 
-- **`PlaylistEntry`** (`src/playlist/PlaylistEntry.h`) is a value object kept in its own light header so `UiState` can depend on the entry shape without pulling in the whole module. An entry's identity is its **full `path`** (used for playback and identity) plus a `name` **basename** (shown in the tab and matched against `PlaybackStatus.fileName` for the current-track "tofu" icon in 28b — the same filename basis the browser highlight uses). Full-path identity avoids the basename-only collisions across directories. Later chunks (28c/28e) may extend the entry with the source context needed to re-fetch remote entries; 28a keeps it to path + basename.
+- **`PlaylistEntry`** (`src/playlist/PlaylistEntry.h`) is a value object kept in its own light header so `UiState` can depend on the entry shape without pulling in the whole module. A file's identity in this app is **(owning `DataSource`, source-relative path)**, so an entry stores three things captured at add-time: `name` (basename, shown in the tab and matched against `PlaybackStatus.fileName` for the current-track "tofu" icon — the same filename basis the browser highlight uses), `path` (the **source-relative path** `getPath()/name` that `DataSource::fetchFile` expects), and `sourceIndex` (the index of the owning source in `FileSystem`'s source list). Both `path` and `sourceIndex` are captured because the browser may later have navigated elsewhere or switched source; 28e re-fetches an entry from that pair. 28b reads only `name`, so the fields added in 28c are backward-compatible.
 
 - **`PlayList`** (`src/playlist/PlayList.{h,cpp}`) mirrors `VisualizerController`'s small `final`-module shape: non-copyable, `create()`/`destroy()` lifecycle (nothing to allocate — `create()` is kept for symmetry and future use, `destroy()` clears the vector). It is **single-threaded, main-thread only** — every access happens on the UI/update path, so unlike `PlayerController` it needs **no mutex**. Mutators (`add`, `removeAt` — bounds-checked no-op if out of range, `clear`) and the `shuffle`/`repeat` flag accessors/toggles are in place from 28a; the behavior that consumes them lands in 28e.
 
@@ -45,4 +46,6 @@ classDiagram
 
 ## Wiring
 
-`Platform` owns `PlayList m_playList` by value (declaration order before `m_app`, which binds a reference to it) and calls `create()`/`destroy()` alongside the other subsystems. `Application` holds `PlayList &m_playList`, populates the `UiState` playlist slice (`playlist` non-owning view + `playlistShuffle`/`playlistRepeat`) in `makeUiState()`, and routes the five playlist `UiActions` callbacks to `handleAddToPlaylist` (28c), `handleRemoveFromPlaylist` (28d), `handlePlayPlaylistEntry` / `handleToggleShuffle` / `handleToggleRepeat` (28e) — placeholder stubs in 28a. See [ui.md](ui.md) for the tab and [application.md](application.md) for the routing.
+`Platform` owns `PlayList m_playList` by value (declaration order before `m_app`, which binds a reference to it) and calls `create()`/`destroy()` alongside the other subsystems. `Application` holds `PlayList &m_playList`, populates the `UiState` playlist slice (`playlist` non-owning view + `playlistShuffle`/`playlistRepeat`) in `makeUiState()`, and routes the five playlist `UiActions` callbacks to `handleAddToPlaylist` (28c), `handleRemoveFromPlaylist` (28d), `handlePlayPlaylistEntry` / `handleToggleShuffle` / `handleToggleRepeat` (28e) — the latter four are placeholder stubs until their chunks.
+
+**Add-to-playlist flow (28c)**: right-clicking a browser **file** row opens a context menu whose "Add to playlist" item fires `onAddToPlaylist(FileEntry)`. `Application::handleAddToPlaylist` builds the entry from the browser's current context — `PlaylistEntry{ entry.name, m_fileSystem.getPath() / entry.name, m_fileSystem.getActiveSourceIndex() }` — and calls `m_playList.add(...)`. Only file rows carry the menu (a defensive `is_directory` guard aside), and duplicates are allowed (no dedup this chunk). The stored `path` + `sourceIndex` are what 28e's replay-from-source path will resolve against; 28c only wires the capture, not playback. See [ui.md](ui.md) for the tab and [application.md](application.md) for the routing.

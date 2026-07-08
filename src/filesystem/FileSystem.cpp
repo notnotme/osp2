@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstddef>
 #include <utility>
 
 
@@ -230,6 +231,18 @@ const std::filesystem::path &FileSystem::getPath() const {
 
 const std::vector<FileEntry> &FileSystem::getContent() const {
     return m_content;
+}
+
+int FileSystem::getActiveSourceIndex() const {
+    if (m_activeSource == nullptr) {
+        return -1; // virtual root: no source produced this listing
+    }
+    for (std::size_t i = 0; i < m_sources.size(); ++i) {
+        if (m_sources[i].get() == m_activeSource) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;
 }
 
 bool FileSystem::isWorking() const {

@@ -500,7 +500,8 @@ void Gui::drawFileBrowser(
     const std::string &workingLabel,
     const std::function<void()> &onCancelWork,
     const std::string &playingFileName,
-    const bool isAtRoot
+    const bool isAtRoot,
+    const std::function<void(const FileEntry &)> &onAddToPlaylist
 ) {
     // Rising edge of the loading overlay: focus is moved to the Cancel button once on this frame
     // (below) so gamepad/keyboard on the Switch can reach it; m_wasWorking is updated at function end.
@@ -581,6 +582,14 @@ void Gui::drawFileBrowser(
                     const bool is_playing = !playingFileName.empty() && file_entry.name == playingFileName;
                     if (ImGui::Selectable(entry_label, is_playing, ImGuiSelectableFlags_SpanAllColumns)) {
                         onFileClick(file_entry);
+                    }
+                    // Right-click a file row to queue it. BeginPopupContextItem() with no id reuses the
+                    // Selectable's id, which is unique per row (basenames are unique within a directory).
+                    if (ImGui::BeginPopupContextItem()) {
+                        if (ImGui::MenuItem("Add to playlist")) {
+                            onAddToPlaylist(file_entry);
+                        }
+                        ImGui::EndPopup();
                     }
                 }
 
@@ -979,7 +988,8 @@ void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
             state.workingLabel,
             actions.onCancelWork,
             playingFileName,
-            state.isAtRoot
+            state.isAtRoot,
+            actions.onAddToPlaylist
         );
     }
     ImGui::EndChild();

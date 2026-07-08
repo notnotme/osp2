@@ -106,6 +106,9 @@ public:
 
 public:
     [[nodiscard]] const std::filesystem::path &getPath() const; // empty at the virtual root
+    // Index of the source that produced the current listing, for capturing playlist entries; -1 at the
+    // virtual root. Main-thread only (like getPath()).
+    [[nodiscard]] int getActiveSourceIndex() const;
     [[nodiscard]] const std::vector<FileEntry> &getContent() const;
     [[nodiscard]] bool isWorking() const;
     [[nodiscard]] bool isFetching() const; // true while a file download (not a scan) is in flight

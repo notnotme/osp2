@@ -71,6 +71,7 @@ classDiagram
         +consumeNavigation() NavKind
         +update()
         +getPath() path
+        +getActiveSourceIndex() int
         +getContent() vector~FileEntry~
         +isWorking() bool
         +isFetching() bool
@@ -261,6 +262,11 @@ style as the audio domain (atomic flag + mutex-guarded handoff, swap on the main
 holds one `FileEntry{displayName, 0, "Source", true}` per source, built by `showVirtualRoot()`.
 `navigateToParent()` from a source root transitions here; entering a source entry activates it
 and scans its `getRootPath()`.
+
+`getActiveSourceIndex()` (main-thread only, like `getPath()`) returns the index of `m_activeSource`
+within the source list — a linear find — or `-1` at the virtual root. It identifies the source that
+produced the current listing so the playlist can capture an entry's full identity (source +
+source-relative path) at add-time; 28e's replay resolves the stored index back to a `DataSource`.
 
 `showVirtualRoot()` mutates `m_content` synchronously, so it must never run **during a draw** —
 `UiState::files` is a reference to `m_content`, and the Gui fires navigation callbacks mid-frame

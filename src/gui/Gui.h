@@ -122,7 +122,8 @@ private:
         const std::string &workingLabel,
         const std::function<void()> &onCancelWork,
         const std::string &playingFileName,
-        bool isAtRoot
+        bool isAtRoot,
+        const std::function<void(const FileEntry &)> &onAddToPlaylist
     );
     void drawTabsSection(
         const TrackMetadata &metadata, const std::vector<PlaylistEntry> &playlist, const std::string &playingFileName

@@ -69,7 +69,7 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
 - [ ] [TODO_28 — Playlist tab (add/remove/shuffle/repeat)](TODO_28.md) — requires TODO_9 + TODO_17 + TODO_18; multi-chunk
   - [x] 28a — PlayList module + wiring
   - [x] 28b — Draw the Playlist tab (tofu state icons)
-  - [ ] 28c — Add to playlist (right-click context menu)
+  - [x] 28c — Add to playlist (right-click context menu)
   - [ ] 28d — Remove from playlist
   - [ ] 28e — Play + Shuffle + Repeat
 - [x] [TODO_29 — GME durations from a companion `.m3u` (local)](TODO_29.md) — requires TODO_21; GmePlugin combined + exploded m3u overlay

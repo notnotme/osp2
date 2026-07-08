@@ -185,9 +185,15 @@ void Application::handleCancelWork() {
     m_pendingPlayName.clear();
 }
 
-void Application::handleAddToPlaylist(const FileEntry & /*entry*/) {
-    // 28c: capture the full path + source context at add-time (a browser FileEntry is
-    // source-relative) and append it to m_playList.
+void Application::handleAddToPlaylist(const FileEntry &entry) {
+    // Only file rows carry the context menu, but guard defensively so a directory never lands
+    // in the playlist. Capture the source-relative path (getPath()/name) and owning source index
+    // now: the browser may later navigate elsewhere or switch source, but replay (28e) must still
+    // re-fetch from where the file actually lives. Duplicates are allowed this chunk (no dedup).
+    if (entry.is_directory) {
+        return;
+    }
+    m_playList.add(PlaylistEntry{entry.name, m_fileSystem.getPath() / entry.name, m_fileSystem.getActiveSourceIndex()});
 }
 
 void Application::handleRemoveFromPlaylist(const std::size_t /*index*/) {
