@@ -17,8 +17,8 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
-#ifndef OSP2_WINDOW_SYSTEM_H
-#define OSP2_WINDOW_SYSTEM_H
+#ifndef OSP2_GUI_H
+#define OSP2_GUI_H
 
 #include <glad/glad.h>
 #include <cstdint>
@@ -26,7 +26,6 @@
 #include <map>
 #include <string>
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
 #include "ButtonId.h"
@@ -34,14 +33,11 @@
 #include "ViewMode.h"
 #include "UiActions.h"
 #include "UiState.h"
-#include "../filesystem/FileEntry.h"
 #include "../player/Metadata.h"
 #include "../player/PlaybackStatus.h"
-#include "../player/PluginSetting.h"
-#include "../playlist/PlaylistEntry.h"
 
 
-class Gui {
+class Gui final {
 private:
     struct Sprite {
         float s;
@@ -90,67 +86,25 @@ public:
     Gui(const Gui &) = delete;
     Gui &operator=(const Gui &) = delete;
     explicit Gui();
-    virtual ~Gui() = default;
 
 private:
-    void drawTopBar(
-        const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings,
-        const std::function<void(Theme)> &onThemeChange,
-        const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange,
-        const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit,
-        const std::vector<std::string> &visualizerNames,
-        std::size_t activeVisualizer,
-        const std::function<void(std::size_t)> &onSelectVisualizer,
-        const std::function<void(ButtonId)> &onButtonClick,
-        const std::string &error
-    );
+    void drawTopBar(const UiState &state, const UiActions &actions);
     void drawAboutPopup() const;
     void drawQuitConfirmPopup(const std::function<void(ButtonId)> &onButtonClick) const;
     // Not const: Close clears m_errorMessage (unlike drawAboutPopup, which reads no members).
     void drawErrorPopup();
-    void drawPluginPopups(
-        const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings,
-        const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange,
-        const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit
-    );
+    void drawPluginPopups(const UiState &state, const UiActions &actions);
     void drawCurrentPath(const std::string &path);
-    void drawFileBrowser(
-        const std::vector<FileEntry> &files,
-        const std::function<void(const FileEntry &)> &onFileClick,
-        const std::function<void(const FileEntry &)> &onDirectoryClick,
-        bool isWorking,
-        const std::string &workingLabel,
-        const std::function<void()> &onCancelWork,
-        const std::string &playingFileName,
-        bool isAtRoot,
-        const std::function<void(const FileEntry &)> &onAddToPlaylist
-    );
-    void drawTabsSection(
-        const TrackMetadata &metadata,
-        const std::vector<PlaylistEntry> &playlist,
-        const std::string &playingFileName,
-        bool shuffle,
-        bool repeat,
-        const std::function<void(std::size_t)> &onRemoveFromPlaylist,
-        const std::function<void(std::size_t)> &onPlayPlaylistEntry,
-        const std::function<void()> &onToggleShuffle,
-        const std::function<void()> &onToggleRepeat
-    );
+    // playingFileName is derived once per frame in drawUserInterface (empty when stopped) and
+    // shared by the browser highlight and the playlist tofu — it is not a UiState field.
+    void drawFileBrowser(const UiState &state, const UiActions &actions, const std::string &playingFileName);
+    void drawTabsSection(const UiState &state, const UiActions &actions, const std::string &playingFileName);
     void drawFileMetadata(const TrackMetadata &metadata);
     void drawModuleMetadata(const ModuleMetadata &metadata);
     void drawGmeMetadata(const GmeMetadata &metadata);
     void drawSidMetadata(const SidMetadata &metadata);
     void drawSc68Metadata(const Sc68Metadata &metadata);
-    void drawTabPlaylist(
-        const std::vector<PlaylistEntry> &playlist,
-        const std::string &playingFileName,
-        bool shuffle,
-        bool repeat,
-        const std::function<void(std::size_t)> &onRemoveFromPlaylist,
-        const std::function<void(std::size_t)> &onPlayPlaylistEntry,
-        const std::function<void()> &onToggleShuffle,
-        const std::function<void()> &onToggleRepeat
-    );
+    void drawTabPlaylist(const UiState &state, const UiActions &actions, const std::string &playingFileName);
     void drawPlayerBar(const PlaybackStatus &status, const std::function<void(ButtonId)> &onButtonClick) const;
 
 public:
@@ -161,4 +115,4 @@ public:
 };
 
 
-#endif //OSP2_WINDOW_SYSTEM_H
+#endif //OSP2_GUI_H

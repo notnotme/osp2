@@ -20,6 +20,9 @@
 #include "Gui.h"
 
 #include "../Paths.h"
+#include "../filesystem/FileEntry.h"
+#include "../player/PluginSetting.h"
+#include "../playlist/PlaylistEntry.h"
 
 #include <imgui.h>
 #include <SDL_image.h>
@@ -82,6 +85,18 @@ namespace {
     }
 
     constexpr auto metadata_table_flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp;
+
+    // Centered, dimmed placeholder for an empty pane (Metadata's "No track loaded", the Playlist
+    // tab's "Playlist is empty"): the text sits in the middle of the remaining content region.
+    void centeredDisabledText(const char *text) {
+        const auto available = ImGui::GetContentRegionAvail();
+        const auto text_size = ImGui::CalcTextSize(text);
+        ImGui::SetCursorPos(ImVec2(
+            ImGui::GetCursorPosX() + (available.x - text_size.x) / 2.0f,
+            ImGui::GetCursorPosY() + (available.y - text_size.y) / 2.0f
+        ));
+        ImGui::TextDisabled("%s", text);
+    }
 
     // Formats a duration as "m:ss" (zero-padded seconds). Negative or NaN clamps to "0:00".
     std::string formatTime(const double seconds) {
@@ -201,17 +216,7 @@ void Gui::applyTheme(const Theme theme) {
     }
 }
 
-void Gui::drawTopBar(
-    const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings,
-    const std::function<void(Theme)> &onThemeChange,
-    const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange,
-    const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit,
-    const std::vector<std::string> &visualizerNames,
-    const std::size_t activeVisualizer,
-    const std::function<void(std::size_t)> &onSelectVisualizer,
-    const std::function<void(ButtonId)> &onButtonClick,
-    const std::string &error
-) {
+void Gui::drawTopBar(const UiState &state, const UiActions &actions) {
     if (ImGui::BeginMainMenuBar()) {
         ImGui::TextUnformatted("OSP2");
         ImGui::Separator();
@@ -220,15 +225,15 @@ void Gui::drawTopBar(
             if (ImGui::BeginMenu("Theme")) {
                 if (ImGui::MenuItem("Dark", nullptr, m_theme == Theme::DARK)) {
                     applyTheme(Theme::DARK);
-                    onThemeChange(Theme::DARK);
+                    actions.onThemeChange(Theme::DARK);
                 }
                 if (ImGui::MenuItem("Light", nullptr, m_theme == Theme::LIGHT)) {
                     applyTheme(Theme::LIGHT);
-                    onThemeChange(Theme::LIGHT);
+                    actions.onThemeChange(Theme::LIGHT);
                 }
                 if (ImGui::MenuItem("Classic", nullptr, m_theme == Theme::CLASSIC)) {
                     applyTheme(Theme::CLASSIC);
-                    onThemeChange(Theme::CLASSIC);
+                    actions.onThemeChange(Theme::CLASSIC);
                 }
                 ImGui::EndMenu();
             }
@@ -237,9 +242,9 @@ void Gui::drawTopBar(
             // Selecting fires onSelectVisualizer(i); Application selects and persists — Gui stays
             // ignorant of the visualizer domain (same principle as onRenderVisualization).
             if (ImGui::BeginMenu("Visualizer")) {
-                for (std::size_t i = 0; i < visualizerNames.size(); ++i) {
-                    if (ImGui::MenuItem(visualizerNames[i].c_str(), nullptr, i == activeVisualizer)) {
-                        onSelectVisualizer(i);
+                for (std::size_t i = 0; i < state.visualizerNames.size(); ++i) {
+                    if (ImGui::MenuItem(state.visualizerNames[i].c_str(), nullptr, i == state.activeVisualizer)) {
+                        actions.onSelectVisualizer(i);
                     }
                 }
                 ImGui::EndMenu();
@@ -249,7 +254,7 @@ void Gui::drawTopBar(
                 // One entry per plugin that publishes settings; clicking it opens that
                 // plugin's popup (latched by name, opened below in the menu-bar scope).
                 auto any_shown = false;
-                for (const auto &[pluginName, descriptors] : pluginSettings) {
+                for (const auto &[pluginName, descriptors] : state.pluginSettings) {
                     if (descriptors.empty()) {
                         continue;
                     }
@@ -298,19 +303,19 @@ void Gui::drawTopBar(
             ImGui::OpenPopup("Quit OSP2?");
             m_quitRequested = false;
         }
-        drawQuitConfirmPopup(onButtonClick);
+        drawQuitConfirmPopup(actions.onButtonClick);
 
         if (!m_requestedPluginPopup.empty()) {
             ImGui::OpenPopup(m_requestedPluginPopup.c_str());
             m_requestedPluginPopup.clear();
         }
-        drawPluginPopups(pluginSettings, onPluginSettingChange, onPluginSettingCommit);
+        drawPluginPopups(state, actions);
 
         // UiState::error is non-empty for exactly one frame; latch it into m_errorMessage on that
         // rising edge so the modal persists until Close even after error goes empty again. If one is
         // already showing, drop the new one (keep it simple). Same menu-bar scope as the other popups.
-        if (!error.empty() && m_errorMessage.empty()) {
-            m_errorMessage = error;
+        if (!state.error.empty() && m_errorMessage.empty()) {
+            m_errorMessage = state.error;
             ImGui::OpenPopup("Playback error");
         }
         drawErrorPopup();
@@ -407,15 +412,11 @@ void Gui::drawErrorPopup() {
 // applies to the decoder live (onPluginSettingChange) for immediate audio preview but does not
 // persist. Save writes every value to the INI (onPluginSettingCommit per descriptor) and closes;
 // Close closes without persisting, leaving the live-applied values in the decoder for the session.
-void Gui::drawPluginPopups(
-    const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings,
-    const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingChange,
-    const std::function<void(const std::string &, const std::string &, int)> &onPluginSettingCommit
-) {
+void Gui::drawPluginPopups(const UiState &state, const UiActions &actions) {
     const auto center = ImGui::GetMainViewport()->GetCenter();
     constexpr auto flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
 
-    for (const auto &[pluginName, descriptors] : pluginSettings) {
+    for (const auto &[pluginName, descriptors] : state.pluginSettings) {
         ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
         if (!ImGui::BeginPopupModal(pluginName.c_str(), nullptr, flags)) {
             // Closed — via a button or the Escape key: forget it here (the single place that clears
@@ -448,7 +449,7 @@ void Gui::drawPluginPopups(
                     using T = std::decay_t<decltype(shape)>;
                     if constexpr (std::is_same_v<T, IntRange>) {
                         if (ImGui::SliderInt(setting.label.c_str(), &v, shape.min, shape.max)) {
-                            onPluginSettingChange(pluginName, setting.key, v);
+                            actions.onPluginSettingChange(pluginName, setting.key, v);
                         }
                     } else if constexpr (std::is_same_v<T, EnumOptions>) {
                         std::vector<const char *> items;
@@ -457,7 +458,7 @@ void Gui::drawPluginPopups(
                             items.push_back(l.c_str());
                         }
                         if (ImGui::Combo(setting.label.c_str(), &v, items.data(), static_cast<int>(items.size()))) {
-                            onPluginSettingChange(pluginName, setting.key, v);
+                            actions.onPluginSettingChange(pluginName, setting.key, v);
                         }
                     }
                 },
@@ -473,7 +474,7 @@ void Gui::drawPluginPopups(
         ImGui::Separator();
         if (ImGui::Button("Save")) {
             for (const auto &setting : descriptors) {
-                onPluginSettingCommit(pluginName, setting.key, m_settingsEdit[setting.key]);
+                actions.onPluginSettingCommit(pluginName, setting.key, m_settingsEdit[setting.key]);
             }
             ImGui::CloseCurrentPopup(); // the not-open branch clears m_openSettingsPlugin next frame
         }
@@ -492,27 +493,17 @@ void Gui::drawCurrentPath(const std::string &path) {
     ImGui::Text("%s", path.c_str());
 }
 
-void Gui::drawFileBrowser(
-    const std::vector<FileEntry> &files,
-    const std::function<void(const FileEntry &)> &onFileClick,
-    const std::function<void(const FileEntry &)> &onDirectoryClick,
-    const bool isWorking,
-    const std::string &workingLabel,
-    const std::function<void()> &onCancelWork,
-    const std::string &playingFileName,
-    const bool isAtRoot,
-    const std::function<void(const FileEntry &)> &onAddToPlaylist
-) {
+void Gui::drawFileBrowser(const UiState &state, const UiActions &actions, const std::string &playingFileName) {
     // Rising edge of the loading overlay: focus is moved to the Cancel button once on this frame
     // (below) so gamepad/keyboard on the Switch can reach it; m_wasWorking is updated at function end.
-    const bool overlayJustAppeared = isWorking && !m_wasWorking;
+    const bool overlayJustAppeared = state.isWorking && !m_wasWorking;
 
     constexpr auto folder_color = ImVec4(0.9f, 0.7f, 0.2f, 1.0f);
     constexpr auto file_color = ImVec4(0.2f, 0.6f, 0.9f, 1.0f);
     constexpr auto file_browser_flags =
         ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollY | ImGuiTableFlags_RowBg;
 
-    const auto file_list_count = static_cast<int32_t>(files.size());
+    const auto file_list_count = static_cast<int32_t>(state.files.size());
 
     // Capture the browser rectangle in screen space before the table, so the loading
     // overlay covers exactly this area (the left pane), not the whole window.
@@ -521,7 +512,7 @@ void Gui::drawFileBrowser(
 
     // A scan blocks the whole browser: BeginDisabled stops mouse and keyboard/gamepad nav,
     // the overlay below dims it and shows the spinner.
-    ImGui::BeginDisabled(isWorking);
+    ImGui::BeginDisabled(state.isWorking);
     if (ImGui::BeginTable("file_browser", 3, file_browser_flags, browser_size)) {
         // Scroll restore on navigation: a new directory opens at the top; returning to a parent restores
         // the offset we left it at. GetScrollY() here still reflects the previous directory's scroll
@@ -548,14 +539,14 @@ void Gui::drawFileBrowser(
         ImGui::TableHeadersRow();
 
         // ".." is only meaningful inside a source; at the virtual root (sources list) it is a no-op, so hide it.
-        if (!isAtRoot) {
+        if (!state.isAtRoot) {
             ImGui::TableNextRow();
             ImGui::TableNextColumn();
             ImGui::TextColored(folder_color, "");
             ImGui::SameLine();
             if (ImGui::Selectable("..", false, ImGuiSelectableFlags_SpanAllColumns)) {
                 // ".." is pinned by the Gui (never a FileSystem entry); a synthetic entry carries the intent.
-                onDirectoryClick(FileEntry{"..", 0, "Folder", true});
+                actions.onDirectoryClick(FileEntry{"..", 0, "Folder", true});
             }
         }
 
@@ -563,7 +554,7 @@ void Gui::drawFileBrowser(
         clipper.Begin(file_list_count);
         while (clipper.Step()) {
             for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; row++) {
-                const auto &file_entry = files[row];
+                const auto &file_entry = state.files[row];
                 const auto entry_label = file_entry.name.c_str();
 
                 ImGui::TableNextRow();
@@ -572,7 +563,7 @@ void Gui::drawFileBrowser(
                     ImGui::TextColored(folder_color, "");
                     ImGui::SameLine();
                     if (ImGui::Selectable(entry_label, false, ImGuiSelectableFlags_SpanAllColumns)) {
-                        onDirectoryClick(file_entry);
+                        actions.onDirectoryClick(file_entry);
                     }
                 } else {
                     ImGui::TextColored(file_color, "");
@@ -581,13 +572,13 @@ void Gui::drawFileBrowser(
                     // playAdjacentTrack uses; empty when nothing plays, so no false match).
                     const bool is_playing = !playingFileName.empty() && file_entry.name == playingFileName;
                     if (ImGui::Selectable(entry_label, is_playing, ImGuiSelectableFlags_SpanAllColumns)) {
-                        onFileClick(file_entry);
+                        actions.onFileClick(file_entry);
                     }
                     // Right-click a file row to queue it. BeginPopupContextItem() with no id reuses the
                     // Selectable's id, which is unique per row (basenames are unique within a directory).
                     if (ImGui::BeginPopupContextItem()) {
                         if (ImGui::MenuItem("Add to playlist")) {
-                            onAddToPlaylist(file_entry);
+                            actions.onAddToPlaylist(file_entry);
                         }
                         ImGui::EndPopup();
                     }
@@ -611,13 +602,13 @@ void Gui::drawFileBrowser(
     }
     ImGui::EndDisabled();
 
-    if (isWorking) {
+    if (state.isWorking) {
         constexpr auto overlay_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings;
 
         // ASCII spinner stepped ~8x/s: | / - \.
         constexpr char frames[] = {'|', '/', '-', '\\'};
         const char spinner[] = {frames[static_cast<int64_t>(ImGui::GetTime() * 8.0) & 3], '\0'};
-        const char *text = workingLabel.c_str();
+        const char *text = state.workingLabel.c_str();
 
         // The frame chars differ in width in the proportional font, so give the spinner a fixed
         // slot and keep the label anchored: center [slot | gap | text] using the stable slot width,
@@ -656,25 +647,15 @@ void Gui::drawFileBrowser(
             ImGui::SetKeyboardFocusHere();
         }
         if (ImGui::Button("Cancel")) {
-            onCancelWork();
+            actions.onCancelWork();
         }
         ImGui::End();
     }
 
-    m_wasWorking = isWorking;
+    m_wasWorking = state.isWorking;
 }
 
-void Gui::drawTabsSection(
-    const TrackMetadata &metadata,
-    const std::vector<PlaylistEntry> &playlist,
-    const std::string &playingFileName,
-    const bool shuffle,
-    const bool repeat,
-    const std::function<void(std::size_t)> &onRemoveFromPlaylist,
-    const std::function<void(std::size_t)> &onPlayPlaylistEntry,
-    const std::function<void()> &onToggleShuffle,
-    const std::function<void()> &onToggleRepeat
-) {
+void Gui::drawTabsSection(const UiState &state, const UiActions &actions, const std::string &playingFileName) {
     // The zero WindowPadding is only wanted for the tab bar itself (so it sits flush with the pane);
     // pop it before drawing tab content so tab bodies and their popups (e.g. the row context menu)
     // use the app's normal window padding, exactly like the file-browser pane and its context menu.
@@ -682,17 +663,8 @@ void Gui::drawTabsSection(
     const bool tabs_open = ImGui::BeginTabBar("tabs_section");
     ImGui::PopStyleVar();
     if (tabs_open) {
-        drawFileMetadata(metadata);
-        drawTabPlaylist(
-            playlist,
-            playingFileName,
-            shuffle,
-            repeat,
-            onRemoveFromPlaylist,
-            onPlayPlaylistEntry,
-            onToggleShuffle,
-            onToggleRepeat
-        );
+        drawFileMetadata(state.metadata);
+        drawTabPlaylist(state, actions, playingFileName);
         ImGui::EndTabBar();
     }
 }
@@ -703,16 +675,7 @@ void Gui::drawFileMetadata(const TrackMetadata &metadata) {
         // metadata alternative must fail to compile here until its draw function is added.
         std::visit(
             overloaded{
-                [](std::monostate) {
-                    constexpr auto text = "No track loaded";
-                    const auto available = ImGui::GetContentRegionAvail();
-                    const auto text_size = ImGui::CalcTextSize(text);
-                    ImGui::SetCursorPos(ImVec2(
-                        ImGui::GetCursorPosX() + (available.x - text_size.x) / 2.0f,
-                        ImGui::GetCursorPosY() + (available.y - text_size.y) / 2.0f
-                    ));
-                    ImGui::TextDisabled("%s", text);
-                },
+                [](std::monostate) { centeredDisabledText("No track loaded"); },
                 [this](const ModuleMetadata &m) { drawModuleMetadata(m); },
                 [this](const GmeMetadata &m) { drawGmeMetadata(m); },
                 [this](const SidMetadata &m) { drawSidMetadata(m); },
@@ -773,41 +736,25 @@ void Gui::drawSc68Metadata(const Sc68Metadata &metadata) {
     }
 }
 
-void Gui::drawTabPlaylist(
-    const std::vector<PlaylistEntry> &playlist,
-    const std::string &playingFileName,
-    const bool shuffle,
-    const bool repeat,
-    const std::function<void(std::size_t)> &onRemoveFromPlaylist,
-    const std::function<void(std::size_t)> &onPlayPlaylistEntry,
-    const std::function<void()> &onToggleShuffle,
-    const std::function<void()> &onToggleRepeat
-) {
+void Gui::drawTabPlaylist(const UiState &state, const UiActions &actions, const std::string &playingFileName) {
     if (ImGui::BeginTabItem("Playlist")) {
         // Shuffle / Repeat toggles at the top of the tab, always visible (even when the list is empty).
         // ImGui::Checkbox needs a bool*, so mirror the immutable incoming flag into a local and fire the
         // toggle callback on change; the model owns the state, this frame just reflects it.
-        bool shuffle_local = shuffle;
+        bool shuffle_local = state.playlistShuffle;
         if (ImGui::Checkbox("Shuffle", &shuffle_local)) {
-            onToggleShuffle();
+            actions.onToggleShuffle();
         }
         ImGui::SameLine();
-        bool repeat_local = repeat;
+        bool repeat_local = state.playlistRepeat;
         if (ImGui::Checkbox("Repeat", &repeat_local)) {
-            onToggleRepeat();
+            actions.onToggleRepeat();
         }
         ImGui::Separator();
 
-        if (playlist.empty()) {
-            // Centered, dimmed placeholder — same idiom as the Metadata tab's "No track loaded".
-            constexpr auto text = "Playlist is empty";
-            const auto available = ImGui::GetContentRegionAvail();
-            const auto text_size = ImGui::CalcTextSize(text);
-            ImGui::SetCursorPos(ImVec2(
-                ImGui::GetCursorPosX() + (available.x - text_size.x) / 2.0f,
-                ImGui::GetCursorPosY() + (available.y - text_size.y) / 2.0f
-            ));
-            ImGui::TextDisabled("%s", text);
+        if (state.playlist.empty()) {
+            // Same idiom as the Metadata tab's "No track loaded".
+            centeredDisabledText("Playlist is empty");
         } else {
             // Same blue as the browser file rows keeps the state icons visually consistent across panes.
             constexpr auto tofu_color = ImVec4(0.2f, 0.6f, 0.9f, 1.0f);
@@ -818,10 +765,10 @@ void Gui::drawTabPlaylist(
             constexpr auto tofu_empty = "";  // check_box_outline_blank (U+E835)
             constexpr auto tofu_filled = ""; // check_box (U+E834)
 
-            // Deferred so a remove never mutates `playlist` (a slice of m_playList) mid-iteration.
+            // Deferred so a remove never mutates the playlist slice (a view of m_playList) mid-iteration.
             int remove_index = -1;
-            for (std::size_t index = 0; index < playlist.size(); index++) {
-                const auto &entry = playlist[index];
+            for (std::size_t index = 0; index < state.playlist.size(); index++) {
+                const auto &entry = state.playlist[index];
                 // Filled tofu on the currently-playing entry, matched by basename against PlaybackStatus
                 // (empty when stopped, so no false match) — the same basis as the browser row highlight.
                 const bool is_current = !playingFileName.empty() && entry.name == playingFileName;
@@ -833,7 +780,7 @@ void Gui::drawTabPlaylist(
                 // The Selectable's selected state reflects the current track so the playing row is highlighted,
                 // like the browser. A left-click plays this entry; a right-click removes it (below).
                 if (ImGui::Selectable(entry.name.c_str(), is_current, ImGuiSelectableFlags_SpanAllColumns)) {
-                    onPlayPlaylistEntry(index);
+                    actions.onPlayPlaylistEntry(index);
                 }
                 // Right-click a row to remove it (mirrors the browser's "Add to playlist" menu).
                 if (ImGui::BeginPopupContextItem()) {
@@ -845,7 +792,7 @@ void Gui::drawTabPlaylist(
                 ImGui::PopID();
             }
             if (remove_index >= 0) {
-                onRemoveFromPlaylist(static_cast<std::size_t>(remove_index));
+                actions.onRemoveFromPlaylist(static_cast<std::size_t>(remove_index));
             }
         }
         ImGui::EndTabItem();
@@ -976,17 +923,7 @@ void Gui::drawPlayerBar(const PlaybackStatus &status, const std::function<void(B
 }
 
 void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
-    drawTopBar(
-        state.pluginSettings,
-        actions.onThemeChange,
-        actions.onPluginSettingChange,
-        actions.onPluginSettingCommit,
-        state.visualizerNames,
-        state.activeVisualizer,
-        actions.onSelectVisualizer,
-        actions.onButtonClick,
-        state.error
-    );
+    drawTopBar(state, actions);
 
     // Latch the one-frame navigation signal before the VISUALIZATION early-return below: a scan can
     // finish (and the listing swap) while the browser is hidden, and drawFileBrowser must still get the
@@ -999,7 +936,7 @@ void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
 
     // VISUALIZATION mode draws only the top bar; the work area below is handed to the visualizer via
     // onRenderVisualization with the reserved rect (WorkPos/WorkSize already exclude the menu bar).
-    // Gui stays presentation-only and knows nothing about the visualizer domain — main.cpp wires it.
+    // Gui stays presentation-only and knows nothing about the visualizer domain — Application wires it.
     // Audio is unaffected.
     if (m_viewMode == ViewMode::VISUALIZATION) {
         const ImGuiViewport *viewport = ImGui::GetMainViewport();
@@ -1036,34 +973,14 @@ void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
 
     if (ImGui::BeginChild("left_pane", ImVec2(left_width, panes_height), ImGuiChildFlags_Borders)) {
         drawCurrentPath(state.path);
-        drawFileBrowser(
-            state.files,
-            actions.onFileClick,
-            actions.onDirectoryClick,
-            state.isWorking,
-            state.workingLabel,
-            actions.onCancelWork,
-            playingFileName,
-            state.isAtRoot,
-            actions.onAddToPlaylist
-        );
+        drawFileBrowser(state, actions, playingFileName);
     }
     ImGui::EndChild();
 
     ImGui::SameLine();
 
     if (ImGui::BeginChild("right_pane", ImVec2(right_width, panes_height), ImGuiChildFlags_Borders)) {
-        drawTabsSection(
-            state.metadata,
-            state.playlist,
-            playingFileName,
-            state.playlistShuffle,
-            state.playlistRepeat,
-            actions.onRemoveFromPlaylist,
-            actions.onPlayPlaylistEntry,
-            actions.onToggleShuffle,
-            actions.onToggleRepeat
-        );
+        drawTabsSection(state, actions, playingFileName);
     }
     ImGui::EndChild();
 
