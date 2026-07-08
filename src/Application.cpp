@@ -21,6 +21,7 @@
 
 #include "player/PlayResult.h"
 #include "player/PlayerState.h"
+#include "settings/SettingsKeys.h"
 #include "visualizer/VisualFrame.h"
 #include "visualizer/VisualizerController.h"
 
@@ -201,7 +202,7 @@ void Application::playAdjacentTrack(const int direction) {
 
 // The Gui already applied the theme visually (it owns the ImGui style); here we only persist it.
 void Application::handleThemeChange(const Theme theme) {
-    m_settings.setString("user", "theme", themeToString(theme));
+    m_settings.setString(settingskeys::kUserSection, settingskeys::kTheme, themeToString(theme));
     m_settings.save();
 }
 
@@ -225,7 +226,7 @@ void Application::handleRenderVisualization(const float x, const float y, const 
 void Application::handleSelectVisualizer(const std::size_t index) {
     if (index < m_visualizerNames.size()) {
         m_visualizer.select(index);
-        m_settings.setString("user", "visualizer", m_visualizerNames[index]);
+        m_settings.setString(settingskeys::kUserSection, settingskeys::kVisualizer, m_visualizerNames[index]);
         m_settings.save();
     }
 }
@@ -253,7 +254,7 @@ void Application::handlePluginSettingChange(const std::string &pluginName, const
 // Commit (fired per setting by the popup's Save button): the decoder already holds the value from
 // the live edits, so only persist it to the INI.
 void Application::handlePluginSettingCommit(const std::string &pluginName, const std::string &key, const int value) {
-    m_settings.setInt("plugin." + pluginName, key, value);
+    m_settings.setInt(settingskeys::kPluginSectionPrefix + pluginName, key, value);
     m_settings.save();
 }
 

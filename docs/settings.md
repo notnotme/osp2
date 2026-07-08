@@ -2,6 +2,8 @@
 
 Persistence layer in `src/settings/`. `Settings` is a hand-editable INI store: sections of `key = value` pairs, loaded at startup and rewritten on every change. Main-thread only, no dependency beyond `SDL_Log`. It holds no app-specific schema knowledge except the defaults it seeds on first run.
 
+The INI schema's section/key names live in `src/settings/SettingsKeys.h` (`settingskeys::kUserSection`, `kTheme`, `kVisualizer`, `kDefaultFolder`, `kPluginSectionPrefix`, `kSourceSectionPrefix`, `kSourceHost`, `kSourcePath`) — the single source of truth shared by every save site (`Application`), restore site (`Platform`), and the seeded defaults (`Settings::applyDefaults`), so a typo can't silently fork a key between writer and reader.
+
 ```mermaid
 classDiagram
     class Settings {

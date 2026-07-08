@@ -80,10 +80,10 @@ Batch from the 2026-07 whole-codebase architecture audit (cpp-architect, finding
 - [x] [TODO_31 — Filesystem robustness: cancellable playlist-replay fetches + FTP listing dedup](TODO_31.md) — independent; top value (user-facing Cancel defect)
   - [x] 31a — Work-source cancel fix (`FileSystem::m_workSource`)
   - [x] 31b — FTP listing-splitter dedup (`parseListing`)
-- [ ] [TODO_32 — UI seam hardening (visualizer into Application, designated initializers, Gui helpers take bundles, SettingsKeys)](TODO_32.md) — behavior-preserving; blocks TODO_33
+- [x] [TODO_32 — UI seam hardening (visualizer into Application, designated initializers, Gui helpers take bundles, SettingsKeys)](TODO_32.md) — behavior-preserving; blocks TODO_33
   - [x] 32a — Visualizer bridge into Application + designated initializers
   - [x] 32b — Gui draw helpers take `(state, actions)` + `Gui final` + cleanups
-  - [ ] 32c — SettingsKeys.h (single-source INI section/key names)
+  - [x] 32c — SettingsKeys.h (single-source INI section/key names)
 - [ ] [TODO_33 — Playlist "now playing" highlight by index](TODO_33.md) — requires TODO_32; single chunk; fixes false highlights
 - [ ] [TODO_34 — Player plugins: RAII lifecycle + PluginUtil dedup](TODO_34.md) — independent; most churn, do last
   - [ ] 34a — RAII collapse (`PlayerPlugin` ctor/dtor; NOT `VisualizerPlugin`; also empty `PlayList` lifecycle)

@@ -19,6 +19,8 @@
 
 #include "Settings.h"
 
+#include "SettingsKeys.h"
+
 #include <SDL.h>
 
 #include <filesystem>
@@ -119,8 +121,8 @@ void Settings::parse(std::istream &input) {
 }
 
 void Settings::applyDefaults() {
-    m_data["user"]["theme"] = "dark";
-    m_data["user"]["default_folder"] = "";
+    m_data[settingskeys::kUserSection][settingskeys::kTheme] = "dark";
+    m_data[settingskeys::kUserSection][settingskeys::kDefaultFolder] = "";
 }
 
 std::string Settings::getString(const std::string &section, const std::string &key, const std::string &fallback) const {

@@ -43,6 +43,7 @@
 #include "gui/Theme.h"
 #include "gui/UiState.h"
 #include "input/CursorEmulator.h"
+#include "settings/SettingsKeys.h"
 
 
 Platform::Platform()
@@ -262,14 +263,14 @@ void Platform::loadFonts() {
 
 void Platform::initPlayerAndSettings() {
     m_settings.load(configPath());
-    m_gui.applyTheme(themeFromString(m_settings.getString("user", "theme", "dark")));
+    m_gui.applyTheme(themeFromString(m_settings.getString(settingskeys::kUserSection, settingskeys::kTheme, "dark")));
 
     m_player.create();
 
     // Push persisted plugin settings; the INI section is "plugin.<pluginName>". Absent keys keep
     // the plugin's own default (getInt fallback = the descriptor's current value).
     for (const auto &[pluginName, descriptors] : m_player.getPluginSettings()) {
-        const std::string section = "plugin." + pluginName;
+        const std::string section = settingskeys::kPluginSectionPrefix + pluginName;
         for (const auto &setting : descriptors) {
             m_player.applyPluginSetting(
                 pluginName, setting.key, m_settings.getInt(section, setting.key, setting.value)
@@ -281,7 +282,9 @@ void Platform::initPlayerAndSettings() {
 
     // Restore the persisted visualizer by stable plugin name (mirrors the theme restore above). An
     // empty or unknown name leaves the controller's default (index 0) untouched.
-    if (const std::string visualizerName = m_settings.getString("user", "visualizer", ""); !visualizerName.empty()) {
+    if (const std::string visualizerName =
+            m_settings.getString(settingskeys::kUserSection, settingskeys::kVisualizer, "");
+        !visualizerName.empty()) {
         if (const auto index = m_visualizer.indexOf(visualizerName)) {
             m_visualizer.select(*index);
         }
@@ -296,7 +299,8 @@ std::filesystem::path Platform::resolveStartPath() const {
 #else
     std::filesystem::path start_path = std::filesystem::current_path();
 #endif
-    if (const auto default_folder = m_settings.getString("user", "default_folder", ""); !default_folder.empty()) {
+    if (const auto default_folder = m_settings.getString(settingskeys::kUserSection, settingskeys::kDefaultFolder, "");
+        !default_folder.empty()) {
         std::error_code ec;
         if (std::filesystem::is_directory(default_folder, ec)) {
             start_path = default_folder;
@@ -336,10 +340,10 @@ std::vector<std::unique_ptr<DataSource>> Platform::buildDataSources() const {
 
     // Register each user-defined [source.NAME] INI section as an extra FTP source. Hand-edit only:
     // these are not seeded and not surfaced in the UI — they simply appear at the virtual root.
-    constexpr std::string_view kSourcePrefix = "source.";
-    for (const auto &section : m_settings.getSectionNames(std::string(kSourcePrefix))) {
-        const std::string name = section.substr(kSourcePrefix.size());
-        const std::string host = m_settings.getString(section, "host", "");
+    constexpr std::string_view sourcePrefix = settingskeys::kSourceSectionPrefix;
+    for (const auto &section : m_settings.getSectionNames(std::string(sourcePrefix))) {
+        const std::string name = section.substr(sourcePrefix.size());
+        const std::string host = m_settings.getString(section, settingskeys::kSourceHost, "");
         if (name.empty() || host.empty()) {
             SDL_Log("Platform: skipping [%s]: a source needs a non-empty name and host", section.c_str());
             continue;
@@ -349,7 +353,7 @@ std::vector<std::unique_ptr<DataSource>> Platform::buildDataSources() const {
             SDL_Log("Platform: skipping [%s]: cache dir '%s' already in use", section.c_str(), subdir.c_str());
             continue;
         }
-        const std::string path = m_settings.getString(section, "path", "/");
+        const std::string path = m_settings.getString(section, settingskeys::kSourcePath, "/");
         sources.push_back(std::make_unique<FtpDataSource>(name, host, path, cachePath() / subdir));
     }
     return sources;
