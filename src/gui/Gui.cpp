@@ -325,14 +325,30 @@ void Gui::drawAboutPopup() const {
 
     constexpr auto flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
     if (ImGui::BeginPopupModal("About", nullptr, flags)) {
+        char version[64];
+        if (OSP_GIT_REV[0] != '\0') {
+            std::snprintf(version, sizeof(version), "Version %s (%s)", OSP_VERSION, OSP_GIT_REV);
+        } else {
+            std::snprintf(version, sizeof(version), "Version %s", OSP_VERSION);
+        }
+
+        // Logo on the left, text block on its right, so the box stays wider than it is tall.
         const auto &logo = m_sprites.at("k7");
         ImGui::Image(m_texture, ImVec2(logo.w, logo.h), ImVec2(logo.s, logo.t), ImVec2(logo.p, logo.q));
-
-        ImGui::Spacing();
+        ImGui::SameLine();
+        ImGui::BeginGroup();
         ImGui::TextUnformatted("OSP2 — chiptune player");
+        ImGui::TextUnformatted(version);
+        ImGui::TextUnformatted("Copyright (C) 2026 Romain Graillot");
         ImGui::TextUnformatted("GPL-3.0-or-later");
+        ImGui::TextUnformatted("https://github.com/notnotme/osp2");
         ImGui::Spacing();
+        ImGui::TextDisabled("Powered by:");
+        ImGui::TextUnformatted("libopenmpt, libgme, libsidplayfp (+ libresidfp), sc68, Dear ImGui, SDL2");
+        ImGui::TextUnformatted("Fonts: Roboto, Material Symbols, Noto Sans JP");
+        ImGui::EndGroup();
 
+        ImGui::Separator();
         if (ImGui::Button("Close")) {
             ImGui::CloseCurrentPopup();
         }
