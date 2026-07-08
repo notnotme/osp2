@@ -189,15 +189,24 @@ void Application::handleAddToPlaylist(const FileEntry &entry) {
     // Only file rows carry the context menu, but guard defensively so a directory never lands
     // in the playlist. Capture the source-relative path (getPath()/name) and owning source index
     // now: the browser may later navigate elsewhere or switch source, but replay (28e) must still
-    // re-fetch from where the file actually lives. Duplicates are allowed this chunk (no dedup).
+    // re-fetch from where the file actually lives.
     if (entry.is_directory) {
         return;
     }
-    m_playList.add(PlaylistEntry{entry.name, m_fileSystem.getPath() / entry.name, m_fileSystem.getActiveSourceIndex()});
+    const int sourceIndex = m_fileSystem.getActiveSourceIndex();
+    auto path = m_fileSystem.getPath() / entry.name;
+    // Reject duplicates: a file's identity is (sourceIndex, source-relative path), so adding the
+    // same file again is a no-op rather than a repeated row.
+    for (const auto &existing : m_playList.entries()) {
+        if (existing.sourceIndex == sourceIndex && existing.path == path) {
+            return;
+        }
+    }
+    m_playList.add(PlaylistEntry{entry.name, std::move(path), sourceIndex});
 }
 
-void Application::handleRemoveFromPlaylist(const std::size_t /*index*/) {
-    // 28d: m_playList.removeAt(index).
+void Application::handleRemoveFromPlaylist(const std::size_t index) {
+    m_playList.removeAt(index); // bounds-checked no-op if out of range
 }
 
 void Application::handlePlayPlaylistEntry(const std::size_t /*index*/) {

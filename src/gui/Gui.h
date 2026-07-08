@@ -126,14 +126,21 @@ private:
         const std::function<void(const FileEntry &)> &onAddToPlaylist
     );
     void drawTabsSection(
-        const TrackMetadata &metadata, const std::vector<PlaylistEntry> &playlist, const std::string &playingFileName
+        const TrackMetadata &metadata,
+        const std::vector<PlaylistEntry> &playlist,
+        const std::string &playingFileName,
+        const std::function<void(std::size_t)> &onRemoveFromPlaylist
     );
     void drawFileMetadata(const TrackMetadata &metadata);
     void drawModuleMetadata(const ModuleMetadata &metadata);
     void drawGmeMetadata(const GmeMetadata &metadata);
     void drawSidMetadata(const SidMetadata &metadata);
     void drawSc68Metadata(const Sc68Metadata &metadata);
-    void drawTabPlaylist(const std::vector<PlaylistEntry> &playlist, const std::string &playingFileName);
+    void drawTabPlaylist(
+        const std::vector<PlaylistEntry> &playlist,
+        const std::string &playingFileName,
+        const std::function<void(std::size_t)> &onRemoveFromPlaylist
+    );
     void drawPlayerBar(const PlaybackStatus &status, const std::function<void(ButtonId)> &onButtonClick) const;
 
 public:

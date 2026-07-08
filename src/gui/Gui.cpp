@@ -665,15 +665,22 @@ void Gui::drawFileBrowser(
 }
 
 void Gui::drawTabsSection(
-    const TrackMetadata &metadata, const std::vector<PlaylistEntry> &playlist, const std::string &playingFileName
+    const TrackMetadata &metadata,
+    const std::vector<PlaylistEntry> &playlist,
+    const std::string &playingFileName,
+    const std::function<void(std::size_t)> &onRemoveFromPlaylist
 ) {
+    // The zero WindowPadding is only wanted for the tab bar itself (so it sits flush with the pane);
+    // pop it before drawing tab content so tab bodies and their popups (e.g. the row context menu)
+    // use the app's normal window padding, exactly like the file-browser pane and its context menu.
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    if (ImGui::BeginTabBar("tabs_section")) {
+    const bool tabs_open = ImGui::BeginTabBar("tabs_section");
+    ImGui::PopStyleVar();
+    if (tabs_open) {
         drawFileMetadata(metadata);
-        drawTabPlaylist(playlist, playingFileName);
+        drawTabPlaylist(playlist, playingFileName, onRemoveFromPlaylist);
         ImGui::EndTabBar();
     }
-    ImGui::PopStyleVar();
 }
 
 void Gui::drawFileMetadata(const TrackMetadata &metadata) {
@@ -752,7 +759,11 @@ void Gui::drawSc68Metadata(const Sc68Metadata &metadata) {
     }
 }
 
-void Gui::drawTabPlaylist(const std::vector<PlaylistEntry> &playlist, const std::string &playingFileName) {
+void Gui::drawTabPlaylist(
+    const std::vector<PlaylistEntry> &playlist,
+    const std::string &playingFileName,
+    const std::function<void(std::size_t)> &onRemoveFromPlaylist
+) {
     if (ImGui::BeginTabItem("Playlist")) {
         if (playlist.empty()) {
             // Centered, dimmed placeholder — same idiom as the Metadata tab's "No track loaded".
@@ -774,6 +785,8 @@ void Gui::drawTabPlaylist(const std::vector<PlaylistEntry> &playlist, const std:
             constexpr auto tofu_empty = "";  // check_box_outline_blank (U+E835)
             constexpr auto tofu_filled = ""; // check_box (U+E834)
 
+            // Deferred so a remove never mutates `playlist` (a slice of m_playList) mid-iteration.
+            int remove_index = -1;
             for (std::size_t index = 0; index < playlist.size(); index++) {
                 const auto &entry = playlist[index];
                 // Filled tofu on the currently-playing entry, matched by basename against PlaybackStatus
@@ -789,7 +802,17 @@ void Gui::drawTabPlaylist(const std::vector<PlaylistEntry> &playlist, const std:
                 if (ImGui::Selectable(entry.name.c_str(), is_current, ImGuiSelectableFlags_SpanAllColumns)) {
                     // 28e: play this entry.
                 }
+                // Right-click a row to remove it (mirrors the browser's "Add to playlist" menu).
+                if (ImGui::BeginPopupContextItem()) {
+                    if (ImGui::MenuItem("Remove from playlist")) {
+                        remove_index = static_cast<int>(index);
+                    }
+                    ImGui::EndPopup();
+                }
                 ImGui::PopID();
+            }
+            if (remove_index >= 0) {
+                onRemoveFromPlaylist(static_cast<std::size_t>(remove_index));
             }
         }
         ImGui::EndTabItem();
@@ -997,7 +1020,7 @@ void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
     ImGui::SameLine();
 
     if (ImGui::BeginChild("right_pane", ImVec2(right_width, panes_height), ImGuiChildFlags_Borders)) {
-        drawTabsSection(state.metadata, state.playlist, playingFileName);
+        drawTabsSection(state.metadata, state.playlist, playingFileName, actions.onRemoveFromPlaylist);
     }
     ImGui::EndChild();
 
