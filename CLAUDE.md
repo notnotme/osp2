@@ -69,6 +69,7 @@ OSP2 is GPL-3.0-or-later (see `LICENSE`). Every `.cpp`/`.h` under `src/` must st
 
 Use the project subagents for C++ work:
 
+- **cpp-architect** — design-pattern analysis. Use it to audit the codebase (or one domain/class) for places where a GoF design pattern (refactoring.guru catalog) would make the current implementation clearer, simpler, or more robust; it reports refactoring work orders to hand to cpp-expert without modifying code.
 - **cpp-expert** — writing and refactoring code. Delegate non-trivial C++20 implementation work (new classes, Dear ImGui UI, refactors, layering/DDD decisions) to it with a concrete task and the relevant file paths.
 - **cpp-reviewer** — reviewing code. Before presenting a finished task (or task chunk) for user verification, have it review the diff; it reports correctness bugs, clean-code violations, and layering breaches without modifying code. Address real findings before asking the user to verify.
 
