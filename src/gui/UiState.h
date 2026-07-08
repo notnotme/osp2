@@ -44,6 +44,7 @@ struct UiState {
         &pluginSettings;             // non-owning view, valid for the frame
     NavKind navKind = NavKind::None; // one-frame descend/ascend signal driving the browser scroll restore
     std::string error;               // one-frame playback error message; opens the error modal when newly non-empty
+    bool isAtRoot;                   // true at the virtual root (sources list): the browser hides its ".." row
     // Default-initialized so Application's aggregate `return {…}` in makeUiState() stays valid untouched;
     // main.cpp (the visualizer bridge) fills these before drawUserInterface (see visualization.md).
     std::vector<std::string> visualizerNames{}; // for the Settings→Visualizer picker

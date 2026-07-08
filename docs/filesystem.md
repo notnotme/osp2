@@ -102,7 +102,7 @@ classDiagram
 
 `name`, `file_size` (bytes; the Gui formats B/KB/MB), `type` (uppercase extension without
 the dot — `"S3M"` — or `"Folder"`, or `"Source"` for virtual-root entries), `is_directory`.
-A bare aggregate. `".."` is **not** an entry — the Gui pins it on top of the listing.
+A bare aggregate. `".."` is **not** an entry — the Gui pins it on top of the listing, and **hides it at the virtual root** (sources list), where `navigateToParent()` would be a no-op (the Gui gates the row on `UiState::isAtRoot`, set from `getPath().empty()`).
 
 ## DataSource
 
