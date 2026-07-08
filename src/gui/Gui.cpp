@@ -499,7 +499,8 @@ void Gui::drawFileBrowser(
     const bool isWorking,
     const std::string &workingLabel,
     const std::function<void()> &onCancelWork,
-    const std::string &playingFileName
+    const std::string &playingFileName,
+    const bool isAtRoot
 ) {
     // Rising edge of the loading overlay: focus is moved to the Cancel button once on this frame
     // (below) so gamepad/keyboard on the Switch can reach it; m_wasWorking is updated at function end.
@@ -545,13 +546,16 @@ void Gui::drawFileBrowser(
         ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed);
         ImGui::TableHeadersRow();
 
-        ImGui::TableNextRow();
-        ImGui::TableNextColumn();
-        ImGui::TextColored(folder_color, "");
-        ImGui::SameLine();
-        if (ImGui::Selectable("..", false, ImGuiSelectableFlags_SpanAllColumns)) {
-            // ".." is pinned by the Gui (never a FileSystem entry); a synthetic entry carries the intent.
-            onDirectoryClick(FileEntry{"..", 0, "Folder", true});
+        // ".." is only meaningful inside a source; at the virtual root (sources list) it is a no-op, so hide it.
+        if (!isAtRoot) {
+            ImGui::TableNextRow();
+            ImGui::TableNextColumn();
+            ImGui::TextColored(folder_color, "");
+            ImGui::SameLine();
+            if (ImGui::Selectable("..", false, ImGuiSelectableFlags_SpanAllColumns)) {
+                // ".." is pinned by the Gui (never a FileSystem entry); a synthetic entry carries the intent.
+                onDirectoryClick(FileEntry{"..", 0, "Folder", true});
+            }
         }
 
         ImGuiListClipper clipper;
@@ -933,7 +937,8 @@ void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
             state.isWorking,
             state.workingLabel,
             actions.onCancelWork,
-            playingFileName
+            playingFileName,
+            state.isAtRoot
         );
     }
     ImGui::EndChild();

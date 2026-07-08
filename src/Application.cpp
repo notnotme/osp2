@@ -299,7 +299,8 @@ UiState Application::makeUiState() const {
         m_trackMetadata,
         m_pluginSettings,
         m_pendingNav,
-        m_playbackError
+        m_playbackError,
+        path.empty() // isAtRoot: the empty FileSystem path is the virtual root (sources list)
     };
 }
 

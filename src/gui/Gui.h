@@ -120,7 +120,8 @@ private:
         bool isWorking,
         const std::string &workingLabel,
         const std::function<void()> &onCancelWork,
-        const std::string &playingFileName
+        const std::string &playingFileName,
+        bool isAtRoot
     );
     void drawTabsSection(const TrackMetadata &metadata);
     void drawFileMetadata(const TrackMetadata &metadata);
