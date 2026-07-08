@@ -23,10 +23,11 @@
 #include "player/PlayerState.h"
 
 
-Application::Application(PlayerController &player, FileSystem &fileSystem, Settings &settings)
+Application::Application(PlayerController &player, FileSystem &fileSystem, Settings &settings, PlayList &playList)
     : m_player(player),
       m_fileSystem(fileSystem),
       m_settings(settings),
+      m_playList(playList),
       m_advanceDirection(0) {}
 
 void Application::handleButtonClick(const ButtonId buttonId) {
@@ -184,6 +185,27 @@ void Application::handleCancelWork() {
     m_pendingPlayName.clear();
 }
 
+void Application::handleAddToPlaylist(const FileEntry & /*entry*/) {
+    // 28c: capture the full path + source context at add-time (a browser FileEntry is
+    // source-relative) and append it to m_playList.
+}
+
+void Application::handleRemoveFromPlaylist(const std::size_t /*index*/) {
+    // 28d: m_playList.removeAt(index).
+}
+
+void Application::handlePlayPlaylistEntry(const std::size_t /*index*/) {
+    // 28e: play the entry via the requestFile + play async path.
+}
+
+void Application::handleToggleShuffle() {
+    // 28e: m_playList.toggleShuffle() and factor shuffle into next-track selection.
+}
+
+void Application::handleToggleRepeat() {
+    // 28e: m_playList.toggleRepeat() and wrap at the end during auto-advance.
+}
+
 // Builds the cached plugin-setting descriptors from the player (locks the audio mutex, so it is
 // called only at settled points — once from main.cpp after the startup push — never per frame and
 // never during a draw). Live edits keep the cache current in place, so no rebuild is needed after.
@@ -299,7 +321,10 @@ UiState Application::makeUiState() const {
         m_pluginSettings,
         m_pendingNav,
         m_playbackError,
-        path.empty() // isAtRoot: the empty FileSystem path is the virtual root (sources list)
+        path.empty(), // isAtRoot: the empty FileSystem path is the virtual root (sources list)
+        m_playList.entries(),
+        m_playList.shuffle(),
+        m_playList.repeat()
     };
 }
 
@@ -315,6 +340,11 @@ UiActions Application::makeUiActions() {
         [this](const std::string &pluginName, const std::string &key, const int value) {
             handlePluginSettingCommit(pluginName, key, value);
         },
-        [this]() { handleCancelWork(); }
+        [this]() { handleCancelWork(); },
+        [this](const FileEntry &entry) { handleAddToPlaylist(entry); },
+        [this](const std::size_t index) { handleRemoveFromPlaylist(index); },
+        [this](const std::size_t index) { handlePlayPlaylistEntry(index); },
+        [this]() { handleToggleShuffle(); },
+        [this]() { handleToggleRepeat(); }
     };
 }

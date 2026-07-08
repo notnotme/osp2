@@ -45,6 +45,10 @@ classDiagram
         +vector~pair~string, vector~PluginSetting~~~ pluginSettings
         +NavKind navKind
         +string error
+        +bool isAtRoot
+        +const vector~PlaylistEntry~& playlist
+        +bool playlistShuffle
+        +bool playlistRepeat
         +vector~string~ visualizerNames
         +size_t activeVisualizer
     }
@@ -58,6 +62,11 @@ classDiagram
         +function~void(string, string, int)~ onPluginSettingChange
         +function~void(string, string, int)~ onPluginSettingCommit
         +function~void()~ onCancelWork
+        +function~void(const FileEntry&)~ onAddToPlaylist
+        +function~void(size_t)~ onRemoveFromPlaylist
+        +function~void(size_t)~ onPlayPlaylistEntry
+        +function~void()~ onToggleShuffle
+        +function~void()~ onToggleRepeat
         +function~void(float, float, float, float)~ onRenderVisualization
         +function~void(size_t)~ onSelectVisualizer
     }
@@ -140,6 +149,7 @@ classDiagram
 - **NEXT/PREVIOUS step subtracks first, then files.** The on-screen transport `NEXT`/`PREVIOUS` buttons (clickable via mouse or the Switch cursor) fire `onButtonClick(NEXT/PREVIOUS)`; `Application::advance` advances to the next/previous **subtrack** within the current file while one remains in that direction, and only at a boundary falls through to the next/previous **file** (auto-advance on track-end takes the same branch). **PREVIOUS from subtrack 0 lands on the previous file at ITS subtrack 0**, not that file's last subtrack — a deliberate, documented choice (see [application.md](application.md)). Single-track files always fall straight through to file navigation, so the old behavior is unchanged for them. No new `ButtonId` was added — the existing transport ids drive this. A file-local `formatTime(double)` renders `m:ss`. **Progress is drawn by hand on the window draw list** (`GetWindowDrawList()`): a thin full-width `FrameBg` line, and — only while a track is loaded (`state != STOPPED`) — the played portion filled in `PlotHistogram` up to a circular playhead (`AddCircleFilled`) sliding along it, all vertically centred on the label line. When stopped the row is just the empty line (no knob). This replaced `ImGui::ProgressBar` (a framed widget whose `FramePadding.y` text-baseline offset pushed the timer labels out of alignment, and whose filled rectangle could not be rounded cleanly at partial/zero widths). The knob's travel is inset by its radius so it never overflows the line ends or the labels, and the row's slot is reserved with a plain `Dummy` so both labels keep one baseline.
 - `UiState::status` is a `PlaybackStatus` snapshot from the player domain (see [audio.md](audio.md)). `UiState::metadata` is a non-owning `TrackMetadata` reference (the variant built by `Application`, see [application.md](application.md)) valid for the frame.
 - **The Metadata tab dispatches on the variant.** `drawFileMetadata(metadata)` runs `std::visit` over a file-local `overloaded{}` lambda set — `std::monostate` renders a centered, dimmed *"No track loaded"*; `ModuleMetadata` calls `drawModuleMetadata`; `GmeMetadata` calls `drawGmeMetadata`; `SidMetadata` calls `drawSidMetadata`; `Sc68Metadata` calls `drawSc68Metadata`. There is deliberately **no** generic `auto` fallback: adding a plugin's metadata alternative to the variant fails to compile here until its own draw function exists (the exhaustiveness guard is the plugin author's checklist). `drawModuleMetadata` renders a two-column field table (text rows — Title/Artist/Format/Tracker — skipped when empty; count rows — Channels/Patterns/Samples/Instruments — always shown) and, when the song message is non-empty, a scrollable word-wrapped child region drawn with `TextUnformatted` (never printf-formatting user-authored text). `drawGmeMetadata` follows the same shape for libgme's fields (text rows — Game/System/Author/Copyright; count row — Tracks; scrollable Comment block). `drawSidMetadata` renders libsidplayfp's fields as a text-row-only table (Title/Author/Released/SID model/Clock, each skipped when empty). `drawSc68Metadata` does the same for libsc68's fields (Title/Author/Composer/Hardware/Ripper, each skipped when empty).
+- **The Playlist tab is data-driven** (as of 28a): `makeUiState()` fills a per-frame playlist slice on `UiState` — `playlist` (a non-owning view over `PlayList::entries()`, valid for the frame) plus the `playlistShuffle` / `playlistRepeat` flags — and `UiActions` carries five playlist callbacks (`onAddToPlaylist`, `onRemoveFromPlaylist`, `onPlayPlaylistEntry`, `onToggleShuffle`, `onToggleRepeat`). `drawTabPlaylist` is still the stub, so the tab renders nothing yet; the drawing (with the per-row "tofu" state icon), the browser right-click "Add to playlist" context menu, and the real action handlers arrive in later chunks (28b–28e). See [playlist.md](playlist.md).
 - `Theme` (`src/gui/Theme.h`) selects one of ImGui's three built-in color palettes; `Gui::applyTheme(Theme)` dispatches to `StyleColorsDark`/`Light`/`Classic` and records `m_theme` (presentation state, drives the Settings menu checkmark). `initialize()` sets the theme-independent style metrics (rounding, padding, spacing) once and then applies the dark default; `applyTheme` only swaps colors, so it is safe to call live from the menu. Theme choice is persisted via `onThemeChange` (see [settings.md](settings.md)). The full design lives in [ui-design.md](ui-design.md).
 
 - Sprites are loaded in `initialize()` from `romfs/sprites/sprites.bin` (custom `SPSH` format) + `sprites.png` into one GL texture; `Sprite` holds the UV rect (s/t/p/q) and pixel size.

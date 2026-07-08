@@ -32,6 +32,7 @@
 #include "filesystem/FileSystem.h"
 #include "gui/Gui.h"
 #include "player/PlayerController.h"
+#include "playlist/PlayList.h"
 #include "settings/Settings.h"
 #include "visualizer/VisualizerController.h"
 
@@ -52,13 +53,14 @@ private:
     SDL_GameController *m_controller = nullptr;
     SDL_GLContext m_glContext = nullptr;
 
-    // Subsystems, owned by value. Declaration order is load-bearing: m_player, m_fileSystem and
-    // m_settings precede m_app, whose constructor binds references to them.
+    // Subsystems, owned by value. Declaration order is load-bearing: m_player, m_fileSystem,
+    // m_settings and m_playList precede m_app, whose constructor binds references to them.
     Gui m_gui;
     PlayerController m_player;
     FileSystem m_fileSystem;
     VisualizerController m_visualizer;
     Settings m_settings;
+    PlayList m_playList;
     Application m_app;
 
 public:

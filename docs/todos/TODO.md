@@ -67,7 +67,7 @@ Large items are broken into **task chunks** (see the "Task chunks" section in ea
 - [x] [TODO_26 — Remove the default bundled sound (romfs/music/)](TODO_26.md) — single chunk
 - [x] [TODO_27 — Reorder Settings menu → Theme, Visualizer, Plugins](TODO_27.md) — single chunk; presentation-only
 - [ ] [TODO_28 — Playlist tab (add/remove/shuffle/repeat)](TODO_28.md) — requires TODO_9 + TODO_17 + TODO_18; multi-chunk
-  - [ ] 28a — PlayList module + wiring
+  - [x] 28a — PlayList module + wiring
   - [ ] 28b — Draw the Playlist tab (tofu state icons)
   - [ ] 28c — Add to playlist (right-click context menu)
   - [ ] 28d — Remove from playlist

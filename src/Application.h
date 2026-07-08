@@ -20,6 +20,7 @@
 #ifndef OSP2_APPLICATION_H
 #define OSP2_APPLICATION_H
 
+#include <cstddef>
 #include <filesystem>
 #include <string>
 #include <utility>
@@ -35,6 +36,7 @@
 #include "player/Metadata.h"
 #include "player/PlayerController.h"
 #include "player/PluginSetting.h"
+#include "playlist/PlayList.h"
 #include "settings/Settings.h"
 
 
@@ -46,6 +48,7 @@ private:
     PlayerController &m_player;
     FileSystem &m_fileSystem;
     Settings &m_settings;
+    PlayList &m_playList;
 
     // Playback-request retry state: m_lastRequestedName is the cursor playAdjacentTrack advances
     // from when a fetched sibling fails; m_advanceDirection is the direction (+1/-1, 0 for a direct click).
@@ -89,7 +92,7 @@ private:
 public:
     Application(const Application &) = delete;
     Application &operator=(const Application &) = delete;
-    explicit Application(PlayerController &player, FileSystem &fileSystem, Settings &settings);
+    explicit Application(PlayerController &player, FileSystem &fileSystem, Settings &settings, PlayList &playList);
     ~Application() = default;
 
 public:
@@ -106,6 +109,13 @@ private:
     void handlePluginSettingChange(const std::string &pluginName, const std::string &key, int value);
     void handlePluginSettingCommit(const std::string &pluginName, const std::string &key, int value);
     void handleCancelWork();
+    // Playlist action handlers. 28a wires them through UiActions but leaves the bodies as stubs;
+    // the real behavior lands in the noted later chunks.
+    void handleAddToPlaylist(const FileEntry &entry);
+    void handleRemoveFromPlaylist(std::size_t index);
+    void handlePlayPlaylistEntry(std::size_t index);
+    void handleToggleShuffle();
+    void handleToggleRepeat();
     void advance(int direction);
     void playAdjacentTrack(int direction);
 };
