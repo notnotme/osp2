@@ -23,6 +23,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -139,6 +140,9 @@ private:
     void handlePluginSettingChange(const std::string &pluginName, const std::string &key, int value);
     void handlePluginSettingCommit(const std::string &pluginName, const std::string &key, int value);
     void handleCancelWork();
+    // Shared tail of every play failure (fetch or decode): silent skip on auto-advance, a
+    // "Cannot play <name>: <reason>" error on a direct click (silent after a user cancel).
+    void handlePlayFailure(std::string_view reason);
     // Playlist action handlers. 28a wires them through UiActions but leaves the bodies as stubs;
     // the real behavior lands in the noted later chunks.
     void handleAddToPlaylist(const FileEntry &entry);

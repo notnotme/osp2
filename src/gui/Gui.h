@@ -95,16 +95,16 @@ private:
     void drawErrorPopup();
     void drawPluginPopups(const UiState &state, const UiActions &actions);
     void drawCurrentPath(const std::string &path);
-    // playingFileName is derived once per frame in drawUserInterface (empty when stopped) and
-    // shared by the browser highlight and the playlist tofu — it is not a UiState field.
+    // playingFileName is derived once per frame in drawUserInterface (empty when stopped) and drives
+    // only the browser highlight — the playlist tofu keys on UiState::playingPlaylistIndex instead.
     void drawFileBrowser(const UiState &state, const UiActions &actions, const std::string &playingFileName);
-    void drawTabsSection(const UiState &state, const UiActions &actions, const std::string &playingFileName);
+    void drawTabsSection(const UiState &state, const UiActions &actions);
     void drawFileMetadata(const TrackMetadata &metadata);
     void drawModuleMetadata(const ModuleMetadata &metadata);
     void drawGmeMetadata(const GmeMetadata &metadata);
     void drawSidMetadata(const SidMetadata &metadata);
     void drawSc68Metadata(const Sc68Metadata &metadata);
-    void drawTabPlaylist(const UiState &state, const UiActions &actions, const std::string &playingFileName);
+    void drawTabPlaylist(const UiState &state, const UiActions &actions);
     void drawPlayerBar(const PlaybackStatus &status, const std::function<void(ButtonId)> &onButtonClick) const;
 
 public:

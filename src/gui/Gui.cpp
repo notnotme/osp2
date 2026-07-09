@@ -655,7 +655,7 @@ void Gui::drawFileBrowser(const UiState &state, const UiActions &actions, const 
     m_wasWorking = state.isWorking;
 }
 
-void Gui::drawTabsSection(const UiState &state, const UiActions &actions, const std::string &playingFileName) {
+void Gui::drawTabsSection(const UiState &state, const UiActions &actions) {
     // The zero WindowPadding is only wanted for the tab bar itself (so it sits flush with the pane);
     // pop it before drawing tab content so tab bodies and their popups (e.g. the row context menu)
     // use the app's normal window padding, exactly like the file-browser pane and its context menu.
@@ -664,7 +664,7 @@ void Gui::drawTabsSection(const UiState &state, const UiActions &actions, const 
     ImGui::PopStyleVar();
     if (tabs_open) {
         drawFileMetadata(state.metadata);
-        drawTabPlaylist(state, actions, playingFileName);
+        drawTabPlaylist(state, actions);
         ImGui::EndTabBar();
     }
 }
@@ -736,7 +736,7 @@ void Gui::drawSc68Metadata(const Sc68Metadata &metadata) {
     }
 }
 
-void Gui::drawTabPlaylist(const UiState &state, const UiActions &actions, const std::string &playingFileName) {
+void Gui::drawTabPlaylist(const UiState &state, const UiActions &actions) {
     if (ImGui::BeginTabItem("Playlist")) {
         // Shuffle / Repeat toggles at the top of the tab, always visible (even when the list is empty).
         // ImGui::Checkbox needs a bool*, so mirror the immutable incoming flag into a local and fire the
@@ -769,9 +769,10 @@ void Gui::drawTabPlaylist(const UiState &state, const UiActions &actions, const 
             int remove_index = -1;
             for (std::size_t index = 0; index < state.playlist.size(); index++) {
                 const auto &entry = state.playlist[index];
-                // Filled tofu on the currently-playing entry, matched by basename against PlaybackStatus
-                // (empty when stopped, so no false match) — the same basis as the browser row highlight.
-                const bool is_current = !playingFileName.empty() && entry.name == playingFileName;
+                // Filled tofu on the currently-playing entry, keyed on the authoritative playlist cursor
+                // (UiState::playingPlaylistIndex, -1 when stopped or browser-originated) — exactly the row
+                // NEXT/PREVIOUS will follow, so browser playback and duplicate basenames never light rows.
+                const bool is_current = static_cast<int>(index) == state.playingPlaylistIndex;
 
                 // PushID by index so identical basenames from different directories don't collide as ImGui ids.
                 ImGui::PushID(static_cast<int>(index));
@@ -966,8 +967,8 @@ void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
     const auto left_width = (available.x - style.ItemSpacing.x) * 0.45f;
     const auto right_width = available.x - style.ItemSpacing.x - left_width;
 
-    // Nothing is "playing" when stopped, so use an empty name (no row highlighted / no filled tofu) in that
-    // state. Shared by the browser highlight and the playlist tab's current-track tofu so they agree.
+    // Nothing is "playing" when stopped, so use an empty name (no browser row highlighted) in that
+    // state. The playlist tab keys on UiState::playingPlaylistIndex instead, not on this name.
     const std::string playingFileName =
         state.status.state == PlayerState::STOPPED ? std::string{} : state.status.fileName;
 
@@ -980,7 +981,7 @@ void Gui::drawUserInterface(const UiState &state, const UiActions &actions) {
     ImGui::SameLine();
 
     if (ImGui::BeginChild("right_pane", ImVec2(right_width, panes_height), ImGuiChildFlags_Borders)) {
-        drawTabsSection(state, actions, playingFileName);
+        drawTabsSection(state, actions);
     }
     ImGui::EndChild();
 
