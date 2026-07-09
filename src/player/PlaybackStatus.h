@@ -25,14 +25,15 @@
 #include "PlayerState.h"
 
 
+/** Per-frame snapshot of the loaded track, served by PlayerController::getStatus(). */
 struct PlaybackStatus {
     PlayerState state;
-    std::string title;      // from decoder metadata, may be empty
-    std::string fileName;   // basename of the open file
-    double positionSeconds; // 0 when stopped
-    double durationSeconds; // 0 when stopped/unknown
-    int subtrackCount;      // number of subtracks in the open file (1 for single-track formats)
-    int currentSubtrack;    // 0-based index of the playing subtrack
+    std::string title;      ///< From decoder metadata, may be empty.
+    std::string fileName;   ///< Basename of the open file.
+    double positionSeconds; ///< 0 when stopped.
+    double durationSeconds; ///< 0 when stopped/unknown.
+    int subtrackCount;      ///< Number of subtracks in the open file (1 for single-track formats).
+    int currentSubtrack;    ///< 0-based index of the playing subtrack.
 };
 
 

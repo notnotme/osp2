@@ -198,7 +198,7 @@ void PlayerController::update() {
         if (succeeded) {
             m_loadPlugin->close();
         }
-        // A reload may have left the outgoing track presented (we no longer cleared it in play());
+        // A reload may leave the outgoing track presented (play() keeps it for reload continuity);
         // a cancel must end up stopped (matching cancelLoad/handleCancelWork intent).
         m_reloadActive = false;
         m_state = PlayerState::STOPPED;

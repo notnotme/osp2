@@ -21,6 +21,7 @@
 #define OSP2_PLAYER_STATE_H
 
 
+/** Playback state of PlayerController; shared with the SDL audio thread under PlayerController::m_mutex. */
 enum class PlayerState { STOPPED, PLAYING, PAUSED };
 
 

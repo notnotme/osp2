@@ -21,11 +21,15 @@
 #define OSP2_PLAY_RESULT_H
 
 
-// Outcome of a play() request, consumed once by the application layer:
-//   Ok           — the module opened and playback started.
-//   Unsupported  — no plugin matched the extension (decided synchronously in play()).
-//   DecodeError  — a matching plugin failed to parse the module (published by the load worker).
-// A cancelled load produces NO result (see PlayerController::cancelLoad).
+/**
+ * Outcome of a play() request, consumed once by the application layer.
+ *
+ * - Ok — the module opened and playback started.
+ * - Unsupported — no plugin matched the extension (decided synchronously in play()).
+ * - DecodeError — a matching plugin failed to parse the module (published by the load worker).
+ *
+ * A cancelled load produces NO result (see PlayerController::cancelLoad).
+ */
 enum class PlayResult { Ok, Unsupported, DecodeError };
 
 

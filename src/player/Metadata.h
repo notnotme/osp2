@@ -24,49 +24,55 @@
 #include <variant>
 
 
-// Per-plugin track metadata. Each decoder library exposes a different shape, so metadata travels
-// as a variant of one struct per plugin family rather than a flat, mostly-empty struct. The Gui
-// dispatches with std::visit; adding a plugin forces (compile error) the UI to handle its shape.
-
-struct ModuleMetadata { // tracker formats via libopenmpt
+/** Metadata of tracker formats, via libopenmpt. */
+struct ModuleMetadata {
     std::string title;
     std::string artist;
-    std::string format;  // e.g. "ScreamTracker 3" (type_long)
-    std::string tracker; // authoring tool, may be empty
+    std::string format;  ///< e.g. "ScreamTracker 3" (type_long).
+    std::string tracker; ///< Authoring tool, may be empty.
     int channels;
     int patterns;
     int samples;
     int instruments;
-    std::string message; // song message, often multiline, may be empty
+    std::string message; ///< Song message, often multiline, may be empty.
 };
 
-struct GmeMetadata { // console/arcade formats via libgme
+/** Metadata of console/arcade formats, via libgme. */
+struct GmeMetadata {
     std::string game;
     std::string system;
     std::string author;
     std::string copyright;
-    std::string comment; // often multiline
+    std::string comment; ///< Often multiline.
     int trackCount;
 };
 
-struct SidMetadata { // Commodore 64 SID files via libsidplayfp
+/** Metadata of Commodore 64 SID files, via libsidplayfp. */
+struct SidMetadata {
     std::string title;
     std::string author;
-    std::string released; // copyright / release line (PSID info string 2)
-    std::string sidModel; // "MOS 6581" / "MOS 8580", may be empty (unknown)
-    std::string clock;    // "PAL" / "NTSC", may be empty (unknown)
+    std::string released; ///< Copyright / release line (PSID info string 2).
+    std::string sidModel; ///< "MOS 6581" / "MOS 8580", may be empty (unknown).
+    std::string clock;    ///< "PAL" / "NTSC", may be empty (unknown).
 };
 
-struct Sc68Metadata { // Atari ST / Amiga / SNDH files via libsc68
+/** Metadata of Atari ST / Amiga / SNDH files, via libsc68. */
+struct Sc68Metadata {
     std::string title;
     std::string author;
-    std::string composer; // from a "composer" tag, may be empty (absent)
-    std::string hardware; // e.g. "Atari ST", may be empty (unknown)
-    std::string ripper;   // who ripped the tune, may be empty
+    std::string composer; ///< From a "composer" tag, may be empty (absent).
+    std::string hardware; ///< e.g. "Atari ST", may be empty (unknown).
+    std::string ripper;   ///< Who ripped the tune, may be empty.
 };
 
-// One alternative per plugin family; monostate = no track loaded. The variant is complete: sc68
-// is the last planned decoder, so every supported format now maps to one alternative below.
+/**
+ * Per-plugin track metadata: one alternative per plugin family; monostate = no track loaded.
+ *
+ * Each decoder library exposes a different shape, so metadata travels as a variant of one struct per plugin
+ * family rather than a flat, mostly-empty struct. The Gui dispatches with std::visit; adding a plugin forces
+ * (compile error) the UI to handle its shape. The variant is complete: sc68 is the last planned decoder, so every
+ * supported format maps to one alternative.
+ */
 using TrackMetadata = std::variant<std::monostate, ModuleMetadata, GmeMetadata, SidMetadata, Sc68Metadata>;
 
 
