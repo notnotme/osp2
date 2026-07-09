@@ -20,9 +20,14 @@
 #ifndef OSP2_VIEW_MODE_H
 #define OSP2_VIEW_MODE_H
 
-// Which regions the Gui draws. WORKSPACE shows the full UI (panes + player bar);
-// VISUALIZATION collapses to the top bar only, leaving the area below for the
-// future visualization system.
-enum class ViewMode { WORKSPACE, VISUALIZATION };
+/** Which regions the Gui draws; presentation state flipped by the right-aligned top-bar toggle. */
+enum class ViewMode {
+    WORKSPACE, ///< Full UI: browser and tabs panes plus the player bar below the top bar.
+    /**
+     * Top bar only; the work area below is handed to the active visualizer via
+     * UiActions::onRenderVisualization. Audio keeps playing while collapsed.
+     */
+    VISUALIZATION
+};
 
 #endif //OSP2_VIEW_MODE_H

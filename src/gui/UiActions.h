@@ -29,33 +29,42 @@
 #include "../filesystem/FileEntry.h"
 
 
-// Callback bundle wired once at startup; the UI reports user intent through these.
+/**
+ * Callback bundle wired once at startup by Application::makeUiActions(); the UI reports user intent through these
+ * and never mutates domain state directly.
+ */
 struct UiActions {
-    std::function<void(ButtonId)> onButtonClick;
-    std::function<void(const FileEntry &)> onFileClick;
-    std::function<void(const FileEntry &)> onDirectoryClick;
-    std::function<void(Theme)> onThemeChange;
-    // onPluginSettingChange fires on every edit (apply to the live decoder for immediate feedback);
-    // onPluginSettingCommit fires once the widget is released (persist to the INI). Split so dragging
-    // a slider does not rewrite the file every frame.
+    std::function<void(ButtonId)> onButtonClick;             ///< Transport / quit intent, keyed by ButtonId.
+    std::function<void(const FileEntry &)> onFileClick;      ///< Browser file row clicked; requests playback.
+    std::function<void(const FileEntry &)> onDirectoryClick; ///< Directory / source / ".." row clicked; navigates.
+    std::function<void(Theme)> onThemeChange;                ///< Theme picked in Settings→Theme; persists the choice.
+    /**
+     * onPluginSettingChange fires on every edit (apply to the live decoder for immediate feedback);
+     * onPluginSettingCommit fires once the widget is released (persist to the INI). Split so dragging a slider does
+     * not rewrite the file every frame.
+     */
     std::function<void(const std::string &pluginName, const std::string &key, int value)> onPluginSettingChange;
     std::function<void(const std::string &pluginName, const std::string &key, int value)> onPluginSettingCommit;
-    // Fired by the browser-overlay Cancel button to abort an in-flight scan/download.
+    /** Fired by the browser-overlay Cancel button to abort an in-flight scan/download. */
     std::function<void()> onCancelWork;
-    // Playlist tab intents. onAddToPlaylist fires from the browser row context menu (28c);
-    // onRemoveFromPlaylist / onPlayPlaylistEntry carry a playlist index (28d/28e); the two toggles
-    // flip the model's shuffle/repeat flags (28e). Wired in 28a with placeholder handlers.
+    /**
+     * Playlist tab intents: onAddToPlaylist fires from the browser row context menu; onRemoveFromPlaylist and
+     * onPlayPlaylistEntry carry a playlist index; the two toggles flip the model's shuffle/repeat flags.
+     */
     std::function<void(const FileEntry &)> onAddToPlaylist;
     std::function<void(std::size_t index)> onRemoveFromPlaylist;
     std::function<void(std::size_t index)> onPlayPlaylistEntry;
     std::function<void()> onToggleShuffle;
     std::function<void()> onToggleRepeat;
-    // Invoked in VISUALIZATION mode with the reserved rect (screen coords) below the top bar.
-    // Application reads the audio tap, builds a VisualFrame, and renders the active visualizer.
+    /**
+     * Invoked in VISUALIZATION mode with the reserved rect (screen coords) below the top bar. Application reads the
+     * audio tap, builds a VisualFrame, and renders the active visualizer.
+     */
     std::function<void(float x, float y, float w, float h)> onRenderVisualization;
-    // Fired by the Settings→Visualizer picker with the chosen index; Application selects the
-    // visualizer and persists the choice. Gui stays ignorant of the visualizer domain (same as
-    // onButtonClick).
+    /**
+     * Fired by the Settings→Visualizer picker with the chosen index; Application selects the visualizer and
+     * persists the choice. Gui stays ignorant of the visualizer domain (same as onButtonClick).
+     */
     std::function<void(std::size_t index)> onSelectVisualizer;
 };
 

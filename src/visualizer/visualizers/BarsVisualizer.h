@@ -27,18 +27,22 @@
 #include "../VisualizerPlugin.h"
 
 
-// The basic plugin (chunk 8c, ImGui backend, no GL): N vertical bars whose heights track per-band
-// audio amplitude. Bands come from bucketing the sample window and taking the time-domain peak per
-// bucket (no FFT → no dependency, Switch-safe). Bar heights are smoothed with a fast attack / gentle
-// decay and persisted across frames in m_levels, so transients pop and the bars fall smoothly to
-// rest when nothing plays (frameCount == 0). An FFT spectrum and a GL shader-quad are follow-ons.
+/**
+ * The ImGui-backend plugin (no GL): vertical bars whose heights track per-band audio amplitude.
+ *
+ * Bands come from bucketing the sample window and taking the time-domain peak per bucket (no FFT → no dependency,
+ * Switch-safe). Bar heights are smoothed with a fast attack / gentle decay and persisted across frames in
+ * m_levels, so transients pop and the bars fall smoothly to rest when nothing plays (frameCount == 0).
+ */
 class BarsVisualizer final : public VisualizerPlugin {
 private:
-    static constexpr int BAR_COUNT = 64;
+    static constexpr int BAR_COUNT = 64; ///< Bars tiled flush across the reserved rect.
 
-    // Smoothed bar heights in [0, 1], persisted across frames for attack/decay smoothing. Advanced
-    // only inside render() from ImGui::GetIO().DeltaTime, so the decay freezes when the visualizer
-    // is hidden and resumes where it left off (see docs/visualization.md "Animation freezes ...").
+    /**
+     * Smoothed bar heights in [0, 1], persisted across frames for attack/decay smoothing. Advanced only inside
+     * render() from ImGui::GetIO().DeltaTime, so the decay freezes when the visualizer is hidden and resumes
+     * where it left off (see docs/visualization.md "Animation freezes ...").
+     */
     std::array<float, BAR_COUNT> m_levels{};
 
 public:

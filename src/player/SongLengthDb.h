@@ -27,25 +27,34 @@
 #include <vector>
 
 
-// Parses and holds HVSC's Songlengths.md5 database: a map from a tune's MD5 (as produced by
-// SidTune::createMD5New()) to its per-subtune play times in seconds, in song order. Deals only in
-// strings and times — it has no dependency on libsidplayfp. Owned outside the audio path; callers
-// look up a length once (off the audio thread) and cache it.
+/**
+ * Parses and holds HVSC's Songlengths.md5 database: a map from a tune's MD5 (as produced by
+ * SidTune::createMD5New()) to its per-subtune play times in seconds, in song order.
+ *
+ * Deals only in strings and times — it has no dependency on libsidplayfp. Owned outside the audio path; callers
+ * look up a length once (off the audio thread) and cache it.
+ */
 class SongLengthDb final {
 private:
-    std::unordered_map<std::string, std::vector<double>> m_lengths;
+    std::unordered_map<std::string, std::vector<double>> m_lengths; ///< MD5 -> per-subtune times in song order.
 
 public:
-    // Load and parse the database at path, replacing any previously loaded contents. Returns false
-    // when the file cannot be opened (a missing database is a normal, non-error condition — the
-    // caller simply reports open-ended durations) or when parsing fails; never throws.
+    /**
+     * Loads and parses the database at path, replacing any previously loaded contents.
+     *
+     * @return false when the file cannot be opened (a missing database is a normal, non-error condition — the
+     *         caller simply reports open-ended durations) or when parsing fails; never throws
+     */
     bool load(const std::filesystem::path &path);
 
-    // The play time in seconds of the given 0-based subtune, or std::nullopt when the MD5 is not in
-    // the database or the subtune index is out of range.
+    /**
+     * The play time in seconds of the given 0-based subtune.
+     *
+     * @return std::nullopt when the MD5 is not in the database or the subtune index is out of range
+     */
     [[nodiscard]] std::optional<double> lookup(const std::string &md5, unsigned int subtuneIndex) const;
 
-    // Number of tunes (MD5 keys) in the loaded database; 0 when nothing is loaded.
+    /** Number of tunes (MD5 keys) in the loaded database; 0 when nothing is loaded. */
     [[nodiscard]] std::size_t size() const {
         return m_lengths.size();
     }

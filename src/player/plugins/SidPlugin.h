@@ -35,44 +35,67 @@ class ReSIDfpBuilder;
 class SidTune;
 
 
+/**
+ * Decoder plugin wrapping libsidplayfp (v3 API) for Commodore 64 SID tunes (sid, psid, rsid).
+ *
+ * Drives a sidplayfp engine through a ReSIDfpBuilder. Optional C64 ROMs (KERNAL/BASIC/CHARGEN) are loaded from
+ * romfs at construction when present: PSID tunes play without them, RSID tunes that boot like a real C64 need
+ * at least the KERNAL. SID tunes carry no intrinsic length and loop indefinitely, so the duration comes from
+ * the HVSC Songlengths database (see m_songLengths); only the tune's default subtune is played. Captured
+ * strings are transcoded from Latin-1 to UTF-8 during open(). Both settings (sid_model, clock) apply on the
+ * next track.
+ */
 class SidPlugin final : public PlayerPlugin {
 private:
-    int m_sampleRate;
-    std::vector<std::string> m_extensions;
-    // The engine, the ReSIDfp emulation builder it drives, and the currently loaded tune.
-    std::unique_ptr<sidplayfp> m_engine;
-    std::unique_ptr<ReSIDfpBuilder> m_builder;
-    std::unique_ptr<SidTune> m_tune;
-    // libsidplayfp's v3 API produces a variable number of samples per play() call; decode() drains
-    // this mixed interleaved-stereo scratch before running the emulation for another chunk.
+    int m_sampleRate;                          ///< Output sample rate the engine is configured for.
+    std::vector<std::string> m_extensions;     ///< Supported file extensions, fixed at construction.
+    std::unique_ptr<sidplayfp> m_engine;       ///< The playback engine.
+    std::unique_ptr<ReSIDfpBuilder> m_builder; ///< The ReSIDfp emulation builder the engine drives.
+    std::unique_ptr<SidTune> m_tune;           ///< The currently loaded tune.
+    /**
+     * Mixed interleaved-stereo scratch: libsidplayfp's v3 API produces a variable number of samples per play()
+     * call, so decode() drains this buffer before running the emulation for another chunk.
+     */
     std::vector<std::int16_t> m_mixBuffer;
-    std::size_t m_mixPos;    // frame cursor into m_mixBuffer
-    std::size_t m_mixFrames; // valid frames currently held in m_mixBuffer
-    // Captured once in open() so getMetadata() never touches the audio-thread-shared engine.
+    std::size_t m_mixPos;    ///< Frame cursor into m_mixBuffer.
+    std::size_t m_mixFrames; ///< Valid frames currently held in m_mixBuffer.
+    /** Captured once in open() so getMetadata() never touches the audio-thread-shared engine. */
     TrackMetadata m_metadata;
-    // Cached in open() so getTitle() never touches the shared engine.
+    /** Cached in open() so getTitle() never touches the shared engine. */
     std::string m_title;
-    // Cached settings, applied on open() (a live change would restart the tune). m_model is
-    // 0=Auto/1=6581/2=8580; m_clock is 0=Auto/1=PAL/2=NTSC (see getSettings()).
+    /**
+     * Cached SID model, 0=Auto/1=6581/2=8580 (see getSettings()); applied on open() — a live change would
+     * restart the tune.
+     */
     int m_model;
+    /**
+     * Cached video clock, 0=Auto/1=PAL/2=NTSC (see getSettings()); applied on open() — a live change would
+     * restart the tune.
+     */
     int m_clock;
-    // HVSC Songlengths time (seconds) for the current subtune, or 0 when the bundled database is
-    // absent or does not know the tune (open-ended, as before). Cached in open(), read by
-    // getDuration() — never looked up on the audio thread.
+    /**
+     * HVSC Songlengths time (seconds) for the current subtune, or 0 when the bundled database is absent or
+     * does not know the tune (open-ended). Cached in open(), read by getDuration() — never looked up on the
+     * audio thread.
+     */
     double m_duration;
-    // The Songlengths database. Parsing the ~5 MB file takes long enough on the Switch to be a
-    // visible stall, so it is loaded once on a background thread started in the constructor rather
-    // than on the open() decode path (which would stretch the loading overlay). m_dbReady
-    // (release/acquire) publishes the finished map; open() only reads m_songLengths once it is set,
-    // so the two threads never touch it concurrently. The destructor joins m_dbLoader. A tune opened
-    // before the load finishes (or with the database absent) just gets an open-ended duration.
+    /**
+     * The HVSC Songlengths database.
+     *
+     * Parsing the ~5 MB file takes long enough on the Switch to be a visible stall, so it is loaded once on a
+     * background thread started in the constructor rather than on the open() decode path (which would stretch
+     * the loading overlay). m_dbReady (release/acquire) publishes the finished map; open() only reads
+     * m_songLengths once it is set, so the two threads never touch it concurrently. The destructor joins
+     * m_dbLoader. A tune opened before the load finishes (or with the database absent) just gets an open-ended
+     * duration.
+     */
     SongLengthDb m_songLengths;
-    std::thread m_dbLoader;
-    std::atomic<bool> m_dbReady;
+    std::thread m_dbLoader;      ///< Background loader for m_songLengths; joined by the destructor.
+    std::atomic<bool> m_dbReady; ///< Release/acquire flag publishing the finished m_songLengths map.
 
-    // (Re)build the SidConfig from the cached settings and hand it to the engine.
+    /** (Re)builds the SidConfig from the cached settings and hands it to the engine. */
     [[nodiscard]] bool configure();
-    // Load the optional C64 KERNAL/BASIC/CHARGEN ROMs from romfs into the engine, if present.
+    /** Loads the optional C64 KERNAL/BASIC/CHARGEN ROMs from romfs into the engine, if present. */
     void loadRoms();
 
 public:
@@ -92,6 +115,10 @@ public:
     [[nodiscard]] double getDuration() const override;
     [[nodiscard]] TrackMetadata getMetadata() const override;
     [[nodiscard]] std::vector<PluginSetting> getSettings() const override;
+    /**
+     * Stores the clamped value only — both settings apply on the next open(), since a live change would
+     * restart the tune.
+     */
     void applySetting(const std::string &key, int value) override;
 };
 

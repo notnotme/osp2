@@ -25,21 +25,27 @@
 #include <vector>
 
 
+/** Inclusive min/max bounds of an integer slider setting. */
 struct IntRange {
     int min;
     int max;
 };
-// value (in PluginSetting) is an index into labels: 0 selects labels[0], and so on.
+/**
+ * Combo-box options of an enumerated setting.
+ *
+ * value (in PluginSetting) is an index into labels: 0 selects labels[0], and so on.
+ */
 struct EnumOptions {
     std::vector<std::string> labels;
 };
 
+/** A tunable a plugin publishes to the settings UI and INI persistence. */
 struct PluginSetting {
-    std::string key;                           // INI key, e.g. "stereo_separation"
-    std::string label;                         // UI label, e.g. "Stereo separation"
-    std::variant<IntRange, EnumOptions> shape; // drives the widget in 6c
-    int value;                                 // current value
-    bool appliesOnNextTrack = false;           // true -> the settings popup shows an "applies on next track" hint
+    std::string key;                           ///< INI key, e.g. "stereo_separation".
+    std::string label;                         ///< UI label, e.g. "Stereo separation".
+    std::variant<IntRange, EnumOptions> shape; ///< Drives the widget: IntRange = slider, EnumOptions = combo.
+    int value;                                 ///< Current value; for EnumOptions, an index into labels.
+    bool appliesOnNextTrack = false;           ///< true -> the settings popup shows an "applies on next track" hint.
 };
 
 

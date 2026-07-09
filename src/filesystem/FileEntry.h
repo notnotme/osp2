@@ -24,11 +24,19 @@
 #include <string>
 
 
+/**
+ * One row of a directory listing: a file, a folder, or a source at the virtual root.
+ *
+ * A bare aggregate; ".." is never an entry — the Gui pins it on top of the listing itself.
+ */
 struct FileEntry {
     std::string name;
-    std::int64_t file_size; // bytes
-    std::string
-        type; // uppercase ext without dot ("S3M"), "Folder", or "Source"; empty when a source hands it over pre-derivation
+    std::int64_t file_size; ///< bytes
+    /**
+     * Uppercase extension without dot ("S3M"), "Folder", or "Source"; empty when a source hands it over
+     * pre-derivation.
+     */
+    std::string type;
     bool is_directory;
 };
 

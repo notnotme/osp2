@@ -29,7 +29,14 @@
 #include "FileEntry.h"
 
 
-// Browses the platform filesystem. A local path is already openable, so fetchFile is the identity.
+/**
+ * Browses the platform filesystem.
+ *
+ * A local path is already openable, so fetchFile is the identity. listDirectory never fails hard: it skips
+ * dot-prefixed and unreadable entries (skip_permission_denied + the error_code overloads) and returns whatever was
+ * readable, never nullopt. The root is "/" on both platforms — on the Switch, sdmc is libnx's default device, so
+ * "/" resolves to the SD card and decomposes like any POSIX path.
+ */
 class LocalDataSource final : public DataSource {
 public:
     [[nodiscard]] std::string getDisplayName() const override;

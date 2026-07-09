@@ -33,30 +33,39 @@
 #include "../playlist/PlaylistEntry.h"
 
 
-// Per-frame view model: rebuilt every frame, never stored across frames.
+/**
+ * Per-frame view model: rebuilt every frame by Application::makeUiState(), never stored across frames.
+ *
+ * The reference members are non-owning views into Application-owned data, valid only for the frame they were
+ * built on.
+ */
 struct UiState {
-    PlaybackStatus status;
-    std::string path;
-    const std::vector<FileEntry> &files; // non-owning view, valid for the frame
-    bool isWorking;
-    std::string workingLabel;      // overlay text while isWorking ("Scanning..." / "Downloading...")
-    const TrackMetadata &metadata; // non-owning view, valid for the frame
-    const std::vector<std::pair<std::string, std::vector<PluginSetting>>>
-        &pluginSettings;             // non-owning view, valid for the frame
-    NavKind navKind = NavKind::None; // one-frame descend/ascend signal driving the browser scroll restore
-    std::string error;               // one-frame playback error message; opens the error modal when newly non-empty
-    bool isAtRoot;                   // true at the virtual root (sources list): the browser hides its ".." row
-    // Playlist tab slice, populated by makeUiState(). `playlist` is a non-owning view valid for the frame.
+    PlaybackStatus status;               ///< Playback snapshot driving the player bar and browser highlight.
+    std::string path;                    ///< Current browse path shown above the file browser.
+    const std::vector<FileEntry> &files; ///< Directory listing; non-owning view, valid for the frame.
+    bool isWorking;                      ///< True while a scan/download/decode is in flight; disables the browser.
+    std::string workingLabel;            ///< Overlay text while isWorking ("Scanning..." / "Downloading...").
+    const TrackMetadata &metadata;       ///< Metadata of the loaded track; non-owning view, valid for the frame.
+    /** Per-plugin setting descriptors (plugin name -> descriptors); non-owning view, valid for the frame. */
+    const std::vector<std::pair<std::string, std::vector<PluginSetting>>> &pluginSettings;
+    NavKind navKind = NavKind::None; ///< One-frame descend/ascend signal driving the browser scroll restore.
+    std::string error;               ///< One-frame playback error message; opens the error modal when newly non-empty.
+    bool isAtRoot;                   ///< True at the virtual root (sources list): the browser hides its ".." row.
+    /** Playlist tab slice, populated by makeUiState(); non-owning view, valid for the frame. */
     const std::vector<PlaylistEntry> &playlist;
-    bool playlistShuffle;
-    bool playlistRepeat;
-    // Index of the currently-playing playlist entry, -1 when none (stopped, or playback originated
-    // from the browser). Drives the playlist tab's "now playing" row: exactly the row advance follows.
+    bool playlistShuffle; ///< Playlist Shuffle flag mirrored into the tab's checkbox.
+    bool playlistRepeat;  ///< Playlist Repeat flag mirrored into the tab's checkbox.
+    /**
+     * Index of the currently-playing playlist entry, -1 when none (stopped, or playback originated from the
+     * browser). Drives the playlist tab's "now playing" row: exactly the row advance follows.
+     */
     int playingPlaylistIndex;
-    // Visualizer picker slice (Settings→Visualizer). `visualizerNames` is a non-owning view of
-    // Application's startup-built cache, valid for the frame.
+    /**
+     * Visualizer picker slice (Settings→Visualizer): the selectable visualizer names; non-owning view of
+     * Application's startup-built cache, valid for the frame.
+     */
     const std::vector<std::string> &visualizerNames;
-    std::size_t activeVisualizer; // currently-selected visualizer index
+    std::size_t activeVisualizer; ///< Currently-selected visualizer index.
 };
 
 

@@ -23,16 +23,23 @@
 #include <string>
 #include <string_view>
 
-// Legacy source charsets in which decoder libraries hand OSP2 their metadata bytes. Dear ImGui only
-// renders UTF-8, so every non-UTF-8 field is transcoded at the plugin boundary before it is stored.
+/**
+ * Legacy source charsets in which decoder libraries hand OSP2 their metadata bytes.
+ *
+ * Dear ImGui only renders UTF-8, so every non-UTF-8 field is transcoded at the plugin boundary before it is
+ * stored.
+ */
 enum class Charset {
-    Latin1,  // ISO-8859-1 — libsidplayfp (PSID/STIL) and libsc68 tags
-    ShiftJis // Shift-JIS — libgme (NSF/GBS/… header fields, ASCII-compatible)
+    Latin1,  ///< ISO-8859-1 — libsidplayfp (PSID/STIL) and libsc68 tags.
+    ShiftJis ///< Shift-JIS — libgme (NSF/GBS/… header fields, ASCII-compatible).
 };
 
-// Transcodes raw metadata bytes from the given source charset to UTF-8. Robust to malformed or
-// truncated input: undecodable bytes become U+FFFD (replacement character); never reads out of
-// bounds. OpenMPT metadata is already UTF-8 and must not pass through this.
+/**
+ * Transcodes raw metadata bytes from the given source charset to UTF-8.
+ *
+ * Robust to malformed or truncated input: undecodable bytes become U+FFFD (replacement character); never reads
+ * out of bounds. OpenMPT metadata is already UTF-8 and must not pass through this.
+ */
 [[nodiscard]] std::string toUtf8(std::string_view bytes, Charset charset);
 
 #endif // OSP2_CHARSET_H
