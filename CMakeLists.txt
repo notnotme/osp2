@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28.3)
 
-project(OSP2 VERSION 0.0.0 DESCRIPTION "A simple chiptune player.")
+project(OSP2 VERSION 1.0.0 DESCRIPTION "A simple chiptune player.")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
