@@ -121,7 +121,9 @@ SidPlugin::SidPlugin(const int sampleRate)
     // shows an open-ended duration. The destructor joins this thread; open() reads the map only
     // once m_dbReady. Started last so no later constructor step can throw past a joinable thread.
     m_dbLoader = std::thread([this] {
-        m_songLengths.load(assetPath("sidlength/Songlengths.md5"));
+        if (m_songLengths.load(assetPath("sidlength/Songlengths.md5"))) {
+            SDL_Log("SidPlugin: loaded Songlengths database (%zu tunes) — SID durations enabled", m_songLengths.size());
+        }
         m_dbReady.store(true, std::memory_order_release);
     });
 }

@@ -44,6 +44,11 @@ public:
     // The play time in seconds of the given 0-based subtune, or std::nullopt when the MD5 is not in
     // the database or the subtune index is out of range.
     [[nodiscard]] std::optional<double> lookup(const std::string &md5, unsigned int subtuneIndex) const;
+
+    // Number of tunes (MD5 keys) in the loaded database; 0 when nothing is loaded.
+    [[nodiscard]] std::size_t size() const {
+        return m_lengths.size();
+    }
 };
 
 
