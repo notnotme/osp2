@@ -21,19 +21,28 @@
 #define OSP2_SETTINGS_KEYS_H
 
 
-// Single source of truth for the INI schema's section and key names. Save and restore sites live
-// in different files (Application persists, Platform restores, Settings seeds defaults) — sharing
-// these constants keeps a typo from silently forking a key and resetting the setting every launch.
+/**
+ * Single source of truth for the INI schema's section and key names.
+ *
+ * Save and restore sites live in different files (Application persists, Platform restores, Settings seeds
+ * defaults) — sharing these constants keeps a typo from silently forking a key and resetting the setting every
+ * launch.
+ */
 namespace settingskeys {
-    inline constexpr const char *kUserSection = "user";
-    inline constexpr const char *kTheme = "theme";
+    inline constexpr const char *kUserSection = "user"; ///< [user] — the general user-settings section.
+    inline constexpr const char *kTheme = "theme";      ///< [user] theme: dark | light | classic.
+    /** [user] visualizer: a stable VisualizerPlugin::getName(); empty/unknown keeps the default (index 0). */
     inline constexpr const char *kVisualizer = "visualizer";
+    /** [user] default_folder: hand-edit only; empty/invalid falls back to the platform default start path. */
     inline constexpr const char *kDefaultFolder = "default_folder";
-    // Per-plugin sections are "plugin." + the plugin's name; user-defined FTP sources are
-    // "source." + the source's display name (hand-edited, see Platform::buildDataSources).
+    /**
+     * Per-plugin sections are "plugin." + the plugin's name; user-defined FTP sources are "source." + the
+     * source's display name (hand-edited, see Platform::buildDataSources).
+     */
     inline constexpr const char *kPluginSectionPrefix = "plugin.";
     inline constexpr const char *kSourceSectionPrefix = "source.";
-    inline constexpr const char *kSourceHost = "host";
+    inline constexpr const char *kSourceHost = "host"; ///< [source.NAME] host (required): FTP hostname, no scheme.
+    /** [source.NAME] path (optional, default "/"): base directory to browse. */
     inline constexpr const char *kSourcePath = "path";
 } // namespace settingskeys
 

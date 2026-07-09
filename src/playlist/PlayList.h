@@ -28,16 +28,19 @@
 #include "PlaylistEntry.h"
 
 
-// Ordered, session-only playlist (no persistence this round). A small final module owned by value
-// in Platform and injected into Application; plain RAII, no explicit lifecycle.
-// Single-threaded, main-thread only — no mutex (unlike PlayerController): every access happens
-// from the UI/update path.
+/**
+ * Ordered, session-only playlist — never persisted across launches.
+ *
+ * A small final module owned by value in Platform and injected into Application; plain RAII, no explicit
+ * lifecycle. Single-threaded, main-thread only — no mutex (unlike PlayerController): every access happens from
+ * the UI/update path.
+ */
 class PlayList final {
 private:
-    std::vector<PlaylistEntry> m_entries;
-    bool m_shuffle = false;
-    bool m_repeat = false;
-    std::mt19937 m_rng; // advanced by nextIndex() when shuffle picks a random forward target
+    std::vector<PlaylistEntry> m_entries; ///< Queued songs, in add order.
+    bool m_shuffle = false;               ///< nextIndex() randomizes the forward target.
+    bool m_repeat = false;                ///< nextIndex() wraps at either end.
+    std::mt19937 m_rng;                   ///< Advanced by nextIndex() when shuffle picks a random forward target.
 
 public:
     PlayList(const PlayList &) = delete;
@@ -45,15 +48,22 @@ public:
     explicit PlayList();
     ~PlayList() = default;
 
+    /** Appends the entry at the end of the list. */
     void add(PlaylistEntry entry);
-    void removeAt(std::size_t index); // bounds-checked no-op if out of range
+    /** Removes the entry at index; bounds-checked no-op if out of range. */
+    void removeAt(std::size_t index);
     void clear();
 
-    // Traversal policy for playlist-aware advance. `current` is the playing entry's index, `direction`
-    // is +1 (NEXT / auto-advance) or -1 (PREVIOUS). Returns the next index or nullopt when there is no
-    // next (empty list, or a boundary with repeat off). Shuffle randomizes only the forward target
-    // (direction > 0, size > 1) — PREVIOUS always steps linearly; repeat wraps at either end. Non-const:
-    // it advances the shuffle RNG. Deliberate simplification: no shuffle history for PREVIOUS.
+    /**
+     * Traversal policy for playlist-aware advance.
+     *
+     * Shuffle randomizes only the forward target (direction > 0, size > 1) — PREVIOUS always steps linearly;
+     * repeat wraps at either end. Non-const: it advances the shuffle RNG. Deliberate simplification: no shuffle
+     * history for PREVIOUS.
+     * @param current the playing entry's index
+     * @param direction +1 (NEXT / auto-advance) or -1 (PREVIOUS)
+     * @return the next index, or nullopt when there is no next (empty list, or a boundary with repeat off)
+     */
     [[nodiscard]] std::optional<std::size_t> nextIndex(std::size_t current, int direction);
 
     [[nodiscard]] bool shuffle() const;

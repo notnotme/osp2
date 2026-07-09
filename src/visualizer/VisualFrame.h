@@ -23,17 +23,20 @@
 #include <cstddef>
 
 
-// Per-frame input handed to a VisualizerPlugin: the reserved screen rect plus a read-only view of
-// the most recently decoded audio. Deliberately free of ImGui/GL types so the value can be built in
-// the platform layer (main.cpp) without dragging the presentation backend into the audio wiring.
-// samples may be nullptr when frameCount == 0; frameCount == 0 means nothing is playing, so a
-// visual should decay to rest rather than react.
+/**
+ * Per-frame input handed to a VisualizerPlugin: the reserved screen rect plus a read-only view of the most
+ * recently decoded audio.
+ *
+ * Deliberately free of ImGui/GL types so the value can be built outside the presentation backend (Application
+ * builds it from the audio tap) without dragging that backend into the audio wiring. samples may be nullptr when
+ * frameCount == 0; frameCount == 0 means nothing is playing, so a visual should decay to rest rather than react.
+ */
 struct VisualFrame {
-    float x, y, w, h;       // reserved rect in screen coordinates
-    const float *samples;   // interleaved stereo, frameCount frames (may be nullptr if frameCount==0)
-    std::size_t frameCount; // 0 when nothing is playing → visual should decay to rest
-    int channels;
-    int sampleRate;
+    float x, y, w, h;       ///< Reserved rect in screen coordinates.
+    const float *samples;   ///< Interleaved stereo, frameCount frames (may be nullptr if frameCount == 0).
+    std::size_t frameCount; ///< 0 when nothing is playing → the visual should decay to rest.
+    int channels;           ///< Interleaved channel count of samples.
+    int sampleRate;         ///< Sample rate of samples, in Hz.
 };
 
 

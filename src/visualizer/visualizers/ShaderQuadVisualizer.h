@@ -31,31 +31,46 @@ struct ImDrawList;
 struct ImDrawCmd;
 
 
-// The raw-GL plugin (chunk 8d): an animated plasma rendered by a fullscreen-triangle fragment shader,
-// bridged into ImGui's draw data via ImDrawList::AddCallback (executed by the GL3 backend before it
-// draws its own geometry). It exercises the GL render path the ImGui BarsVisualizer does not. Uses
-// #version 330 core (proven portable on desktop + Switch here) and confines its draw to the reserved
-// rect with glViewport + glScissor (Y-flipped, since GL's framebuffer origin is bottom-left).
+/**
+ * The raw-GL plugin: an animated plasma rendered by a fullscreen-triangle fragment shader, bridged into ImGui's
+ * draw data via ImDrawList::AddCallback (executed by the GL3 backend before it draws its own geometry).
+ *
+ * It exercises the GL render path the ImGui BarsVisualizer does not. Uses #version 330 core (proven portable on
+ * desktop + Switch here) and confines its draw to the reserved rect with glViewport + glScissor (Y-flipped, since
+ * GL's framebuffer origin is bottom-left).
+ */
 class ShaderQuadVisualizer final : public VisualizerPlugin {
 private:
-    unsigned int m_program = 0; // GL program (0 = not built / build failed → render() is a no-op)
-    unsigned int m_vao = 0;     // empty VAO required by core profile for the attribute-less draw
-    int m_locTime = -1;
-    int m_locLevel = -1;
+    unsigned int m_program = 0; ///< GL program (0 = not built / build failed → render() is a no-op).
+    unsigned int m_vao = 0;     ///< Empty VAO required by core profile for the attribute-less draw.
+    int m_locTime = -1;         ///< Uniform location for the animation clock (-1 = not found).
+    int m_locLevel = -1;        ///< Uniform location for the audio level (-1 = not found).
     // Captured in render() for the deferred GL callback, which runs later inside RenderDrawData:
-    float m_time = 0.0f;  // accumulated render-delta (freeze-when-hidden contract, not GetTime())
-    float m_level = 0.0f; // audio amplitude in [0, 1], drives the plasma's pulse
-    int m_vpX = 0, m_vpY = 0, m_vpW = 0, m_vpH = 0; // reserved rect in framebuffer pixels, Y-flipped
+    float m_time = 0.0f;  ///< Accumulated render-delta (freeze-when-hidden contract, not GetTime()).
+    float m_level = 0.0f; ///< Audio amplitude in [0, 1], drives the plasma's pulse.
+    int m_vpX = 0, m_vpY = 0, m_vpW = 0, m_vpH = 0; ///< Reserved rect in framebuffer pixels, Y-flipped.
 
 public:
+    /**
+     * Compiles and links the plasma program.
+     *
+     * On failure it logs the compile/link info log and leaves m_program at 0, making render() a safe no-op.
+     */
     void create() override;
     void destroy() override;
     [[nodiscard]] std::string getName() const override;
+    /**
+     * Schedules the GL draw instead of drawing immediately: captures this frame's uniforms/viewport, then queues
+     * glDrawCallback (followed by ImDrawCallback_ResetRenderState) on the background draw list.
+     */
     void render(const VisualFrame &frame) override;
 
 private:
-    // ImDrawList::AddCallback trampoline: unpacks `this` from cmd->UserCallbackData and issues the
-    // raw-GL draw. Runs during ImGui_ImplOpenGL3_RenderDrawData, so the GL context is current.
+    /**
+     * ImDrawList::AddCallback trampoline: unpacks `this` from cmd->UserCallbackData and issues the raw-GL draw.
+     *
+     * Runs during ImGui_ImplOpenGL3_RenderDrawData, so the GL context is current.
+     */
     static void glDrawCallback(const ImDrawList *parentList, const ImDrawCmd *cmd);
 };
 

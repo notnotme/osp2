@@ -24,16 +24,19 @@
 #include <string>
 
 
-// A single playlist row. Kept in its own light header so UiState can depend on the entry shape
-// without pulling in the whole PlayList module. A file's identity in this app is
-// (owning DataSource, source-relative path); both are captured at add-time because the browser may
-// later have navigated elsewhere or switched source. 28e re-fetches an entry from path + sourceIndex
-// (the same source-relative path FileSystem::requestFile / DataSource::fetchFile expect); 28b only
-// reads name, so the added fields are backward-compatible.
+/**
+ * A single playlist row.
+ *
+ * Kept in its own light header so UiState can depend on the entry shape without pulling in the whole PlayList
+ * module. A file's identity in this app is (owning DataSource, source-relative path); both are captured at
+ * add-time because the browser may later have navigated elsewhere or switched source — replaying an entry
+ * re-fetches it from path + sourceIndex (the same source-relative path FileSystem::requestFile /
+ * DataSource::fetchFile expect).
+ */
 struct PlaylistEntry {
-    std::string name;           // basename: display and error text only (the playing row is tracked by index)
-    std::filesystem::path path; // source-relative path (getPath()/name) fetchFile expects; replay (28e)
-    int sourceIndex = -1;       // index of the owning DataSource in FileSystem's source list; replay (28e)
+    std::string name;           ///< Basename: display and error text only (the playing row is tracked by index).
+    std::filesystem::path path; ///< Source-relative path (getPath()/name) fetchFile expects; used for replay.
+    int sourceIndex = -1;       ///< Index of the owning DataSource in FileSystem's source list; used for replay.
 };
 
 

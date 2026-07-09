@@ -25,12 +25,15 @@
 #include "VisualFrame.h"
 
 
-// Interchangeable visualization, mirroring PlayerPlugin. create()/destroy() give a raw-GL plugin a
-// clear lifecycle for its shader/VBO (called once from VisualizerController::create()/destroy() on
-// the main thread, with a live GL context — the controller itself is constructed before GL exists,
-// so this two-phase lifecycle is load-bearing); ImGui-only plugins keep the no-op defaults.
-// render() runs inside the ImGui frame (between NewFrame and Render) once per frame while in
-// VISUALIZATION mode.
+/**
+ * Interchangeable visualization, mirroring PlayerPlugin.
+ *
+ * create()/destroy() give a raw-GL plugin a clear lifecycle for its shader/VBO (called once from
+ * VisualizerController::create()/destroy() on the main thread, with a live GL context — the controller itself is
+ * constructed before GL exists, so this two-phase lifecycle is load-bearing); ImGui-only plugins keep the no-op
+ * defaults. render() runs inside the ImGui frame (between NewFrame and Render) once per frame while in
+ * VISUALIZATION mode.
+ */
 class VisualizerPlugin {
 public:
     VisualizerPlugin(const VisualizerPlugin &) = delete;
@@ -38,9 +41,20 @@ public:
     explicit VisualizerPlugin() = default;
     virtual ~VisualizerPlugin() = default;
 
-    virtual void create() {}  // allocate GL objects if any (default: none)
-    virtual void destroy() {} // free them
+    /** Allocates the plugin's GL objects, if any (default: none); runs with a live GL context, main thread. */
+    virtual void create() {}
+    /** Frees the GL objects allocated by create(); runs while the GL context is still alive, main thread. */
+    virtual void destroy() {}
+    /** Stable display name; also the value persisted under [user] visualizer and matched by indexOf(). */
     [[nodiscard]] virtual std::string getName() const = 0;
+    /**
+     * Draws one frame into the reserved rect, with ImGui primitives or raw GL.
+     *
+     * Runs inside the ImGui frame (between NewFrame and Render) once per frame while in VISUALIZATION mode.
+     * Animation state must advance from ImGui::GetIO().DeltaTime inside render() — never from the always-ticking
+     * ImGui::GetTime() — so a hidden visualizer freezes and resumes where it left off. frame.frameCount == 0 means
+     * nothing is playing: decay to rest rather than react.
+     */
     virtual void render(const VisualFrame &frame) = 0;
 };
 
