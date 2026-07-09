@@ -50,6 +50,9 @@ struct UiState {
     const std::vector<PlaylistEntry> &playlist;
     bool playlistShuffle;
     bool playlistRepeat;
+    // Index of the currently-playing playlist entry, -1 when none (stopped, or playback originated
+    // from the browser). Drives the playlist tab's "now playing" row: exactly the row advance follows.
+    int playingPlaylistIndex;
     // Visualizer picker slice (Settings→Visualizer). `visualizerNames` is a non-owning view of
     // Application's startup-built cache, valid for the frame.
     const std::vector<std::string> &visualizerNames;

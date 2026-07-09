@@ -320,6 +320,19 @@ void Application::handlePlayPlaylistEntry(const std::size_t index) {
     m_fileSystem.requestFileFromSource(entry.sourceIndex, entry.path);
 }
 
+// Shared tail of every play failure (fetch or decode). An auto-advance (direction != 0) silently
+// skips to the next candidate — playlist- or browser-aware via advanceTrack. A direct click
+// (direction 0) surfaces the reason, unless the pending name was cleared by a user cancel
+// (handleCancelWork), which stays silent.
+void Application::handlePlayFailure(const std::string_view reason) {
+    if (m_advanceDirection != 0) {
+        advanceTrack(m_advanceDirection);
+    } else if (!m_pendingPlayName.empty()) {
+        m_playbackError = "Cannot play " + m_pendingPlayName + ": ";
+        m_playbackError += reason;
+    }
+}
+
 void Application::handleToggleShuffle() {
     m_playList.toggleShuffle();
 }
@@ -362,12 +375,8 @@ void Application::update() {
             // Suppress the decode overlay only for a boundary/auto advance (direction != 0); a direct
             // click (direction 0) keeps it. m_advanceDirection is coherent at this consume point.
             m_advanceLoadInFlight = (m_advanceDirection != 0);
-        } else if (m_advanceDirection != 0) {
-            advanceTrack(m_advanceDirection); // skip a broken entry (fetch failure): silent, playlist- or browser-aware
-        } else if (!m_pendingPlayName.empty()) {
-            // Direct-click fetch failure (direction 0): surface it. An empty pending name means the
-            // work was cancelled by the user (handleCancelWork cleared it), which stays silent.
-            m_playbackError = "Cannot play " + m_pendingPlayName + ": download failed";
+        } else {
+            handlePlayFailure("download failed");
         }
     }
 
@@ -384,18 +393,10 @@ void Application::update() {
             m_consecutivePlaylistSkips = 0; // a track played: the playlist-skip guard starts fresh
             break;
         case PlayResult::Unsupported:
-            if (m_advanceDirection != 0) {
-                advanceTrack(m_advanceDirection);
-            } else if (!m_pendingPlayName.empty()) {
-                m_playbackError = "Cannot play " + m_pendingPlayName + ": unsupported format";
-            }
+            handlePlayFailure("unsupported format");
             break;
         case PlayResult::DecodeError:
-            if (m_advanceDirection != 0) {
-                advanceTrack(m_advanceDirection);
-            } else if (!m_pendingPlayName.empty()) {
-                m_playbackError = "Cannot play " + m_pendingPlayName + ": failed to decode";
-            }
+            handlePlayFailure("failed to decode");
             break;
         }
     }
@@ -454,6 +455,9 @@ UiState Application::makeUiState() const {
         .playlist = m_playList.entries(),
         .playlistShuffle = m_playList.shuffle(),
         .playlistRepeat = m_playList.repeat(),
+        // The cursor itself survives STOP (NEXT still resumes from the playlist), but a stopped
+        // player lights no row — matching the browser highlight, which goes dark on an empty fileName.
+        .playingPlaylistIndex = m_player.getState() == PlayerState::STOPPED ? -1 : m_playlistIndex,
         .visualizerNames = m_visualizerNames,
         .activeVisualizer = m_visualizer.getActiveIndex()
     };

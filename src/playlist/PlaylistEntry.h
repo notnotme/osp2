@@ -31,7 +31,7 @@
 // (the same source-relative path FileSystem::requestFile / DataSource::fetchFile expect); 28b only
 // reads name, so the added fields are backward-compatible.
 struct PlaylistEntry {
-    std::string name;           // basename: shown in the tab, matched against PlaybackStatus.fileName
+    std::string name;           // basename: display and error text only (the playing row is tracked by index)
     std::filesystem::path path; // source-relative path (getPath()/name) fetchFile expects; replay (28e)
     int sourceIndex = -1;       // index of the owning DataSource in FileSystem's source list; replay (28e)
 };
