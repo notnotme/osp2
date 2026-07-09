@@ -30,21 +30,28 @@ namespace openmpt {
 }
 
 
+/**
+ * Decoder plugin wrapping libopenmpt for tracker formats (MOD, XM, S3M, IT, ...).
+ *
+ * Extensions come from openmpt::get_supported_extensions(). Captured strings need no transcoding — libopenmpt
+ * already returns UTF-8. All three settings (stereo_separation, interpolation, loop) are cached members applied
+ * to each module on open() and applied live in applySetting(); loop On maps to set_repeat_count(-1), so the
+ * module loops seamlessly inside the decoder and never signals end-of-track.
+ */
 class OpenMptPlugin final : public PlayerPlugin {
 private:
-    int m_sampleRate;
-    std::vector<std::string> m_extensions;
-    std::unique_ptr<openmpt::module> m_module;
-    // Captured once in open() so getMetadata()/getTitle() never touch the audio-thread-shared
-    // module. m_title stays raw metadata (may be empty — the Gui falls back to the filename).
+    int m_sampleRate;                          ///< Output sample rate handed to every module render call.
+    std::vector<std::string> m_extensions;     ///< Supported extensions, from openmpt::get_supported_extensions().
+    std::unique_ptr<openmpt::module> m_module; ///< The open module; shared with the audio thread while active.
+    /**
+     * Captured once in open() so getMetadata()/getTitle() never touch the audio-thread-shared module.
+     */
     TrackMetadata m_metadata;
+    /** Raw title captured in open(); may be empty — the Gui falls back to the filename. */
     std::string m_title;
-    // Cached render settings, re-applied to each module on open(); m_interpolation is an index
-    // into the Interpolation enum labels (see getSettings()). m_loop is 0/1 and maps to
-    // set_repeat_count (1 -> -1, loop forever; 0 -> play once).
-    int m_stereoSeparation;
-    int m_interpolation;
-    int m_loop;
+    int m_stereoSeparation; ///< Cached stereo separation percent, re-applied to each module on open().
+    int m_interpolation;    ///< Index into the Interpolation enum labels (see getSettings()); re-applied on open().
+    int m_loop;             ///< 0/1, maps to set_repeat_count (1 -> -1, loop forever; 0 -> play once).
 
 public:
     OpenMptPlugin(const OpenMptPlugin &) = delete;

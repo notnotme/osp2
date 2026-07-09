@@ -28,27 +28,46 @@
 struct Music_Emu;
 
 
+/**
+ * Decoder plugin wrapping libgme for classic console/arcade formats (ay, gbs, gym, hes, kss, nsf, nsfe, sap,
+ * spc, vgm, vgz).
+ *
+ * gme_play renders interleaved-stereo 16-bit straight into the output buffer. Many of these formats pack
+ * several tunes per file, so this is the plugin that overrides the subtrack virtuals. Quirks:
+ * - Duration is a real length only: gme_info_t.length, else intro_length + loop_length, else 0 = unknown.
+ *   libgme's play_length is ignored — for a bare header it is a built-in 150000 ms default that would fake a
+ *   constant 2:30 on every subsong.
+ * - Most GME formats never self-limit, so with loop off startTrack() sets a fade at the track's length to make
+ *   the track end and auto-advance work; with loop on, no fade is set and the tune repeats forever.
+ * - A sibling ".m3u" playlist, when present, overlays curated per-subtrack titles and lengths onto the emulator
+ *   (see overlaySiblingM3u()).
+ * - Header strings are transcoded from Shift-JIS to UTF-8 during open() (ASCII tags pass through unchanged).
+ */
 class GmePlugin final : public PlayerPlugin {
 private:
-    int m_sampleRate;
-    std::vector<std::string> m_extensions;
-    // Custom deleter (&gme_delete, set in the .cpp ctor) so the emulator is torn down via RAII.
+    int m_sampleRate;                      ///< Output sample rate handed to gme_open_data.
+    std::vector<std::string> m_extensions; ///< Supported file extensions, fixed at construction.
+    /** Custom deleter (&gme_delete, set in the .cpp ctor) so the emulator is torn down via RAII. */
     std::unique_ptr<Music_Emu, void (*)(Music_Emu *)> m_emu;
-    // Captured once in open() so getMetadata() never touches the audio-thread-shared emulator.
+    /** Captured once in open() so getMetadata() never touches the audio-thread-shared emulator. */
     TrackMetadata m_metadata;
-    // Cached in open() so getTitle()/getDuration() never touch the shared emulator.
+    /** Cached in open() so getTitle() never touches the shared emulator. */
     std::string m_title;
+    /** Cached in open() so getDuration() never touches the shared emulator. */
     double m_duration;
-    // Cached subtrack navigation state so getSubtrackCount()/getCurrentSubtrack() never touch the
-    // shared emulator; refreshed by startTrack() (mirrors m_title/m_duration/m_metadata).
+    /**
+     * Cached subtrack count so getSubtrackCount() never touches the shared emulator; refreshed by startTrack()
+     * (mirrors m_title/m_duration/m_metadata).
+     */
     int m_trackCount;
+    /** Cached 0-based playing subtrack so getCurrentSubtrack() never touches the shared emulator. */
     int m_currentTrack;
-    // Cached render settings, re-applied to each emulator on open(). m_stereoDepth is a 0..100
-    // percent (mapped to gme's 0.0..1.0 depth); m_accuracy is 0/1 (see getSettings()).
-    int m_stereoDepth;
-    int m_accuracy;
-    // Deferred loop flag (0/1): consumed at each startTrack() to disable gme's play-length limit so
-    // the track repeats forever. Persists across open/close like m_accuracy; clamped on store.
+    int m_stereoDepth; ///< 0..100 percent (mapped to gme's 0.0..1.0 depth); re-applied to each emulator on open().
+    int m_accuracy;    ///< 0/1 (see getSettings()); re-applied to each emulator on open().
+    /**
+     * Deferred loop flag (0/1): consumed at each startTrack() to disable gme's play-length limit so the track
+     * repeats forever. Persists across open/close like m_accuracy; clamped on store.
+     */
     int m_loop;
 
 public:
@@ -68,21 +87,37 @@ public:
     [[nodiscard]] double getDuration() const override;
     [[nodiscard]] TrackMetadata getMetadata() const override;
     [[nodiscard]] std::vector<PluginSetting> getSettings() const override;
+    /**
+     * Applies stereo_depth and accuracy to the live emulator; the loop flag is only stored, consumed at the
+     * next startTrack().
+     */
     void applySetting(const std::string &key, int value) override;
     [[nodiscard]] int getSubtrackCount() const override;
     [[nodiscard]] int getCurrentSubtrack() const override;
+    /**
+     * Clamps index to [0, count) and starts it via startTrack(); on failure the current subtrack (and the
+     * emulator) is kept, since the file is still valid.
+     */
     void selectSubtrack(int index) override;
 
 private:
-    // Overlays a sibling ".m3u" playlist onto the freshly-opened emulator so libgme reports the
-    // curated per-subtrack titles/lengths the tune's own header lacks. Handles both real-world
-    // layouts (a combined "<stem>.m3u", or several per-track ".m3u" files each referencing the tune
-    // by filename). Strictly best-effort: any failure is logged at most, never propagated or thrown.
+    /**
+     * Overlays a sibling ".m3u" playlist onto the freshly-opened emulator so libgme reports the curated
+     * per-subtrack titles/lengths the tune's own header lacks.
+     *
+     * Handles both real-world layouts (a combined "<stem>.m3u", or several per-track ".m3u" files each
+     * referencing the tune by filename). Strictly best-effort: any failure is logged at most, never propagated
+     * or thrown.
+     */
     void overlaySiblingM3u(const std::filesystem::path &tunePath);
 
-    // Starts subtrack `index` on the already-open emulator: re-applies stereo depth (start_track can
-    // reset effects), re-reads gme_track_info and rebuilds the cached title/duration/metadata, and
-    // sets m_currentTrack. Returns false (leaving the caches untouched) if libgme reports an error.
+    /**
+     * Starts subtrack `index` on the already-open emulator.
+     *
+     * Re-applies stereo depth (start_track can reset effects), re-reads gme_track_info and rebuilds the cached
+     * title/duration/metadata, and sets m_currentTrack.
+     * @return false (leaving the caches untouched) if libgme reports an error
+     */
     [[nodiscard]] bool startTrack(int index);
 };
 
