@@ -2,8 +2,8 @@
 
 Some decoder libraries OSP2 links are not packaged for one or both targets and are built from
 source by the maintainer. This file records exactly how, so the builds are reproducible. These are
-**environment prerequisites**, not part of any code chunk — the CMake stanzas assume `pkg-config`
-resolves each library in the target environment.
+**environment prerequisites** — the CMake stanzas assume `pkg-config` resolves each library in the
+target environment.
 
 ## libsidplayfp (+ libresidfp) — SID playback
 
@@ -47,8 +47,7 @@ Verify: `pkg-config --exists libresidfp libsidplayfp` and
 
 ### Switch (devkitA64 portlib, installs into `/opt/devkitpro/portlibs/switch`)
 
-Same order (libresidfp first), cross-compiled. See the full recipe in the memory note
-`switch-portlib-build-recipe`; in short, per source tree:
+Same order (libresidfp first), cross-compiled. Per source tree:
 
 ```sh
 source /opt/devkitpro/switchvars.sh
@@ -97,8 +96,8 @@ for it, so autoconf's link-test leaves `HAVE_BASENAME` undefined. That breaks th
 Fix **without patching sc68 sources**: force `ac_cv_func_basename=yes` on the cross configure so both
 use the system declaration. `unice68`'s only `basename` caller is its CLI `main` → disabled via
 `--disable-unice68-cli`. That leaves exactly one unresolved `U basename` in `libsc68.a` (from
-`api68.c`), which OSP2 satisfies at final link with a tiny Switch-only stub (see `SwitchCompat.c` /
-the `Sc68Plugin` CMake stanza).
+`api68.c`), which OSP2 satisfies at final link with a tiny Switch-only stub (see
+`src/player/plugins/switch_compat.c` / the `Sc68Plugin` CMake stanza).
 
 ### Desktop (native, installs into `/usr/local`) — run first, generates trap68.h
 
