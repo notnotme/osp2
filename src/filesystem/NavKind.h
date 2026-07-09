@@ -20,8 +20,12 @@
 #ifndef OSP2_NAV_KIND_H
 #define OSP2_NAV_KIND_H
 
-// One-frame browser navigation signal: emitted when a directory listing is swapped in, so the Gui
-// can reset scroll to the top on descend and restore the saved offset on ascend. See docs/ui.md.
+/**
+ * One-frame browser navigation signal: emitted when a directory listing is swapped in, so the Gui can reset scroll
+ * to the top on descend and restore the saved offset on ascend.
+ *
+ * See docs/ui.md.
+ */
 enum class NavKind { None, Descend, Ascend };
 
 #endif //OSP2_NAV_KIND_H
