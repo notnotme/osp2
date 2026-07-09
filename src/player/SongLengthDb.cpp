@@ -19,12 +19,14 @@
 
 #include "SongLengthDb.h"
 
+#include "plugins/PluginUtil.h"
+
 #include <SDL_log.h>
 
-#include <cctype>
 #include <exception>
 #include <fstream>
 #include <sstream>
+#include <string_view>
 
 namespace {
     // HVSC's file has ~60k entries; reserving up front avoids rehashing during the load.
@@ -73,11 +75,8 @@ bool SongLengthDb::load(const std::filesystem::path &path) {
                 continue;
             }
 
-            std::string md5 = line.substr(0, equals);
             // Keys are already lowercase hex; lowercase defensively so a lookup can rely on it.
-            for (char &c : md5) {
-                c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-            }
+            std::string md5 = asciiToLower(std::string_view(line).substr(0, equals));
 
             std::vector<double> times;
             std::istringstream tokens(line.substr(equals + 1));

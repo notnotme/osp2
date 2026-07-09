@@ -34,13 +34,8 @@
 
 #include "../../Paths.h"
 #include "../Charset.h"
+#include "PluginUtil.h"
 
-
-// mix() writes interleaved-stereo 16-bit samples into a short buffer; we hand it our int16 scratch.
-static_assert(
-    sizeof(short) == sizeof(std::int16_t),
-    "SidPlugin mixes libsidplayfp's short output directly into the int16 scratch buffer"
-);
 
 namespace {
     // Interleaved stereo — libsidplayfp is initialized with initMixer(true).
@@ -49,11 +44,6 @@ namespace {
     // CPU cycles emulated per play() step (~10ms at the C64's ~1MHz clock). One step yields a
     // variable, bounded number of samples that decode() buffers in m_mixBuffer.
     constexpr unsigned int PLAY_CYCLES = 10000;
-
-    // Maps a possibly-null C string (libsidplayfp leaves absent fields as nullptr) to a std::string.
-    std::string toString(const char *value) {
-        return value != nullptr ? std::string(value) : std::string();
-    }
 
     std::string sidModelString(const SidTuneInfo::model_t model) {
         switch (model) {
@@ -188,15 +178,14 @@ bool SidPlugin::open(const std::filesystem::path &path) {
     m_duration = 0.0; // open-ended until the Songlengths database resolves a time below
 
     try {
-        std::ifstream file(path, std::ios::binary);
-        if (!file.is_open()) {
+        const auto data = readFileBytes(path);
+        if (!data) {
             SDL_Log("SidPlugin: cannot open %s", path.c_str());
             return false;
         }
-        const std::vector<char> data{std::istreambuf_iterator(file), std::istreambuf_iterator<char>()};
 
         auto tune = std::make_unique<SidTune>(
-            reinterpret_cast<const uint_least8_t *>(data.data()), static_cast<uint_least32_t>(data.size())
+            reinterpret_cast<const uint_least8_t *>(data->data()), static_cast<uint_least32_t>(data->size())
         );
         if (!tune->getStatus()) {
             SDL_Log("SidPlugin: cannot parse %s: %s", path.c_str(), tune->statusString());

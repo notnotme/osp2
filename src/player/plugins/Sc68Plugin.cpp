@@ -20,6 +20,7 @@
 #include "Sc68Plugin.h"
 
 #include "../Charset.h"
+#include "PluginUtil.h"
 
 #include <sc68/sc68.h>
 #include <SDL_log.h>
@@ -27,8 +28,7 @@
 #include <algorithm>
 #include <cctype>
 #include <exception>
-#include <fstream>
-#include <iterator>
+#include <utility>
 #include <vector>
 
 
@@ -40,11 +40,6 @@ namespace {
     // bail. A deferred track-change/loop event costs exactly one such empty pass (see decode()); the
     // cap only exists so a persistent SC68_IDLE can never spin the audio thread under m_mutex.
     constexpr int MAX_EMPTY_PASSES = 8;
-
-    // Maps a possibly-null C string (libsc68 leaves absent fields as nullptr) to a std::string.
-    std::string toString(const char *value) {
-        return value != nullptr ? std::string(value) : std::string();
-    }
 
     bool equalsIgnoreCase(const char *a, const char *b) {
         if (a == nullptr || b == nullptr) {
@@ -125,12 +120,12 @@ bool Sc68Plugin::open(const std::filesystem::path &path) {
     // honor PlayerPlugin's "must not throw" contract by catching everything and returning false.
     std::vector<char> data;
     try {
-        std::ifstream file(path, std::ios::binary);
-        if (!file.is_open()) {
+        auto bytes = readFileBytes(path);
+        if (!bytes) {
             SDL_Log("Sc68Plugin: cannot open %s", path.c_str());
             return false;
         }
-        data.assign(std::istreambuf_iterator(file), std::istreambuf_iterator<char>());
+        data = std::move(*bytes);
     } catch (const std::exception &e) {
         SDL_Log("Sc68Plugin: failed to read %s: %s", path.c_str(), e.what());
         return false;

@@ -81,6 +81,7 @@ bool OpenMptPlugin::open(const std::filesystem::path &path) {
             m_module->get_num_instruments(),
             m_module->get_metadata("message")
         };
+        m_title = m_module->get_metadata("title");
         return true;
     } catch (const openmpt::exception &e) {
         SDL_Log("OpenMptPlugin: failed to parse %s: %s", path.c_str(), e.what());
@@ -92,6 +93,7 @@ bool OpenMptPlugin::open(const std::filesystem::path &path) {
 void OpenMptPlugin::close() {
     m_module.reset();
     m_metadata = std::monostate{};
+    m_title.clear();
 }
 
 int OpenMptPlugin::decode(std::int16_t *buffer, const int frames) {
@@ -107,7 +109,7 @@ const std::vector<std::string> &OpenMptPlugin::getSupportedExtensions() const {
 }
 
 std::string OpenMptPlugin::getTitle() const {
-    return m_module ? m_module->get_metadata("title") : "";
+    return m_title;
 }
 
 double OpenMptPlugin::getPosition() const {
