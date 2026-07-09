@@ -100,6 +100,14 @@ cmake --build build --target tidy           # clang-tidy over src/ (needs a conf
 
 Architecture details — including the audio threading contract and how to add a decoder plugin — are documented per domain in [docs/](docs/) and in [CLAUDE.md](CLAUDE.md).
 
+## Screenshots
+
+![Dark UI with Bars visualizer](./docs/z_capture_1.png)
+
+![Dark UI with metadata](./docs/z_capture_3.png)
+
+![Light UI with playlist](./docs/z_capture_5.png)
+
 ## License
 
 OSP2 is licensed under the GPL-3.0-or-later; see [LICENSE](LICENSE). Third-party components and their licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
