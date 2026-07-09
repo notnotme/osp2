@@ -42,8 +42,6 @@ private:
     std::array<float, BAR_COUNT> m_levels{};
 
 public:
-    void create() override;
-    void destroy() override;
     [[nodiscard]] std::string getName() const override;
     void render(const VisualFrame &frame) override;
 };

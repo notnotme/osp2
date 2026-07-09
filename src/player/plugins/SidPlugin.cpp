@@ -102,39 +102,41 @@ namespace {
     }
 } // namespace
 
-SidPlugin::SidPlugin()
-    : m_sampleRate(0),
+SidPlugin::SidPlugin(const int sampleRate)
+    : m_sampleRate(sampleRate),
+      m_extensions{"sid", "psid", "rsid"},
+      m_engine(std::make_unique<sidplayfp>()),
+      m_builder(std::make_unique<ReSIDfpBuilder>("ReSIDfp")),
       m_mixPos(0),
       m_mixFrames(0),
       m_model(0),
       m_clock(0),
       m_duration(0.0),
-      m_dbReady(false) {}
-
-SidPlugin::~SidPlugin() {
-    // Defensive: destroy() normally joins the loader, but if create()/run() throws before destroy()
-    // is reached, a still-joinable std::thread would std::terminate during destruction. The
-    // joinable() check makes this a no-op on the normal (already-joined) path.
-    if (m_dbLoader.joinable()) {
-        m_dbLoader.join();
-    }
-}
-
-void SidPlugin::create(const int sampleRate) {
-    m_sampleRate = sampleRate;
-    m_extensions = {"sid", "psid", "rsid"};
-    m_engine = std::make_unique<sidplayfp>();
-    m_builder = std::make_unique<ReSIDfpBuilder>("ReSIDfp");
+      m_dbReady(false) {
     loadRoms();
 
     // Parse the ~5 MB Songlengths database off the decode path so it never stalls the first SID's
     // open() (and stretches the loading overlay). It starts here, at startup, and typically finishes
-    // long before the user browses to and picks a tune; a tune opened before it is ready simply shows
-    // an open-ended duration. destroy() joins this thread; open() reads the map only once m_dbReady.
+    // long before the user browses to and picks a tune; a tune opened before it is ready simply
+    // shows an open-ended duration. The destructor joins this thread; open() reads the map only
+    // once m_dbReady. Started last so no later constructor step can throw past a joinable thread.
     m_dbLoader = std::thread([this] {
         m_songLengths.load(assetPath("sidlength/Songlengths.md5"));
         m_dbReady.store(true, std::memory_order_release);
     });
+}
+
+SidPlugin::~SidPlugin() {
+    // Join the background database loader before tearing down (a still-joinable std::thread would
+    // std::terminate at destruction); it only touches m_songLengths, so this is safe any time.
+    if (m_dbLoader.joinable()) {
+        m_dbLoader.join();
+    }
+    // Reset the engine first: it holds locked SID emulations owned by the builder. This also
+    // unloads any tune still open.
+    m_engine.reset();
+    m_builder.reset();
+    m_tune.reset();
 }
 
 void SidPlugin::loadRoms() {
@@ -154,18 +156,6 @@ void SidPlugin::loadRoms() {
     if (!kernal.empty()) {
         SDL_Log("SidPlugin: loaded C64 KERNAL ROM — RSID tunes enabled");
     }
-}
-
-void SidPlugin::destroy() {
-    // Join the background database loader before tearing down (a still-joinable std::thread would
-    // std::terminate at destruction); it only touches m_songLengths, so this is safe any time.
-    if (m_dbLoader.joinable()) {
-        m_dbLoader.join();
-    }
-    // Reset the engine first: it holds locked SID emulations owned by the builder.
-    m_engine.reset();
-    m_builder.reset();
-    m_tune.reset();
 }
 
 bool SidPlugin::configure() {

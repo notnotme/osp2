@@ -60,7 +60,6 @@ void Platform::create() {
     // The plugin set is fixed from here on: build the Application's visualizer-name cache once,
     // keeping getNames() (which allocates) off the per-frame makeUiState() path.
     m_app.refreshVisualizerNames();
-    m_playList.create();
     initPlayerAndSettings();
 
     const std::filesystem::path start_path = resolveStartPath();
@@ -150,7 +149,6 @@ void Platform::destroy() {
     m_player.destroy();
     // Free visualizer GL objects while the GL context is still valid.
     m_visualizer.destroy();
-    m_playList.destroy();
     m_gui.finalize();
 
     ImGui_ImplOpenGL3_Shutdown();

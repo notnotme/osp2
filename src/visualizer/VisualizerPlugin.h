@@ -27,8 +27,10 @@
 
 // Interchangeable visualization, mirroring PlayerPlugin. create()/destroy() give a raw-GL plugin a
 // clear lifecycle for its shader/VBO (called once from VisualizerController::create()/destroy() on
-// the main thread, with a live GL context); ImGui plugins leave them empty. render() runs inside the
-// ImGui frame (between NewFrame and Render) once per frame while in VISUALIZATION mode.
+// the main thread, with a live GL context — the controller itself is constructed before GL exists,
+// so this two-phase lifecycle is load-bearing); ImGui-only plugins keep the no-op defaults.
+// render() runs inside the ImGui frame (between NewFrame and Render) once per frame while in
+// VISUALIZATION mode.
 class VisualizerPlugin {
 public:
     VisualizerPlugin(const VisualizerPlugin &) = delete;
@@ -36,8 +38,8 @@ public:
     explicit VisualizerPlugin() = default;
     virtual ~VisualizerPlugin() = default;
 
-    virtual void create() = 0;  // allocate GL objects if any (ImGui plugins: empty)
-    virtual void destroy() = 0; // free them
+    virtual void create() {}  // allocate GL objects if any (default: none)
+    virtual void destroy() {} // free them
     [[nodiscard]] virtual std::string getName() const = 0;
     virtual void render(const VisualFrame &frame) = 0;
 };

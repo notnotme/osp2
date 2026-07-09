@@ -28,8 +28,8 @@
 #include "PlaylistEntry.h"
 
 
-// Ordered, session-only playlist (no persistence this round). Mirrors VisualizerController's small
-// final-module shape (create()/destroy(), owned by value in Platform, injected into Application).
+// Ordered, session-only playlist (no persistence this round). A small final module owned by value
+// in Platform and injected into Application; plain RAII, no explicit lifecycle.
 // Single-threaded, main-thread only — no mutex (unlike PlayerController): every access happens
 // from the UI/update path.
 class PlayList final {
@@ -44,10 +44,6 @@ public:
     PlayList &operator=(const PlayList &) = delete;
     explicit PlayList();
     ~PlayList() = default;
-
-    // Nothing to allocate; kept for symmetry with the other subsystems and for future use.
-    void create();
-    void destroy();
 
     void add(PlaylistEntry entry);
     void removeAt(std::size_t index); // bounds-checked no-op if out of range

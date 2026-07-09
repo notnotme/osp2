@@ -25,15 +25,6 @@
 PlayList::PlayList()
     : m_rng(std::random_device{}()) {}
 
-void PlayList::create() {
-    // Nothing to allocate — the entry vector and flags are default-constructed. Kept for lifecycle
-    // symmetry with the other subsystems and for future use.
-}
-
-void PlayList::destroy() {
-    m_entries.clear();
-}
-
 void PlayList::add(PlaylistEntry entry) {
     m_entries.push_back(std::move(entry));
 }

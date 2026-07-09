@@ -45,22 +45,16 @@ namespace {
     }
 } // namespace
 
-OpenMptPlugin::OpenMptPlugin()
-    : m_sampleRate(0),
+OpenMptPlugin::OpenMptPlugin(const int sampleRate)
+    : m_sampleRate(sampleRate),
+      m_extensions(openmpt::get_supported_extensions()),
       m_stereoSeparation(100),
       m_interpolation(0),
       m_loop(0) {}
 
+// Defined here, where openmpt::module is complete, so ~unique_ptr can destroy it — which also
+// releases any track still open.
 OpenMptPlugin::~OpenMptPlugin() = default;
-
-void OpenMptPlugin::create(const int sampleRate) {
-    m_sampleRate = sampleRate;
-    m_extensions = openmpt::get_supported_extensions();
-}
-
-void OpenMptPlugin::destroy() {
-    m_module.reset();
-}
 
 bool OpenMptPlugin::open(const std::filesystem::path &path) {
     try {

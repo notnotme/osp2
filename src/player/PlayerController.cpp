@@ -50,14 +50,11 @@ PlayerController::PlayerController()
       m_loadSucceeded(false) {}
 
 void PlayerController::create() {
-    m_plugins.emplace_back(std::make_unique<OpenMptPlugin>());
-    m_plugins.emplace_back(std::make_unique<GmePlugin>());
-    m_plugins.emplace_back(std::make_unique<SidPlugin>());
-    m_plugins.emplace_back(std::make_unique<Sc68Plugin>());
-
-    for (const auto &plugin : m_plugins) {
-        plugin->create(SAMPLE_RATE);
-    }
+    // Registration order = dispatch priority on extension overlap.
+    m_plugins.emplace_back(std::make_unique<OpenMptPlugin>(SAMPLE_RATE));
+    m_plugins.emplace_back(std::make_unique<GmePlugin>(SAMPLE_RATE));
+    m_plugins.emplace_back(std::make_unique<SidPlugin>(SAMPLE_RATE));
+    m_plugins.emplace_back(std::make_unique<Sc68Plugin>(SAMPLE_RATE));
 
     SDL_AudioSpec want = {};
     want.freq = SAMPLE_RATE;
@@ -93,9 +90,8 @@ void PlayerController::destroy() {
 
     for (const auto &plugin : m_plugins) {
         plugin->close();
-        plugin->destroy();
     }
-    m_plugins.clear();
+    m_plugins.clear(); // destructors run here, after the device is closed
     m_activePlugin = nullptr;
     m_state = PlayerState::STOPPED;
 }

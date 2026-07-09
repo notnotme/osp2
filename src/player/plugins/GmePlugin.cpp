@@ -69,8 +69,9 @@ namespace {
     }
 } // namespace
 
-GmePlugin::GmePlugin()
-    : m_sampleRate(0),
+GmePlugin::GmePlugin(const int sampleRate)
+    : m_sampleRate(sampleRate),
+      m_extensions{"ay", "gbs", "gym", "hes", "kss", "nsf", "nsfe", "sap", "spc", "vgm", "vgz"},
       m_emu(nullptr, &gme_delete),
       m_duration(0.0),
       m_trackCount(0),
@@ -79,16 +80,8 @@ GmePlugin::GmePlugin()
       m_accuracy(0),
       m_loop(0) {}
 
+// ~unique_ptr runs gme_delete on the emulator, which also releases any track still open.
 GmePlugin::~GmePlugin() = default;
-
-void GmePlugin::create(const int sampleRate) {
-    m_sampleRate = sampleRate;
-    m_extensions = {"ay", "gbs", "gym", "hes", "kss", "nsf", "nsfe", "sap", "spc", "vgm", "vgz"};
-}
-
-void GmePlugin::destroy() {
-    m_emu.reset();
-}
 
 bool GmePlugin::open(const std::filesystem::path &path) {
     // libgme is a C library and never throws, but the file read into a vector can (bad_alloc on a
@@ -204,12 +197,9 @@ void GmePlugin::overlaySiblingM3u(const std::filesystem::path &tunePath) {
             buffer += '\n';
         }
 
-        if (const gme_err_t error =
-                gme_load_m3u_data(m_emu.get(), buffer.data(), static_cast<long>(buffer.size()))) {
+        if (const gme_err_t error = gme_load_m3u_data(m_emu.get(), buffer.data(), static_cast<long>(buffer.size()))) {
             SDL_Log(
-                "GmePlugin: ignoring exploded m3u playlist in %s: %s",
-                tunePath.parent_path().string().c_str(),
-                error
+                "GmePlugin: ignoring exploded m3u playlist in %s: %s", tunePath.parent_path().string().c_str(), error
             );
         }
     } catch (const std::exception &e) {

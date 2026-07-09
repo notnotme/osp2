@@ -86,7 +86,7 @@ Batch from the 2026-07 whole-codebase architecture audit (cpp-architect, finding
   - [x] 32c — SettingsKeys.h (single-source INI section/key names)
 - [x] [TODO_33 — Playlist "now playing" highlight by index](TODO_33.md) — requires TODO_32; single chunk; fixes false highlights
 - [ ] [TODO_34 — Player plugins: RAII lifecycle + PluginUtil dedup](TODO_34.md) — independent; most churn, do last
-  - [ ] 34a — RAII collapse (`PlayerPlugin` ctor/dtor; NOT `VisualizerPlugin`; also empty `PlayList` lifecycle)
+  - [x] 34a — RAII collapse (`PlayerPlugin` ctor/dtor; NOT `VisualizerPlugin`; also empty `PlayList` lifecycle)
   - [ ] 34b — PluginUtil.h dedup + `statusLocked()` + OpenMpt title cache
 
 - [ ] [TODO_35 — No overlay blink between "Downloading..." and "Loading..." (fetch→decode hand-off)](TODO_35.md) — independent; single chunk; found on Switch hardware during TODO_31 verification

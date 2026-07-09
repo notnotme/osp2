@@ -70,18 +70,13 @@ namespace {
     }
 } // namespace
 
-Sc68Plugin::Sc68Plugin()
-    : m_sampleRate(0) {}
-
-Sc68Plugin::~Sc68Plugin() = default;
-
-void Sc68Plugin::create(const int sampleRate) {
-    m_sampleRate = sampleRate;
-    m_extensions = {"sc68", "sndh", "snd"};
-
+Sc68Plugin::Sc68Plugin(const int sampleRate)
+    : m_sampleRate(sampleRate),
+      m_extensions{"sc68", "sndh", "snd"} {
     // sc68_init toggles a single global init flag; the sole Sc68Plugin instance owns the one
-    // init/shutdown pair. A failure here leaves m_sc68 null, so every open() fails defensively
-    // rather than crashing, and destroy() must not call sc68_shutdown() (guarded by m_initialized).
+    // init/shutdown pair. A failure here (never a throw) leaves m_sc68 null, so every open() fails
+    // defensively rather than crashing, and the destructor must not call sc68_shutdown() (guarded
+    // by m_initialized).
     if (sc68_init(nullptr) != SC68_OK) {
         SDL_Log("Sc68Plugin: sc68_init failed — sc68 playback disabled");
         return;
@@ -104,15 +99,14 @@ void Sc68Plugin::create(const int sampleRate) {
     }
 }
 
-void Sc68Plugin::destroy() {
+Sc68Plugin::~Sc68Plugin() {
     if (m_sc68 != nullptr) {
-        sc68_close(m_sc68);
+        sc68_close(m_sc68); // releases any disk still loaded
         sc68_destroy(m_sc68);
         m_sc68 = nullptr;
     }
     if (m_initialized) {
         sc68_shutdown(); // pair only with a successful sc68_init()
-        m_initialized = false;
     }
 }
 

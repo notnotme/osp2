@@ -36,7 +36,8 @@ private:
     std::vector<std::string> m_extensions;
     // The libsc68 instance; holds the currently loaded disk between open() and close().
     sc68_t *m_sc68 = nullptr;
-    // True once sc68_init() succeeded in create(), so destroy() only pairs a shutdown with it.
+    // True once sc68_init() succeeded in the constructor, so the destructor only pairs a shutdown
+    // with it.
     bool m_initialized = false;
     // Captured once in open() so getMetadata() never touches the audio-thread-shared instance.
     TrackMetadata m_metadata;
@@ -58,12 +59,10 @@ private:
 public:
     Sc68Plugin(const Sc68Plugin &) = delete;
     Sc68Plugin &operator=(const Sc68Plugin &) = delete;
-    explicit Sc68Plugin();
+    explicit Sc68Plugin(int sampleRate);
     ~Sc68Plugin() override;
 
 public:
-    void create(int sampleRate) override;
-    void destroy() override;
     [[nodiscard]] bool open(const std::filesystem::path &path) override;
     void close() override;
     [[nodiscard]] int decode(std::int16_t *buffer, int frames) override;
