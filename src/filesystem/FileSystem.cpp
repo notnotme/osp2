@@ -181,6 +181,14 @@ std::optional<FetchResult> FileSystem::consumeFetchResult() {
     return result;
 }
 
+bool FileSystem::hasPendingFetchResult() const {
+    // Same mutex the worker parks the result under; the worker stores the result BEFORE clearing
+    // m_working, so whenever isWorking() reads false during the hand-off the parked result is
+    // already visible here — the overlay gap detection is race-free.
+    std::scoped_lock lock(m_mutex);
+    return m_fetchResult.has_value();
+}
+
 NavKind FileSystem::consumeNavigation() {
     const auto signal = m_navSignal;
     m_navSignal = NavKind::None;

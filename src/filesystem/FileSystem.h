@@ -109,6 +109,10 @@ public:
     void requestFileFromSource(int sourceIndex, const std::filesystem::path &path);
     void cancel();
     [[nodiscard]] std::optional<FetchResult> consumeFetchResult();
+    // True while a finished fetch's result is parked awaiting consumeFetchResult() — the one-frame
+    // window after the worker clears m_working and before the next update() consumes the result.
+    // Lets the UI keep the download overlay up across the fetch → decode hand-off (TODO_35).
+    [[nodiscard]] bool hasPendingFetchResult() const;
     [[nodiscard]] NavKind consumeNavigation();
     void update();
 

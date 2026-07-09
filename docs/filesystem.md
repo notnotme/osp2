@@ -70,6 +70,7 @@ classDiagram
         +requestFileFromSource(sourceIndex, path)
         +cancel()
         +consumeFetchResult() optional~FetchResult~
+        +hasPendingFetchResult() bool
         +consumeNavigation() NavKind
         +update()
         +getPath() path
@@ -226,7 +227,7 @@ style as the audio domain (atomic flag + mutex-guarded handoff, swap on the main
 | `m_sources`, `m_isPlayable` | immutable after `create()` until `destroy()` releases the sources (worker already joined); `m_isPlayable` is called on the worker: `PlayerController::isSupported` reads only immutable plugin extension lists |
 | `m_activeSource`, `m_sourceBeforeScan`, `m_workKind`, `m_workSource` | main thread only, mutated while the worker is idle; the worker uses the source pointer captured at launch. `m_workKind`/`m_workSource` are set at each worker start (`startScan`/`startFetch`/`requestFileFromSource`) and cleared in `update()` (and `destroy()`); `m_workSource` is read by `cancel()` |
 | `m_pendingVirtualRoot` | main thread only — set by `navigateToParent()` (mid-draw), applied and cleared by `update()` |
-| `m_fetchResult` | `m_mutex` (worker writes in `fetch()`; `consumeFetchResult()` reads on the main thread) |
+| `m_fetchResult` | `m_mutex` (worker writes in `fetch()`; `consumeFetchResult()` / `hasPendingFetchResult()` read on the main thread) |
 
 - **Worker lifecycle**: every launch goes through the shared `startWorker(kind, source, path)` —
   join any finished-but-unswapped worker, set `m_workKind`/`m_workSource`, set `m_working = true`,
@@ -247,6 +248,11 @@ style as the audio domain (atomic flag + mutex-guarded handoff, swap on the main
   `update()` joins the finished worker and, only for a `Scan`, swaps the listing; a `Fetch` leaves
   its result parked for `consumeFetchResult()`. The single worker stays sufficient because all
   FileSystem work is UI-modal — a listing and a download never need to overlap.
+  `hasPendingFetchResult()` reports (under `m_mutex`) whether a finished fetch's result is still
+  parked unconsumed; because the worker parks the result **before** clearing `m_working`, whenever
+  `isWorking()` reads false during the hand-off the parked result is already visible — the UI uses
+  this to keep the "Downloading..." overlay up across the fetch → decode gap frame, race-free
+  (TODO_35, see [application.md](application.md)).
 - **Cancellation**: `FileSystem::cancel()` (main thread) forwards to `m_workSource->cancel()` while
   `m_working` — `m_workSource` is the source captured at worker start, which for a playlist-replay
   fetch (`requestFileFromSource`) can differ from the browsed `m_activeSource`. The worker then

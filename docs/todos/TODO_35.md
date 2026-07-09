@@ -15,7 +15,7 @@
 
 ## Task chunks (implement, verify, and commit one at a time)
 
-- [ ] **35 — Continuous overlay across the fetch→decode hand-off**: direct click from the browser *and* playlist replay (`requestFileFromSource`) show an unbroken overlay "Downloading..." → "Loading..."; a cancelled or failed fetch still drops the overlay the frame it resolves; TODO_22 auto-advance semantics (no overlay for seamless local advance, "Downloading..." for remote siblings) unchanged.
+- [x] **35 — Continuous overlay across the fetch→decode hand-off**: direct click from the browser *and* playlist replay (`requestFileFromSource`) show an unbroken overlay "Downloading..." → "Loading..."; a cancelled or failed fetch still drops the overlay the frame it resolves; TODO_22 auto-advance semantics (no overlay for seamless local advance, "Downloading..." for remote siblings) unchanged.
 
 ## Files to change
 

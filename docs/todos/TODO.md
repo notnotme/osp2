@@ -89,4 +89,4 @@ Batch from the 2026-07 whole-codebase architecture audit (cpp-architect, finding
   - [x] 34a — RAII collapse (`PlayerPlugin` ctor/dtor; NOT `VisualizerPlugin`; also empty `PlayList` lifecycle)
   - [x] 34b — PluginUtil.h dedup + `statusLocked()` + OpenMpt title cache
 
-- [ ] [TODO_35 — No overlay blink between "Downloading..." and "Loading..." (fetch→decode hand-off)](TODO_35.md) — independent; single chunk; found on Switch hardware during TODO_31 verification
+- [x] [TODO_35 — No overlay blink between "Downloading..." and "Loading..." (fetch→decode hand-off)](TODO_35.md) — independent; single chunk; found on Switch hardware during TODO_31 verification
