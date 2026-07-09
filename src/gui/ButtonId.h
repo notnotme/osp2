@@ -21,7 +21,14 @@
 #define OSP2_BUTTON_ID_H
 
 
-enum ButtonId { PLAY_PAUSE, STOP, NEXT, PREVIOUS, QUIT };
+/** User-intent button identifier reported through UiActions::onButtonClick (player-bar transport and top-bar Quit). */
+enum ButtonId {
+    PLAY_PAUSE, ///< Toggles between playing and paused; a no-op while stopped.
+    STOP,       ///< Stops playback (also cancels an in-flight load).
+    NEXT,       ///< Advances: next subtrack first, then the next file/playlist entry.
+    PREVIOUS,   ///< Steps back: previous subtrack first, then the previous file/playlist entry.
+    QUIT        ///< Requests application exit; handled by Platform's run loop.
+};
 
 
 #endif //OSP2_BUTTON_ID_H
