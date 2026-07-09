@@ -26,11 +26,16 @@
 #include <SDL_stdinc.h>
 
 
-// Single source of path truth for OSP2.
+/**
+ * @file
+ * Single source of path truth for OSP2 — the per-platform (__SWITCH__) path split lives only here.
+ */
 
-// Absolute path to a read-only asset bundled under the romfs root, e.g.
-// assetPath("font/Roboto-Regular.ttf"). romfs is mounted at "romfs:/" on the Switch and shipped
-// alongside the executable as "romfs/" on desktop.
+/**
+ * Absolute path to a read-only asset bundled under the romfs root, e.g. assetPath("font/Roboto-Regular.ttf").
+ *
+ * romfs is mounted at "romfs:/" on the Switch and shipped alongside the executable as "romfs/" on desktop.
+ */
 inline std::filesystem::path assetPath(const std::filesystem::path &relative) {
 #if defined(__SWITCH__)
     return std::filesystem::path("romfs:/") / relative;
@@ -39,9 +44,12 @@ inline std::filesystem::path assetPath(const std::filesystem::path &relative) {
 #endif
 }
 
-// A writable file next to the executable on desktop; falls back to a bare relative path when
-// SDL cannot resolve the base directory. Switch callers do not use this — romfs is read-only,
-// so they target fixed SD-card ("/switch/…") locations instead.
+/**
+ * A writable file next to the executable on desktop.
+ *
+ * Falls back to a bare relative path when SDL cannot resolve the base directory. Switch callers do not use
+ * this — romfs is read-only, so they target fixed SD-card ("/switch/…") locations instead.
+ */
 inline std::filesystem::path nextToExecutable(const char *relative) {
     char *base = SDL_GetBasePath();
     if (!base) {
@@ -52,8 +60,12 @@ inline std::filesystem::path nextToExecutable(const char *relative) {
     return path;
 }
 
-// The INI lives next to the executable on desktop (git-ignored build dir); romfs is read-only
-// on the Switch, so it goes to writable SD-card storage instead ("/" is libnx's default sdmc device).
+/**
+ * Location of the osp2.ini settings file.
+ *
+ * The INI lives next to the executable on desktop (git-ignored build dir); romfs is read-only on the Switch,
+ * so it goes to writable SD-card storage instead ("/" is libnx's default sdmc device).
+ */
 inline std::filesystem::path configPath() {
 #if defined(__SWITCH__)
     return "/switch/OSP2/osp2.ini";
@@ -62,8 +74,12 @@ inline std::filesystem::path configPath() {
 #endif
 }
 
-// Remote sources download to this writable cache root. Mirrors configPath()'s convention:
-// SD-card storage on the Switch (romfs is read-only), next to the executable on desktop.
+/**
+ * Writable cache root remote sources download to.
+ *
+ * Mirrors configPath()'s convention: SD-card storage on the Switch (romfs is read-only), next to the
+ * executable on desktop.
+ */
 inline std::filesystem::path cachePath() {
 #if defined(__SWITCH__)
     return "/switch/OSP2/cache/";

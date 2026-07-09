@@ -276,8 +276,8 @@ void Application::handleCancelWork() {
 void Application::handleAddToPlaylist(const FileEntry &entry) {
     // Only file rows carry the context menu, but guard defensively so a directory never lands
     // in the playlist. Capture the source-relative path (getPath()/name) and owning source index
-    // now: the browser may later navigate elsewhere or switch source, but replay (28e) must still
-    // re-fetch from where the file actually lives.
+    // now: the browser may later navigate elsewhere or switch source, but replaying the entry must
+    // still re-fetch from where the file actually lives.
     if (entry.is_directory) {
         return;
     }
@@ -431,7 +431,7 @@ UiState Application::makeUiState() const {
     // Suppress the decode "Loading..." overlay for a boundary/auto advance (m_advanceLoadInFlight):
     // reload continuity keeps the outgoing track on screen, so the fast local decode needs no overlay.
     // A remote sibling still shows "Downloading..." via fsWorking during the FTP fetch. The parked
-    // fetch result bridges the fetch → decode hand-off window so the overlay never blinks (TODO_35).
+    // fetch result bridges the fetch → decode hand-off window so the overlay never blinks.
     const bool loading = m_player.isLoading() && !m_advanceLoadInFlight;
     const bool fsWorking = m_fileSystem.isWorking();
     // A finished fetch parked unconsumed (the one-frame fetch→decode hand-off window) keeps the

@@ -243,7 +243,7 @@ void Platform::loadFonts() {
         icon_ranges
     );
 
-    // Merge a subset Noto Sans JP so CJK metadata (e.g. Shift-JIS NSF titles from TODO_20a)
+    // Merge a subset Noto Sans JP so CJK metadata (e.g. Shift-JIS NSF titles)
     // renders as glyphs, not tofu. ImGui 1.92 rasterizes on demand, so coverage is whatever the
     // TTF holds — pre-subset to kana + ~2999 common kanji by scripts/gen_cjk_subset.py; widen it
     // by regenerating, not via the range arg (legacy-preload only). Roboto is added first, so it
