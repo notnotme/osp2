@@ -54,12 +54,10 @@ private:
 public:
     GmePlugin(const GmePlugin &) = delete;
     GmePlugin &operator=(const GmePlugin &) = delete;
-    explicit GmePlugin();
+    explicit GmePlugin(int sampleRate);
     ~GmePlugin() override;
 
 public:
-    void create(int sampleRate) override;
-    void destroy() override;
     [[nodiscard]] bool open(const std::filesystem::path &path) override;
     void close() override;
     [[nodiscard]] int decode(std::int16_t *buffer, int frames) override;

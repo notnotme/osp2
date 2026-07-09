@@ -16,8 +16,6 @@ classDiagram
         -bool m_shuffle
         -bool m_repeat
         -mt19937 m_rng
-        +create()
-        +destroy()
         +add(entry)
         +removeAt(index)
         +clear()
@@ -40,7 +38,7 @@ classDiagram
 
 - **`PlaylistEntry`** (`src/playlist/PlaylistEntry.h`) is a value object kept in its own light header so `UiState` can depend on the entry shape without pulling in the whole module. A file's identity in this app is **(owning `DataSource`, source-relative path)**, so an entry stores three things captured at add-time: `name` (basename, shown in the tab and matched against `PlaybackStatus.fileName` for the current-track "tofu" icon — the same filename basis the browser highlight uses), `path` (the **source-relative path** `getPath()/name` that `DataSource::fetchFile` expects), and `sourceIndex` (the index of the owning source in `FileSystem`'s source list). Both `path` and `sourceIndex` are captured because the browser may later have navigated elsewhere or switched source; 28e re-fetches an entry from that pair. 28b reads only `name`, so the fields added in 28c are backward-compatible.
 
-- **`PlayList`** (`src/playlist/PlayList.{h,cpp}`) mirrors `VisualizerController`'s small `final`-module shape: non-copyable, `create()`/`destroy()` lifecycle (nothing to allocate — `create()` is kept for symmetry and future use, `destroy()` clears the vector). It is **single-threaded, main-thread only** — every access happens on the UI/update path, so unlike `PlayerController` it needs **no mutex**. Mutators (`add`, `removeAt` — bounds-checked no-op if out of range, `clear`) and the `shuffle`/`repeat` flag accessors/toggles are in place from 28a.
+- **`PlayList`** (`src/playlist/PlayList.{h,cpp}`) is a small, non-copyable `final` module with plain RAII — nothing to allocate, so it has no explicit `create()`/`destroy()` lifecycle. It is **single-threaded, main-thread only** — every access happens on the UI/update path, so unlike `PlayerController` it needs **no mutex**. Mutators (`add`, `removeAt` — bounds-checked no-op if out of range, `clear`) and the `shuffle`/`repeat` flag accessors/toggles are in place from 28a.
 
 - **Session-only (no persistence).** The playlist is not saved across launches this round: the flat INI `Settings` store has no list type, and an ordered path list would need numbered keys. A later chunk can add persistence.
 
@@ -50,7 +48,7 @@ classDiagram
 
 ## Wiring
 
-`Platform` owns `PlayList m_playList` by value (declaration order before `m_app`, which binds a reference to it) and calls `create()`/`destroy()` alongside the other subsystems. `Application` holds `PlayList &m_playList`, populates the `UiState` playlist slice (`playlist` non-owning view + `playlistShuffle`/`playlistRepeat`) in `makeUiState()`, and routes the five playlist `UiActions` callbacks to `handleAddToPlaylist` (28c), `handleRemoveFromPlaylist` (28d), and `handlePlayPlaylistEntry` / `handleToggleShuffle` / `handleToggleRepeat` (28e).
+`Platform` owns `PlayList m_playList` by value (declaration order before `m_app`, which binds a reference to it); construction/destruction is the whole lifecycle — no explicit `create()`/`destroy()` calls. `Application` holds `PlayList &m_playList`, populates the `UiState` playlist slice (`playlist` non-owning view + `playlistShuffle`/`playlistRepeat`) in `makeUiState()`, and routes the five playlist `UiActions` callbacks to `handleAddToPlaylist` (28c), `handleRemoveFromPlaylist` (28d), and `handlePlayPlaylistEntry` / `handleToggleShuffle` / `handleToggleRepeat` (28e).
 
 ## Playback origin: playlist-vs-browser advance (28e)
 

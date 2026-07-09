@@ -63,7 +63,7 @@ classDiagram
   `initSdlAndGl()` → `initImGui()` (context + backends + `loadFonts()` + `m_gui.initialize()`) →
   `m_visualizer.create()` (GL context must be up) followed by `m_app.refreshVisualizerNames()`
   (the plugin set is fixed from then on, so the name cache is built once — see
-  [application.md](application.md)) → `m_playList.create()` → `initPlayerAndSettings()` (settings
+  [application.md](application.md)) → `initPlayerAndSettings()` (settings
   load + theme + `m_player.create()` + the persisted plugin-setting push) → `resolveStartPath()` →
   `m_fileSystem.create(...)`.
 - **`destroy()` is the exact reverse teardown** (`m_fileSystem.destroy()` joins the worker first,

@@ -20,28 +20,20 @@
 #include "GmePlugin.h"
 
 #include "../Charset.h"
+#include "PluginUtil.h"
 
 #include <gme/gme.h>
 #include <SDL_log.h>
 
 #include <algorithm>
-#include <cctype>
 #include <exception>
 #include <filesystem>
 #include <fstream>
-#include <iterator>
 #include <string>
-#include <string_view>
 #include <system_error>
 #include <utility>
 #include <vector>
 
-
-// decode() renders straight into the int16 output buffer via gme_play, which takes short*.
-static_assert(
-    sizeof(short) == sizeof(std::int16_t),
-    "GmePlugin decodes gme_play's short output directly into the int16 audio buffer"
-);
 
 namespace {
     // Auto-advance play limit (see startTrack): with loop off, a track is faded out so it ends and
@@ -52,25 +44,11 @@ namespace {
     constexpr long kUnknownLengthPlayLimitMs = 150000; // 2:30, libgme's historical default guess
     constexpr long kMinFadeMs = 500;
     constexpr long kMaxFadeMs = 8000;
-
-    // Maps a possibly-null C string (libgme leaves absent fields as nullptr) to a std::string.
-    std::string toString(const char *value) {
-        return value != nullptr ? std::string(value) : std::string();
-    }
-
-    // ASCII lowercase for case-insensitive filename/extension matching. The cast through unsigned
-    // char is required: std::tolower has undefined behavior on a plain char that is negative.
-    std::string toLower(std::string_view value) {
-        std::string lowered(value);
-        std::transform(lowered.begin(), lowered.end(), lowered.begin(), [](const unsigned char c) {
-            return static_cast<char>(std::tolower(c));
-        });
-        return lowered;
-    }
 } // namespace
 
-GmePlugin::GmePlugin()
-    : m_sampleRate(0),
+GmePlugin::GmePlugin(const int sampleRate)
+    : m_sampleRate(sampleRate),
+      m_extensions{"ay", "gbs", "gym", "hes", "kss", "nsf", "nsfe", "sap", "spc", "vgm", "vgz"},
       m_emu(nullptr, &gme_delete),
       m_duration(0.0),
       m_trackCount(0),
@@ -79,31 +57,21 @@ GmePlugin::GmePlugin()
       m_accuracy(0),
       m_loop(0) {}
 
+// ~unique_ptr runs gme_delete on the emulator, which also releases any track still open.
 GmePlugin::~GmePlugin() = default;
-
-void GmePlugin::create(const int sampleRate) {
-    m_sampleRate = sampleRate;
-    m_extensions = {"ay", "gbs", "gym", "hes", "kss", "nsf", "nsfe", "sap", "spc", "vgm", "vgz"};
-}
-
-void GmePlugin::destroy() {
-    m_emu.reset();
-}
 
 bool GmePlugin::open(const std::filesystem::path &path) {
     // libgme is a C library and never throws, but the file read into a vector can (bad_alloc on a
     // large VGM under the Switch's constrained RAM); honor PlayerPlugin's "must not throw" contract.
     try {
-        auto file = std::ifstream(path, std::ios::binary);
-        if (!file.is_open()) {
+        const auto data = readFileBytes(path);
+        if (!data) {
             SDL_Log("GmePlugin: cannot open %s", path.c_str());
             return false;
         }
 
-        const std::vector<char> data{std::istreambuf_iterator(file), std::istreambuf_iterator<char>()};
-
         Music_Emu *raw = nullptr;
-        if (const gme_err_t error = gme_open_data(data.data(), static_cast<long>(data.size()), &raw, m_sampleRate)) {
+        if (const gme_err_t error = gme_open_data(data->data(), static_cast<long>(data->size()), &raw, m_sampleRate)) {
             SDL_Log("GmePlugin: failed to parse %s: %s", path.c_str(), error);
             return false;
         }
@@ -156,8 +124,8 @@ void GmePlugin::overlaySiblingM3u(const std::filesystem::path &tunePath) {
         // filename + track index (e.g. "TUNE.gbs::GBS,0,Title,2:29,,10"). Concatenating those
         // referencing lines, ordered by their source ".m3u" filename, rebuilds the curated album
         // playlist for gme_load_m3u_data.
-        const auto tuneFilename = toLower(tunePath.filename().string());
-        const auto combinedFilename = toLower(combined.filename().string());
+        const auto tuneFilename = asciiToLower(tunePath.filename().string());
+        const auto combinedFilename = asciiToLower(combined.filename().string());
 
         // (source ".m3u" filename, referencing line) — sorted by source filename to recover album order.
         std::vector<std::pair<std::string, std::string>> entries;
@@ -168,8 +136,8 @@ void GmePlugin::overlaySiblingM3u(const std::filesystem::path &tunePath) {
             if (!it->is_regular_file(ec) || ec) {
                 continue;
             }
-            if (toLower(entryPath.extension().string()) != ".m3u" ||
-                toLower(entryPath.filename().string()) == combinedFilename) {
+            if (asciiToLower(entryPath.extension().string()) != ".m3u" ||
+                asciiToLower(entryPath.filename().string()) == combinedFilename) {
                 continue;
             }
 
@@ -187,7 +155,7 @@ void GmePlugin::overlaySiblingM3u(const std::filesystem::path &tunePath) {
                 // referenced filename. Other lines (comments, blanks, entries for sibling tunes) are
                 // dropped so the rebuilt buffer holds exactly this tune's curated subtracks.
                 const auto separator = line.find("::");
-                if (separator != std::string::npos && toLower(line.substr(0, separator)) == tuneFilename) {
+                if (separator != std::string::npos && asciiToLower(line.substr(0, separator)) == tuneFilename) {
                     entries.emplace_back(sourceFilename, line);
                 }
             }
@@ -204,12 +172,9 @@ void GmePlugin::overlaySiblingM3u(const std::filesystem::path &tunePath) {
             buffer += '\n';
         }
 
-        if (const gme_err_t error =
-                gme_load_m3u_data(m_emu.get(), buffer.data(), static_cast<long>(buffer.size()))) {
+        if (const gme_err_t error = gme_load_m3u_data(m_emu.get(), buffer.data(), static_cast<long>(buffer.size()))) {
             SDL_Log(
-                "GmePlugin: ignoring exploded m3u playlist in %s: %s",
-                tunePath.parent_path().string().c_str(),
-                error
+                "GmePlugin: ignoring exploded m3u playlist in %s: %s", tunePath.parent_path().string().c_str(), error
             );
         }
     } catch (const std::exception &e) {

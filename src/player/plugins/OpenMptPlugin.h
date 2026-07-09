@@ -35,8 +35,10 @@ private:
     int m_sampleRate;
     std::vector<std::string> m_extensions;
     std::unique_ptr<openmpt::module> m_module;
-    // Captured once in open() so getMetadata() never touches the audio-thread-shared module.
+    // Captured once in open() so getMetadata()/getTitle() never touch the audio-thread-shared
+    // module. m_title stays raw metadata (may be empty — the Gui falls back to the filename).
     TrackMetadata m_metadata;
+    std::string m_title;
     // Cached render settings, re-applied to each module on open(); m_interpolation is an index
     // into the Interpolation enum labels (see getSettings()). m_loop is 0/1 and maps to
     // set_repeat_count (1 -> -1, loop forever; 0 -> play once).
@@ -47,12 +49,10 @@ private:
 public:
     OpenMptPlugin(const OpenMptPlugin &) = delete;
     OpenMptPlugin &operator=(const OpenMptPlugin &) = delete;
-    explicit OpenMptPlugin();
+    explicit OpenMptPlugin(int sampleRate);
     ~OpenMptPlugin() override;
 
 public:
-    void create(int sampleRate) override;
-    void destroy() override;
     [[nodiscard]] bool open(const std::filesystem::path &path) override;
     void close() override;
     [[nodiscard]] int decode(std::int16_t *buffer, int frames) override;

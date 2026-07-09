@@ -29,6 +29,12 @@
 #include "PluginSetting.h"
 
 
+// RAII lifecycle: implementations take the output sample rate as a constructor parameter and
+// fully tear down (decoder object, worker threads, library shutdown) in their destructor —
+// by convention destructors do their own teardown directly, never via the virtual close(),
+// so no destructor depends on dynamic dispatch mid-destruction. Construction and
+// destruction happen on the main thread (PlayerController::create()/destroy()); the audio
+// device is closed before plugins are destroyed, so destructors never race decode().
 class PlayerPlugin {
 public:
     PlayerPlugin(const PlayerPlugin &) = delete;
@@ -37,10 +43,6 @@ public:
     virtual ~PlayerPlugin() = default;
 
 public:
-    // Called once from PlayerController::create()/destroy(), main thread.
-    virtual void create(int sampleRate) = 0;
-    virtual void destroy() = 0;
-
     // Track lifecycle, main thread. Returns false if the file cannot be parsed; must not throw.
     [[nodiscard]] virtual bool open(const std::filesystem::path &path) = 0;
     virtual void close() = 0;

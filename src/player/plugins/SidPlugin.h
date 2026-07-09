@@ -61,11 +61,11 @@ private:
     // getDuration() — never looked up on the audio thread.
     double m_duration;
     // The Songlengths database. Parsing the ~5 MB file takes long enough on the Switch to be a
-    // visible stall, so it is loaded once on a background thread started in create() rather than on
-    // the open() decode path (which would stretch the loading overlay). m_dbReady (release/acquire)
-    // publishes the finished map; open() only reads m_songLengths once it is set, so the two threads
-    // never touch it concurrently. destroy() joins m_dbLoader. A tune opened before the load finishes
-    // (or with the database absent) just gets an open-ended duration, as before.
+    // visible stall, so it is loaded once on a background thread started in the constructor rather
+    // than on the open() decode path (which would stretch the loading overlay). m_dbReady
+    // (release/acquire) publishes the finished map; open() only reads m_songLengths once it is set,
+    // so the two threads never touch it concurrently. The destructor joins m_dbLoader. A tune opened
+    // before the load finishes (or with the database absent) just gets an open-ended duration.
     SongLengthDb m_songLengths;
     std::thread m_dbLoader;
     std::atomic<bool> m_dbReady;
@@ -78,12 +78,10 @@ private:
 public:
     SidPlugin(const SidPlugin &) = delete;
     SidPlugin &operator=(const SidPlugin &) = delete;
-    explicit SidPlugin();
+    explicit SidPlugin(int sampleRate);
     ~SidPlugin() override;
 
 public:
-    void create(int sampleRate) override;
-    void destroy() override;
     [[nodiscard]] bool open(const std::filesystem::path &path) override;
     void close() override;
     [[nodiscard]] int decode(std::int16_t *buffer, int frames) override;

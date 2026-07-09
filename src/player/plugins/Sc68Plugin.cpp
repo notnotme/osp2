@@ -20,6 +20,7 @@
 #include "Sc68Plugin.h"
 
 #include "../Charset.h"
+#include "PluginUtil.h"
 
 #include <sc68/sc68.h>
 #include <SDL_log.h>
@@ -27,8 +28,7 @@
 #include <algorithm>
 #include <cctype>
 #include <exception>
-#include <fstream>
-#include <iterator>
+#include <utility>
 #include <vector>
 
 
@@ -40,11 +40,6 @@ namespace {
     // bail. A deferred track-change/loop event costs exactly one such empty pass (see decode()); the
     // cap only exists so a persistent SC68_IDLE can never spin the audio thread under m_mutex.
     constexpr int MAX_EMPTY_PASSES = 8;
-
-    // Maps a possibly-null C string (libsc68 leaves absent fields as nullptr) to a std::string.
-    std::string toString(const char *value) {
-        return value != nullptr ? std::string(value) : std::string();
-    }
 
     bool equalsIgnoreCase(const char *a, const char *b) {
         if (a == nullptr || b == nullptr) {
@@ -70,18 +65,13 @@ namespace {
     }
 } // namespace
 
-Sc68Plugin::Sc68Plugin()
-    : m_sampleRate(0) {}
-
-Sc68Plugin::~Sc68Plugin() = default;
-
-void Sc68Plugin::create(const int sampleRate) {
-    m_sampleRate = sampleRate;
-    m_extensions = {"sc68", "sndh", "snd"};
-
+Sc68Plugin::Sc68Plugin(const int sampleRate)
+    : m_sampleRate(sampleRate),
+      m_extensions{"sc68", "sndh", "snd"} {
     // sc68_init toggles a single global init flag; the sole Sc68Plugin instance owns the one
-    // init/shutdown pair. A failure here leaves m_sc68 null, so every open() fails defensively
-    // rather than crashing, and destroy() must not call sc68_shutdown() (guarded by m_initialized).
+    // init/shutdown pair. A failure here (never a throw) leaves m_sc68 null, so every open() fails
+    // defensively rather than crashing, and the destructor must not call sc68_shutdown() (guarded
+    // by m_initialized).
     if (sc68_init(nullptr) != SC68_OK) {
         SDL_Log("Sc68Plugin: sc68_init failed — sc68 playback disabled");
         return;
@@ -104,15 +94,14 @@ void Sc68Plugin::create(const int sampleRate) {
     }
 }
 
-void Sc68Plugin::destroy() {
+Sc68Plugin::~Sc68Plugin() {
     if (m_sc68 != nullptr) {
-        sc68_close(m_sc68);
+        sc68_close(m_sc68); // releases any disk still loaded
         sc68_destroy(m_sc68);
         m_sc68 = nullptr;
     }
     if (m_initialized) {
         sc68_shutdown(); // pair only with a successful sc68_init()
-        m_initialized = false;
     }
 }
 
@@ -131,12 +120,12 @@ bool Sc68Plugin::open(const std::filesystem::path &path) {
     // honor PlayerPlugin's "must not throw" contract by catching everything and returning false.
     std::vector<char> data;
     try {
-        std::ifstream file(path, std::ios::binary);
-        if (!file.is_open()) {
+        auto bytes = readFileBytes(path);
+        if (!bytes) {
             SDL_Log("Sc68Plugin: cannot open %s", path.c_str());
             return false;
         }
-        data.assign(std::istreambuf_iterator(file), std::istreambuf_iterator<char>());
+        data = std::move(*bytes);
     } catch (const std::exception &e) {
         SDL_Log("Sc68Plugin: failed to read %s: %s", path.c_str(), e.what());
         return false;

@@ -20,14 +20,15 @@
 #include "PlayerController.h"
 
 #include <algorithm>
-#include <cctype>
 #include <cstdint>
 #include <stdexcept>
+#include <string_view>
 
 #include "plugins/OpenMptPlugin.h"
 #include "plugins/GmePlugin.h"
 #include "plugins/SidPlugin.h"
 #include "plugins/Sc68Plugin.h"
+#include "plugins/PluginUtil.h"
 
 
 // The tap's fixed capacity is declared independently of PlayerController (to keep AudioTap.h
@@ -50,14 +51,11 @@ PlayerController::PlayerController()
       m_loadSucceeded(false) {}
 
 void PlayerController::create() {
-    m_plugins.emplace_back(std::make_unique<OpenMptPlugin>());
-    m_plugins.emplace_back(std::make_unique<GmePlugin>());
-    m_plugins.emplace_back(std::make_unique<SidPlugin>());
-    m_plugins.emplace_back(std::make_unique<Sc68Plugin>());
-
-    for (const auto &plugin : m_plugins) {
-        plugin->create(SAMPLE_RATE);
-    }
+    // Registration order = dispatch priority on extension overlap.
+    m_plugins.emplace_back(std::make_unique<OpenMptPlugin>(SAMPLE_RATE));
+    m_plugins.emplace_back(std::make_unique<GmePlugin>(SAMPLE_RATE));
+    m_plugins.emplace_back(std::make_unique<SidPlugin>(SAMPLE_RATE));
+    m_plugins.emplace_back(std::make_unique<Sc68Plugin>(SAMPLE_RATE));
 
     SDL_AudioSpec want = {};
     want.freq = SAMPLE_RATE;
@@ -93,9 +91,8 @@ void PlayerController::destroy() {
 
     for (const auto &plugin : m_plugins) {
         plugin->close();
-        plugin->destroy();
     }
-    m_plugins.clear();
+    m_plugins.clear(); // destructors run here, after the device is closed
     m_activePlugin = nullptr;
     m_state = PlayerState::STOPPED;
 }
@@ -117,19 +114,11 @@ void PlayerController::play(const std::filesystem::path &path) {
         const bool reload = (m_activePlugin != nullptr) || m_reloadActive;
         if (reload && m_activePlugin != nullptr) {
             // Snapshot the outgoing track so getStatus() can keep serving it during the async load,
-            // avoiding a transient flash to STOPPED/empty. Inline the same reads getStatus() does
-            // under the lock — m_mutex is non-recursive, so we must NOT call getStatus(). When
-            // reloading with m_activePlugin already null (chained advance), keep the existing
-            // m_reloadStatus — it already holds the outgoing track.
-            m_reloadStatus = {
-                PlayerState::PLAYING,
-                m_activePlugin->getTitle(),
-                m_currentPath.filename().string(),
-                m_activePlugin->getPosition(),
-                m_activePlugin->getDuration(),
-                m_activePlugin->getSubtrackCount(),
-                m_activePlugin->getCurrentSubtrack()
-            };
+            // avoiding a transient flash to STOPPED/empty. Stamped PLAYING regardless of m_state so
+            // the bar keeps presenting the outgoing track. When reloading with m_activePlugin
+            // already null (chained advance), keep the existing m_reloadStatus — it already holds
+            // the outgoing track.
+            m_reloadStatus = statusLocked(PlayerState::PLAYING);
         }
         // The audio-thread contract requires the plugin being opened to be inactive; decode() outputs
         // silence when m_activePlugin == nullptr.
@@ -330,12 +319,16 @@ PlaybackStatus PlayerController::getStatus() const {
     if (m_activePlugin == nullptr) {
         return {m_state, "", m_currentPath.filename().string(), 0.0, 0.0, 1, 0};
     }
+    return statusLocked(m_state);
+}
+
+PlaybackStatus PlayerController::statusLocked(const PlayerState stateOverride) const {
     // A track that ended with no next to auto-advance to stays STOPPED with its plugin still loaded
     // (teardown is main-thread only). Honor PlaybackStatus's "0 when stopped" contract so the timer
     // resets to 0:00 rather than freezing on the finished track's final position/duration.
-    const bool stopped = m_state == PlayerState::STOPPED;
+    const bool stopped = stateOverride == PlayerState::STOPPED;
     return {
-        m_state,
+        stateOverride,
         m_activePlugin->getTitle(),
         m_currentPath.filename().string(),
         stopped ? 0.0 : m_activePlugin->getPosition(),
@@ -426,14 +419,12 @@ void PlayerController::decode(Uint8 *stream, const int len) {
 }
 
 PlayerPlugin *PlayerController::findPluginFor(const std::filesystem::path &path) const {
-    auto extension = path.extension().string();
-    if (extension.empty()) {
+    const auto rawExtension = path.extension().string();
+    if (rawExtension.empty()) {
         return nullptr;
     }
-    extension.erase(0, 1);
-    std::ranges::transform(extension, extension.begin(), [](const unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
+    // Drop the leading dot; extensions are matched lowercase against getSupportedExtensions().
+    const auto extension = asciiToLower(std::string_view(rawExtension).substr(1));
 
     for (const auto &plugin : m_plugins) {
         const auto &extensions = plugin->getSupportedExtensions();

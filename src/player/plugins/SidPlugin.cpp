@@ -34,13 +34,8 @@
 
 #include "../../Paths.h"
 #include "../Charset.h"
+#include "PluginUtil.h"
 
-
-// mix() writes interleaved-stereo 16-bit samples into a short buffer; we hand it our int16 scratch.
-static_assert(
-    sizeof(short) == sizeof(std::int16_t),
-    "SidPlugin mixes libsidplayfp's short output directly into the int16 scratch buffer"
-);
 
 namespace {
     // Interleaved stereo — libsidplayfp is initialized with initMixer(true).
@@ -49,11 +44,6 @@ namespace {
     // CPU cycles emulated per play() step (~10ms at the C64's ~1MHz clock). One step yields a
     // variable, bounded number of samples that decode() buffers in m_mixBuffer.
     constexpr unsigned int PLAY_CYCLES = 10000;
-
-    // Maps a possibly-null C string (libsidplayfp leaves absent fields as nullptr) to a std::string.
-    std::string toString(const char *value) {
-        return value != nullptr ? std::string(value) : std::string();
-    }
 
     std::string sidModelString(const SidTuneInfo::model_t model) {
         switch (model) {
@@ -102,39 +92,43 @@ namespace {
     }
 } // namespace
 
-SidPlugin::SidPlugin()
-    : m_sampleRate(0),
+SidPlugin::SidPlugin(const int sampleRate)
+    : m_sampleRate(sampleRate),
+      m_extensions{"sid", "psid", "rsid"},
+      m_engine(std::make_unique<sidplayfp>()),
+      m_builder(std::make_unique<ReSIDfpBuilder>("ReSIDfp")),
       m_mixPos(0),
       m_mixFrames(0),
       m_model(0),
       m_clock(0),
       m_duration(0.0),
-      m_dbReady(false) {}
-
-SidPlugin::~SidPlugin() {
-    // Defensive: destroy() normally joins the loader, but if create()/run() throws before destroy()
-    // is reached, a still-joinable std::thread would std::terminate during destruction. The
-    // joinable() check makes this a no-op on the normal (already-joined) path.
-    if (m_dbLoader.joinable()) {
-        m_dbLoader.join();
-    }
-}
-
-void SidPlugin::create(const int sampleRate) {
-    m_sampleRate = sampleRate;
-    m_extensions = {"sid", "psid", "rsid"};
-    m_engine = std::make_unique<sidplayfp>();
-    m_builder = std::make_unique<ReSIDfpBuilder>("ReSIDfp");
+      m_dbReady(false) {
     loadRoms();
 
     // Parse the ~5 MB Songlengths database off the decode path so it never stalls the first SID's
     // open() (and stretches the loading overlay). It starts here, at startup, and typically finishes
-    // long before the user browses to and picks a tune; a tune opened before it is ready simply shows
-    // an open-ended duration. destroy() joins this thread; open() reads the map only once m_dbReady.
+    // long before the user browses to and picks a tune; a tune opened before it is ready simply
+    // shows an open-ended duration. The destructor joins this thread; open() reads the map only
+    // once m_dbReady. Started last so no later constructor step can throw past a joinable thread.
     m_dbLoader = std::thread([this] {
-        m_songLengths.load(assetPath("sidlength/Songlengths.md5"));
+        if (m_songLengths.load(assetPath("sidlength/Songlengths.md5"))) {
+            SDL_Log("SidPlugin: loaded Songlengths database (%zu tunes) — SID durations enabled", m_songLengths.size());
+        }
         m_dbReady.store(true, std::memory_order_release);
     });
+}
+
+SidPlugin::~SidPlugin() {
+    // Join the background database loader before tearing down (a still-joinable std::thread would
+    // std::terminate at destruction); it only touches m_songLengths, so this is safe any time.
+    if (m_dbLoader.joinable()) {
+        m_dbLoader.join();
+    }
+    // Reset the engine first: it holds locked SID emulations owned by the builder. This also
+    // unloads any tune still open.
+    m_engine.reset();
+    m_builder.reset();
+    m_tune.reset();
 }
 
 void SidPlugin::loadRoms() {
@@ -154,18 +148,6 @@ void SidPlugin::loadRoms() {
     if (!kernal.empty()) {
         SDL_Log("SidPlugin: loaded C64 KERNAL ROM — RSID tunes enabled");
     }
-}
-
-void SidPlugin::destroy() {
-    // Join the background database loader before tearing down (a still-joinable std::thread would
-    // std::terminate at destruction); it only touches m_songLengths, so this is safe any time.
-    if (m_dbLoader.joinable()) {
-        m_dbLoader.join();
-    }
-    // Reset the engine first: it holds locked SID emulations owned by the builder.
-    m_engine.reset();
-    m_builder.reset();
-    m_tune.reset();
 }
 
 bool SidPlugin::configure() {
@@ -196,15 +178,14 @@ bool SidPlugin::open(const std::filesystem::path &path) {
     m_duration = 0.0; // open-ended until the Songlengths database resolves a time below
 
     try {
-        std::ifstream file(path, std::ios::binary);
-        if (!file.is_open()) {
+        const auto data = readFileBytes(path);
+        if (!data) {
             SDL_Log("SidPlugin: cannot open %s", path.c_str());
             return false;
         }
-        const std::vector<char> data{std::istreambuf_iterator(file), std::istreambuf_iterator<char>()};
 
         auto tune = std::make_unique<SidTune>(
-            reinterpret_cast<const uint_least8_t *>(data.data()), static_cast<uint_least32_t>(data.size())
+            reinterpret_cast<const uint_least8_t *>(data->data()), static_cast<uint_least32_t>(data->size())
         );
         if (!tune->getStatus()) {
             SDL_Log("SidPlugin: cannot parse %s: %s", path.c_str(), tune->statusString());

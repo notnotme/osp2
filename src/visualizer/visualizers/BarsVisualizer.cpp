@@ -25,10 +25,6 @@
 #include <cmath>
 
 
-// ImGui-only plugin: nothing to allocate or free.
-void BarsVisualizer::create() {}
-void BarsVisualizer::destroy() {}
-
 std::string BarsVisualizer::getName() const {
     return "Bars";
 }

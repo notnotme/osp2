@@ -158,6 +158,11 @@ private:
     static void audioCallback(void *userdata, Uint8 *stream, int len);
     void decode(Uint8 *stream, int len);
     [[nodiscard]] PlayerPlugin *findPluginFor(const std::filesystem::path &path) const;
+    // Builds the PlaybackStatus snapshot of the loaded track, stamped with stateOverride; STOPPED
+    // zeroes position/duration per PlaybackStatus's "0 when stopped" contract. Precondition: the
+    // caller holds m_mutex (m_mutex is non-recursive, hence no lock here) and m_activePlugin is
+    // non-null.
+    [[nodiscard]] PlaybackStatus statusLocked(PlayerState stateOverride) const;
     // Worker body: parses the module off m_mutex (the plugin is inactive), stores the outcome
     // under m_mutex, then clears m_loading last so update() observes a fully-published result.
     void loadTrack(PlayerPlugin *plugin, const std::filesystem::path &path);
