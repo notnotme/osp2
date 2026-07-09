@@ -430,15 +430,23 @@ UiState Application::makeUiState() const {
     // distinct label taking priority (a decode always follows the fetch that fed it).
     // Suppress the decode "Loading..." overlay for a boundary/auto advance (m_advanceLoadInFlight):
     // reload continuity keeps the outgoing track on screen, so the fast local decode needs no overlay.
-    // A remote sibling still shows "Downloading..." via fsWorking during the FTP fetch.
+    // A remote sibling still shows "Downloading..." via fsWorking during the FTP fetch. The parked
+    // fetch result bridges the fetch → decode hand-off window so the overlay never blinks (TODO_35).
     const bool loading = m_player.isLoading() && !m_advanceLoadInFlight;
     const bool fsWorking = m_fileSystem.isWorking();
-    const bool working = loading || fsWorking;
+    // A finished fetch parked unconsumed (the one-frame fetch→decode hand-off window) keeps the
+    // overlay up: next frame update() consumes it and play() raises isLoading() synchronously.
+    // Must be read AFTER fsWorking — the worker parks the result before clearing m_working, so this
+    // order can never see both false while a fetch is pending; reversed, the blink comes back.
+    const bool fetchParked = m_fileSystem.hasPendingFetchResult();
+    const bool working = loading || fsWorking || fetchParked;
     std::string workingLabel;
     if (loading) {
         workingLabel = "Loading...";
     } else if (fsWorking) {
         workingLabel = m_fileSystem.isFetching() ? "Downloading..." : "Scanning...";
+    } else if (fetchParked) {
+        workingLabel = "Downloading..."; // only fetches park results, never scans
     }
 
     return {
