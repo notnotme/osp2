@@ -106,12 +106,6 @@ Sc68Plugin::~Sc68Plugin() {
 }
 
 bool Sc68Plugin::open(const std::filesystem::path &path) {
-    m_playedFrames = 0;
-    m_ended = false;
-    m_duration = 0.0;
-    m_metadata = std::monostate{};
-    m_title.clear();
-
     if (m_sc68 == nullptr) {
         return false;
     }
@@ -185,7 +179,9 @@ void Sc68Plugin::close() {
         sc68_stop(m_sc68);
         sc68_close(m_sc68);
     }
+    m_playedFrames = 0;
     m_ended = false;
+    m_duration = 0.0;
     m_metadata = std::monostate{};
     m_title.clear();
 }
